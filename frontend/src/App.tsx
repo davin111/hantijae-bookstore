@@ -2,26 +2,24 @@ import React from 'react';
 import { Route, Switch } from 'react-router-dom';
 import { ConnectedRouter } from 'connected-react-router';
 import {
-  Main
+  Main,
 } from './containers';
-import {
-  Header,
-} from './components';
 
 import './App.css';
 
 interface Props {
-  history: any,
+  history: any;
 }
 
-function App(props: Props) {
+function App(props: Props): JSX.Element {
+  const { history } = props;
   return (
     <div className="App">
-        <ConnectedRouter history={props.history}>
-          <Switch>
-            <Route path="/" exact component={Main} />
-          </Switch>
-        </ConnectedRouter>
+      <ConnectedRouter history={history}>
+        <Switch>
+          <Route path="/" exact component={Main} />
+        </Switch>
+      </ConnectedRouter>
     </div>
   );
 }

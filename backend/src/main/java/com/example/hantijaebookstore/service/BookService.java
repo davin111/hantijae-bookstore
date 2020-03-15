@@ -15,7 +15,7 @@ public class BookService {
     private final BookDao bookDao;
 
     @Autowired
-    public BookService(@Qualifier("fakeDaoBook") BookDao bookDao) {
+    public BookService(@Qualifier("dataSource") BookDao bookDao) {
         this.bookDao = bookDao;
     }
 

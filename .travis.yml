@@ -1,0 +1,53 @@
+sudo: required
+notifications:
+  webhooks: https://coveralls.io/webhook
+
+matrix:
+  include:
+  - language: node_js
+    cache:
+      yarn: true
+    node_js:
+    - '10'
+    dist: trusty
+    env:
+    - COVERALLS_PARALLEL=true
+    before_install:   # Script to run before install
+    - cd frontend
+    install:          # Script to install required packages
+    - yarn install
+    script:           # Script to test your build
+    - yarn run lint
+    - yarn run test --coverage --watchAll=false
+    after_success:
+    - cat ./coverage/lcov.info | coveralls
+
+  - language: python
+    cache:
+      pip: true
+    python:
+    - '3.6'
+    dist: trusty
+    services:
+    - mysql
+    - redis-server
+    env:
+    - COVERALLS_PARALLEL=true
+    - TEXT_ANALYTICS_SUBSCRIPTION_KEY=secret
+    - TEXT_ANALYTICS_ENDPOINT=https://koreacentral.api.cognitive.microsoft.com/
+    before_install:
+    - mysql -e "CREATE DATABASE PapersFeed_DB;"
+    - mysql -e "CREATE USER 'PapersFeed'@'localhost' IDENTIFIED BY 'swpp2019team3';"
+    - mysql -e "GRANT ALL PRIVILEGES ON *.* to 'PapersFeed'@'localhost';"
+    install:
+    - pip install -r requirements.txt
+    script:
+    - pylint --rcfile=./backend/.pylintrc backend --disable='fixme, duplicate-code'
+    - cd backend
+    - coverage run --source='.' ./manage.py test
+    - coverage report --fail-under=90
+    - coverage xml
+    after_success:
+    - sonar-scanner
+    - coveralls
+

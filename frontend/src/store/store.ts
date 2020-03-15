@@ -7,10 +7,10 @@ import rootReducer from './reducers/index';
 
 
 const logger = (store: any) => (next: any) => (action: any) => {
-    window.console.log("[Middleware] Dispatching", action);
-    const result = next(action);
-    window.console.log("[Middleware] Next State", store.getState());
-    return result;
+  window.console.log('[Middleware] Dispatching', action);
+  const result = next(action);
+  window.console.log('[Middleware] Next State', store.getState());
+  return result;
 };
 
 export const history = createBrowserHistory();
