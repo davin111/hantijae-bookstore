@@ -39,3 +39,19 @@ transaction-logs
 secrets.yml
 .gradletasknamecache
 .sts4-cache
+
+
+
+# dependencies
+/node_modules
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env
+npm-debug.log
