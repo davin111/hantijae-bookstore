@@ -2,22 +2,27 @@ package com.example.hantijaebookstore.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
 import javax.validation.constraints.NotBlank;
-import java.util.UUID;
 
+@Entity
 public class User {
-    private final UUID id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Integer id;
 
-    @NotBlank
     private final String email;
 
-    public User(@JsonProperty("id") UUID id,
+    public User(@JsonProperty("id") Integer id,
                 @JsonProperty("email") String email) {
         this.id = id;
         this.email = email;
     }
 
-    public UUID getId() {
+    public Integer getId() {
         return id;
     }
 

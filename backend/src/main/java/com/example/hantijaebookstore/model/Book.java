@@ -2,16 +2,23 @@ package com.example.hantijaebookstore.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
 import javax.validation.constraints.NotBlank;
 
+@Entity
 public class Book {
-    private final int id;
-    private final String description;
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Integer id;
 
-    @NotBlank
-    private final String title;
+    private String description;
 
-    public Book(@JsonProperty("id") int id,
+    private String title;
+
+    public Book(@JsonProperty("id") Integer id,
                 @JsonProperty("title") String title,
                 @JsonProperty("description") String description) {
         this.id = id;
@@ -19,7 +26,7 @@ public class Book {
         this.description = description;
     }
 
-    public int getId() {
+    public Integer getId() {
         return id;
     }
 
