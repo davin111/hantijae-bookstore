@@ -18,6 +18,10 @@ public class Book {
 
     private String title;
 
+    public Book() {
+
+    }
+
     public Book(@JsonProperty("id") Integer id,
                 @JsonProperty("title") String title,
                 @JsonProperty("description") String description) {

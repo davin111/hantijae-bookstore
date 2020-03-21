@@ -14,7 +14,11 @@ public class User {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Integer id;
 
-    private final String email;
+    private String email;
+
+    public User() {
+
+    }
 
     public User(@JsonProperty("id") Integer id,
                 @JsonProperty("email") String email) {
