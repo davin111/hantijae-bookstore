@@ -1,44 +1,34 @@
 package com.example.hantijaebookstore.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
+import javax.persistence.*;
 import javax.validation.constraints.NotBlank;
 
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Getter
 @Entity
-public class Book {
+public class Book extends BaseTimeEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    private String description;
-
+    @NotBlank
+    @Column(length = 500, nullable = false)
     private String title;
 
-    public Book() {
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
-    }
-
-    public Book(@JsonProperty("id") Integer id,
-                @JsonProperty("title") String title,
-                @JsonProperty("description") String description) {
+    @Builder
+    public Book(Integer id,
+                String title,
+                String description) {
         this.id = id;
         this.title = title;
         this.description = description;
-    }
-
-    public Integer getId() {
-        return id;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public String getDescription() {
-        return description;
     }
 }

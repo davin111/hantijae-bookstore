@@ -22,32 +22,29 @@ matrix:
     after_success:
     - cat ./coverage/lcov.info | coveralls
 
-  - language: python
-    cache:
-      pip: true
-    python:
-    - '3.6'
+  - language: java
+    jdk:
+    - openjdk13
     dist: trusty
     services:
     - mysql
     - redis-server
     env:
     - COVERALLS_PARALLEL=true
-    - TEXT_ANALYTICS_SUBSCRIPTION_KEY=secret
-    - TEXT_ANALYTICS_ENDPOINT=https://koreacentral.api.cognitive.microsoft.com/
     before_install:
-    - mysql -e "CREATE DATABASE PapersFeed_DB;"
-    - mysql -e "CREATE USER 'PapersFeed'@'localhost' IDENTIFIED BY 'swpp2019team3';"
-    - mysql -e "GRANT ALL PRIVILEGES ON *.* to 'PapersFeed'@'localhost';"
+    - mysql -e "CREATE DATABASE hantijae_bookstore;"
+    - mysql -e "CREATE USER 'davin'@'localhost' IDENTIFIED BY 'hantijae';"
+    - mysql -e "GRANT ALL PRIVILEGES ON *.* to 'davin'@'localhost';"
     install:
-    - pip install -r requirements.txt
+    #- pip install -r requirements.txt
     script:
-    - pylint --rcfile=./backend/.pylintrc backend --disable='fixme, duplicate-code'
+    #- pylint --rcfile=./backend/.pylintrc backend --disable='fixme, duplicate-code'
     - cd backend
-    - coverage run --source='.' ./manage.py test
-    - coverage report --fail-under=90
-    - coverage xml
-    after_success:
-    - sonar-scanner
-    - coveralls
+    - mvn test -B
+    #- coverage run --source='.' ./manage.py test
+    #- coverage report --fail-under=90
+    #- coverage xml
+    #after_success:
+    #- sonar-scanner
+    #- coveralls
 
