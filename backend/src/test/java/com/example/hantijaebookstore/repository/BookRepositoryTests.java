@@ -12,7 +12,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 @RunWith(SpringRunner.class)
@@ -30,7 +30,7 @@ public class BookRepositoryTests {
     @Test
     public void registerBaseTimeEntity() {
         //given
-        LocalDateTime now = LocalDateTime.now();
+        LocalDate today = LocalDate.now();
         bookRepository.save(Book.builder()
                 .title("title")
                 .description("description")
@@ -41,9 +41,8 @@ public class BookRepositoryTests {
 
         //then
         Book book = bookList.get(0);
-        System.out.println(book.getCreatedAt());
-        assertEquals(true, (book.getCreatedAt().isAfter(now)) || (book.getCreatedAt().isEqual(now)));
-        assertEquals(true, (book.getUpdatedAt().isAfter(now)) || (book.getUpdatedAt().isEqual(now)));
+        assertEquals(today, book.getCreatedAt().toLocalDate());
+        assertEquals(today, book.getUpdatedAt().toLocalDate());
     }
 
     @Test

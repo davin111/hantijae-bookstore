@@ -1,6 +1,6 @@
 sudo: required
-notifications:
-  webhooks: https://coveralls.io/webhook
+#notifications:
+#  webhooks: https://coveralls.io/webhook
 
 matrix:
   include:
@@ -10,8 +10,8 @@ matrix:
     node_js:
     - '10'
     dist: trusty
-    env:
-    - COVERALLS_PARALLEL=true
+    #env:
+    #- COVERALLS_PARALLEL=true
     before_install:   # Script to run before install
     - cd frontend
     install:          # Script to install required packages
@@ -19,8 +19,8 @@ matrix:
     script:           # Script to test your build
     - yarn run lint
     - yarn run test --coverage --watchAll=false
-    after_success:
-    - cat ./coverage/lcov.info | coveralls
+    #after_success:
+    #- cat ./coverage/lcov.info | coveralls
 
   - language: java
     jdk:
@@ -29,8 +29,8 @@ matrix:
     services:
     - mysql
     - redis-server
-    env:
-    - COVERALLS_PARALLEL=true
+    #env:
+    #- COVERALLS_PARALLEL=true
     before_install:
     - mysql -e "CREATE DATABASE hantijae_bookstore;"
     - mysql -e "CREATE USER 'davin'@'localhost' IDENTIFIED BY 'hantijae';"
