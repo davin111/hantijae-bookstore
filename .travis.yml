@@ -24,7 +24,7 @@ matrix:
 
   - language: java
     jdk:
-    - openjdk13
+    - openjdk8
     dist: trusty
     services:
     - mysql
