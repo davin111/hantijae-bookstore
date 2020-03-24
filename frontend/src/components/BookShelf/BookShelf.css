@@ -1,0 +1,5 @@
+.BookShelf {
+    height: inherit;
+    flex: 4;
+    margin-right: 15px;
+}

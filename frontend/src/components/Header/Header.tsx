@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 
-export interface Props {
+interface Props {
   title: string;
   description: number;
 }

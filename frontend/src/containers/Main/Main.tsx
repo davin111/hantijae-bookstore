@@ -1,12 +1,12 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 
-import { Book } from '../../components';
+import { BookShelf } from '../../components';
 import { bookActions } from '../../store/actions';
+import './Main.css';
 
 interface Props {
   onGetBooks: () => void;
-  books: any;
 }
 
 class Main extends Component<Props> {
@@ -15,22 +15,10 @@ class Main extends Component<Props> {
     onGetBooks();
   }
 
-  bookCardMaker = (book: any) => (
-    <Book key={book.id} title={book.title} description={book.description} />
-  );
 
   render() {
-    const { books } = this.props;
-    const bookCards = books.map(
-      (book: any) => this.bookCardMaker(book),
-    );
-
     return (
-      <div className="main">
-        <div className="book-list">
-          { bookCards }
-        </div>
-      </div>
+      <BookShelf />
     );
   }
 }

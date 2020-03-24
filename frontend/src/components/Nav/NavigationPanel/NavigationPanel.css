@@ -1,0 +1,6 @@
+.NavigationPanel {
+    height: 6vh;
+    display: flex;
+    flex-direction: row;
+    border-bottom: 0.5px solid #CFD8DC;
+}

@@ -1,6 +1,5 @@
 import { bookConstants } from '../../actions/actionTypes';
 import { bookStatus } from '../../../constants/constants';
-import { Main } from '../../../containers';
 
 const initialState = {
   getBookStatus: bookStatus.NONE,
