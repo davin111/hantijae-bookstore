@@ -1,24 +1,19 @@
 import React, { Component } from 'react';
 
-interface Props {
-  title: string;
-  description: number;
-}
+import Title from './Title/Title';
+import SearchBar from './SearchBar/SearchBar';
+
+import './Header.css';
+
 
 // eslint-disable-next-line react/prefer-stateless-function
-class Header extends Component<Props, object> {
+class Header extends Component {
   render() {
-    const { title, description } = this.props;
-
     return (
-      <div className="book">
-        <div className="title">
-          {title}
-        </div>
-        <div className="description">
-          {description}
-        </div>
-      </div>
+      <header>
+        <SearchBar />
+        <Title />
+      </header>
     );
   }
 }

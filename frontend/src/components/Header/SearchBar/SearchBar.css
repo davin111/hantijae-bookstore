@@ -1,0 +1,31 @@
+.iconSearch{
+    margin: 5px;
+    color: #B0BEC5;
+}
+.SearchBar input {
+    background-color: inherit;
+    color: #90A4AE;
+    box-sizing: border-box;
+    border: 0;
+    border-bottom: 0.5px solid #B0BEC5;
+    flex: 2;
+    width: 50%;
+    font-size: 16px;
+    margin-right: 10px;
+    -webkit-transition: margin 0.4s ease-in-out;
+    transition: margin 0.4s ease-in-out;
+}
+
+.SearchBar input:focus {  
+    margin-right: 3px;
+}
+
+.SearchBar input::-webkit-input-placeholder {
+    color: #B0BEC5;
+    -webkit-transition: color 0.4s ease-in-out;
+    transition: color 0.4s ease-in-out;
+}
+
+.SearchBar input:focus::-webkit-input-placeholder {
+    color: transparent;
+}

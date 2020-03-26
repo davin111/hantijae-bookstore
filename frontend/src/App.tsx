@@ -1,9 +1,9 @@
 import React from 'react';
 import { Route, Switch } from 'react-router-dom';
 import { ConnectedRouter } from 'connected-react-router';
-import {
-  Main,
-} from './containers';
+
+import { Header } from './components';
+import { Main } from './containers';
 
 import './App.css';
 
@@ -16,6 +16,7 @@ function App(props: Props): JSX.Element {
   return (
     <div className="App">
       <ConnectedRouter history={history}>
+        <Header />
         <Switch>
           <Route path="/" exact component={Main} />
         </Switch>
