@@ -3,6 +3,8 @@ package com.example.hantijaebookstore.api;
 import com.example.hantijaebookstore.model.User;
 import com.example.hantijaebookstore.repository.UserRepository;
 import lombok.AllArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
@@ -22,8 +24,9 @@ public class UserController {
     //}
 //
     @PostMapping
-    public void addUser(@Valid @NotNull @RequestBody User user) {
+    public ResponseEntity addUser(@Valid @NotNull @RequestBody User user) {
         userRepository.save(user);
+        return new ResponseEntity(user, HttpStatus.CREATED);
     }
 
     @GetMapping

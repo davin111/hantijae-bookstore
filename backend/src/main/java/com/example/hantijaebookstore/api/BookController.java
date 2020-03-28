@@ -3,6 +3,8 @@ package com.example.hantijaebookstore.api;
 import com.example.hantijaebookstore.model.Book;
 import com.example.hantijaebookstore.repository.BookRepository;
 import lombok.AllArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
@@ -17,8 +19,9 @@ public class BookController {
     private BookRepository bookRepository;
 
     @PostMapping
-    public void addBook(@Valid @NotNull @RequestBody Book book) {
+    public ResponseEntity addBook(@Valid @NotNull @RequestBody Book book) {
         bookRepository.save(book);
+        return new ResponseEntity(book, HttpStatus.CREATED);
     }
 
     @GetMapping
