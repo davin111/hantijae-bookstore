@@ -34,6 +34,7 @@ public class BookRepositoryTests {
         bookRepository.save(Book.builder()
                 .title("title")
                 .description("description")
+                .fullPrice(10000)
                 .build());
 
         //when
@@ -51,6 +52,7 @@ public class BookRepositoryTests {
         bookRepository.save(Book.builder()
                 .title("test title")
                 .description("test desc")
+                .fullPrice(20000)
                 .build());
 
         //when
@@ -60,5 +62,6 @@ public class BookRepositoryTests {
         Book book = bookList.get(0);
         assertThat(book.getTitle(), is("test title"));
         assertThat(book.getDescription(), is("test desc"));
+        assertThat(book.getFullPrice(), is(20000));
     }
 }
