@@ -1,10 +1,7 @@
 package com.example.hantijaebookstore.model;
 
 import com.fasterxml.jackson.annotation.*;
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.validator.constraints.URL;
 
 import javax.persistence.*;
@@ -15,6 +12,7 @@ import java.util.List;
 
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
+@Setter
 @Entity
 public class Book extends BaseTimeEntity {
     @Id
@@ -56,10 +54,22 @@ public class Book extends BaseTimeEntity {
 
     @OneToMany(mappedBy = "book")
     @JsonIgnore
-    private List<BookAuthor> authors = new ArrayList<>();
+    private List<BookAuthor> bookAuthors = new ArrayList<>();
+
+    @OneToMany(mappedBy = "book")
+    @JsonIgnore
+    private List<BookCategory> bookCategories = new ArrayList<>();
+
+    @ManyToOne
+    private Series series;
 
     @Builder
-    public Book(Integer id, @NotBlank String title, String subtitle, String shortDescription, String description, @Min(value = 0, message = "The value must be positive.") Integer fullPrice, @Min(value = 0, message = "The value must be positive.") Integer price, String ISBN, @Min(value = 0, message = "The value must be positive.") Integer pageCount, String size, @URL(protocol = "http") String extraURL, @URL(protocol = "http") String ebookURL, List<BookAuthor> authors) {
+    public Book(Integer id, @NotBlank String title, String subtitle, String shortDescription, String description,
+                @Min(value = 0, message = "The value must be positive.") Integer fullPrice,
+                @Min(value = 0, message = "The value must be positive.") Integer price, String ISBN,
+                @Min(value = 0, message = "The value must be positive.") Integer pageCount, String size,
+                @URL(protocol = "http") String extraURL, @URL(protocol = "http") String ebookURL,
+                List<BookAuthor> bookAuthors, Series series) {
         this.id = id;
         this.title = title;
         this.subtitle = subtitle;
@@ -72,6 +82,7 @@ public class Book extends BaseTimeEntity {
         this.size = size;
         this.extraURL = extraURL;
         this.ebookURL = ebookURL;
-        this.authors = authors;
+        this.bookAuthors = bookAuthors;
+        this.series = series;
     }
 }

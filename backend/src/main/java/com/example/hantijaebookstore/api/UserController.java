@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
@@ -17,11 +18,6 @@ import java.util.List;
 public class UserController {
 
     private UserRepository userRepository;
-
-    //@Autowired
-    //public BookController(BookRepository bookRepository) {
-    //    this.bookRepository = bookRepository;
-    //}
 //
     @PostMapping
     public ResponseEntity addUser(@Valid @NotNull @RequestBody User user) {
@@ -34,19 +30,28 @@ public class UserController {
         return userRepository.findAll();
     }
 
-//    @GetMapping(path = "{id}")
-//    public Book getBookById(@PathVariable("id") int id) {
-//        return bookService.getBookById(id)
-//                .orElse(null);
-//    }
-//
-//    @DeleteMapping(path = "{id}")
-//    public void deleteBookById(@PathVariable("id") int id) {
-//        bookService.deleteBook(id);
-//    }
-//
-//    @PutMapping(path = "{id}")
-//    public void updateBookById(@PathVariable("id") int id, @Valid @NotNull @RequestBody Book bookToUpdate) {
-//        bookService.updateBook(id, bookToUpdate);
-//    }
+    @GetMapping(path = "{id}")
+    public User getUserById(@PathVariable("id") int id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        return user;
+    }
+
+    @DeleteMapping(path = "{id}")
+    public void deleteUserById(@PathVariable("id") int id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        userRepository.delete(user);
+    }
+
+    @PutMapping(path = "{id}")
+    public ResponseEntity updateUserById(@PathVariable("id") int id, @Valid @NotNull @RequestBody User newUser) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        user.setEmail(newUser.getEmail());
+        user.setAddress(newUser.getAddress());
+        user.setPhoneNumber(newUser.getPhoneNumber());
+        return new ResponseEntity(user, HttpStatus.OK);
+    }
 }

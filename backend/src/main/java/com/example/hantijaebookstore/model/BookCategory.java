@@ -8,7 +8,7 @@ import javax.persistence.*;
 @Getter
 @Setter
 @Entity
-public class BookAuthor {
+public class BookCategory {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
@@ -18,15 +18,23 @@ public class BookAuthor {
     private Book book;
 
     @ManyToOne
-    @JoinColumn(name = "author_id")
-    private Author author;
+    @JoinColumn(name = "category_id")
+    private Category category;
 
     @Column(length = 100)
     private String type = "normal";
 
     @Builder
-    public BookAuthor(Book book, Author author) {
+    public BookCategory(Book book, Category category) {
         this.book = book;
-        this.author = author;
+        this.category = category;
+    }
+
+    @Builder
+    public BookCategory(Integer id, Book book, Category category, String type) {
+        this.id = id;
+        this.book = book;
+        this.category = category;
+        this.type = type;
     }
 }

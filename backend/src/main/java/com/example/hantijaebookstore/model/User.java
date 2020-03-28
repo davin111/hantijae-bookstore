@@ -1,15 +1,14 @@
 package com.example.hantijaebookstore.model;
 
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import javax.persistence.*;
+import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
 
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
+@Setter
 @Entity
 public class User extends BaseTimeEntity {
     @Id
@@ -17,13 +16,23 @@ public class User extends BaseTimeEntity {
     private Integer id;
 
     @NotBlank
-    @Column(length = 200, nullable = false)
+    @Email
+    @Column(nullable = false)
     private String email;
 
+    @NotBlank
+    @Column(nullable = false)
+    private String address;
+
+    @NotBlank
+    @Column(nullable = false)
+    private String phoneNumber;
+
     @Builder
-    public User(Integer id,
-                String email) {
+    public User(Integer id, @NotBlank @Email String email, String address, String phoneNumber) {
         this.id = id;
         this.email = email;
+        this.address = address;
+        this.phoneNumber = phoneNumber;
     }
 }

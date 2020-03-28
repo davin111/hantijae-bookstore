@@ -1,9 +1,6 @@
 package com.example.hantijaebookstore.service;
 
-import com.example.hantijaebookstore.repository.AuthorRepository;
-import com.example.hantijaebookstore.repository.BookAuthorRepository;
-import com.example.hantijaebookstore.repository.BookRepository;
-import com.example.hantijaebookstore.repository.UserRepository;
+import com.example.hantijaebookstore.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -16,10 +13,16 @@ public class RepositoryServiceImpl implements RepositoryService {
     private BookRepository bookRepository;
 
     @Autowired
-    private AuthorRepository authorRepository;
+    private BookAuthorRepository bookAuthorRepository;
 
     @Autowired
-    private BookAuthorRepository bookAuthorRepository;
+    private SeriesRepository seriesRepository;
+
+    @Autowired
+    private CategoryRepository categoryRepository;
+
+    @Autowired
+    private BookCategoryRepository bookCategoryRepository;
 
     public RepositoryServiceImpl() {
 

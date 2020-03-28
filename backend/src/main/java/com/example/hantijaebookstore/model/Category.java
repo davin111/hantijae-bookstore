@@ -1,7 +1,10 @@
 package com.example.hantijaebookstore.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import javax.persistence.*;
 import javax.validation.constraints.NotBlank;
@@ -12,23 +15,16 @@ import java.util.List;
 @Getter
 @Setter
 @Entity
-public class Series {
+public class Category extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
     @NotBlank
-    @Column(length = 500, nullable = false)
+    @Column(length = 300, nullable = false)
     private String name;
 
-    @OneToMany(mappedBy = "series")
+    @OneToMany(mappedBy = "category")
     @JsonIgnore
-    private List<Book> books = new ArrayList<>();
-
-    @Builder
-    public Series(Integer id, @NotBlank String name, List<Book> books) {
-        this.id = id;
-        this.name = name;
-        this.books = books;
-    }
+    private List<BookCategory> bookCategories = new ArrayList<>();
 }
