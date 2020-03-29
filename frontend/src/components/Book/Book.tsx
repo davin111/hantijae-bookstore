@@ -3,12 +3,17 @@ import { FaHeartO, FaHeart } from 'react-icons/lib/fa';
 import './Book.css';
 
 export interface BookProps {
-  name: string;
-  image: string;
-  author: string;
-  rate: any;
-  voters: any;
-  people: any;
+  id: number;
+  title: string;
+  subtitle: string;
+  shortDescription: string;
+  fullPrice: number;
+  price: number;
+  // image: string;
+  authors: any[];
+  // rate: any;
+  // voters: any;
+  // people: any;
 }
 
 interface State{
@@ -36,19 +41,26 @@ class Book extends Component<BookProps, State> {
       like = <FaHeartO className="icon" onClick={() => { this.isLiked(); }} />;
     }
 
+    const authors = this.props.authors.map(
+      (author: any) => (
+        <p className="Author" key={author.id}>
+          by
+          {' '}
+          {author.familyName}
+          {author.givenName}
+        </p>
+      ),
+    );
+
     return (
       <div className="Book">
         <div className="BookCover">
           {/* eslint-disable-next-line */}
-          <img src={require(`./booksImgs/${this.props.image}`)} />
+          <img src={require(`./booksImgs/3.jpg`)} />
         </div>
         <div className="BookInfo">
-          <h1>{this.props.name}</h1>
-          <p className="Author">
-            by
-            {' '}
-            {this.props.author}
-          </p>
+          <h1>{this.props.title}</h1>
+          {authors}
           {/* <Rate rate={this.props.rate} voters={this.props.voters} textColor="#607D8B" /> */}
           <div className="BookDescription">
             <p>

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -30,11 +31,19 @@ public class AuthorService {
         response.put("createdAt", author.getCreatedAt());
         response.put("updatedAt", author.getUpdatedAt());
 
-        ArrayList<Book> books = new ArrayList<Book>();
+        List<Book> books = new ArrayList<Book>();
         for (int i = 0; i < author.getBookAuthors().size(); i++) {
             books.add(author.getBookAuthors().get(i).getBook());
         }
         response.put("books", books);
+        return response;
+    }
+
+    public List<Map> serializeAuthors(List<Author> authors) {
+        List<Map> response = new ArrayList<>();
+        for (int i = 0; i < authors.size(); i++) {
+            response.add(serializeAuthor(authors.get(i)));
+        }
         return response;
     }
 }

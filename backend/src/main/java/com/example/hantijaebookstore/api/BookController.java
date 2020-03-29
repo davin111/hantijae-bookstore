@@ -1,7 +1,9 @@
 package com.example.hantijaebookstore.api;
 
+import com.example.hantijaebookstore.model.Author;
 import com.example.hantijaebookstore.model.Book;
 import com.example.hantijaebookstore.repository.BookRepository;
+import com.example.hantijaebookstore.service.BookService;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,7 +13,9 @@ import org.springframework.web.server.ResponseStatusException;
 import javax.persistence.EntityNotFoundException;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @AllArgsConstructor
 @RequestMapping("api/book/")
@@ -20,22 +24,26 @@ public class BookController {
 
     private BookRepository bookRepository;
 
+    private BookService bookService;
+
     @PostMapping
     public ResponseEntity addBook(@Valid @NotNull @RequestBody Book book) {
         bookRepository.save(book);
         return new ResponseEntity(book, HttpStatus.CREATED);
     }
 
+    @ResponseBody
     @GetMapping
-    public List<Book> getAllBook() {
-        return bookRepository.findAll();
+    public List<Map> getAllBook() {
+        return bookService.serializeBooks(bookRepository.findAll());
     }
 
+    @ResponseBody
     @GetMapping(path = "{id}")
-    public Book getBookById(@PathVariable("id") int id) {
+    public Map getBookById(@PathVariable("id") int id) {
         Book book = bookRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        return book;
+        return bookService.serializeBook(book);
     }
 
     @DeleteMapping(path = "{id}")

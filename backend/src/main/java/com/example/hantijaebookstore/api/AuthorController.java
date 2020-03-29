@@ -40,18 +40,13 @@ public class AuthorController {
 
     @ResponseBody
     @GetMapping
-    public ArrayList<Map<String, Object>> getAllAuthor() {
-        List<Author> authors = authorRepository.findAll();
-        ArrayList<Map<String, Object>> response = new ArrayList<>();
-        for (int i = 0; i < authors.size(); i++) {
-            response.add(authorService.serializeAuthor(authors.get(i)));
-        }
-        return response;
+    public List<Map> getAllAuthor() {
+        return authorService.serializeAuthors(authorRepository.findAll());
     }
 
     @ResponseBody
     @GetMapping(path = "{id}")
-    public Map<String, Object> getAuthorById(@PathVariable("id") int id) {
+    public Map getAuthorById(@PathVariable("id") int id) {
         Author author = authorRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         return authorService.serializeAuthor(author);
@@ -78,7 +73,7 @@ public class AuthorController {
     }
 
     @PutMapping(path = "{id}/book/{bookId}")
-    public void relateAuthorBook(@PathVariable("id") int id, @PathVariable("bookId") int bookId) {
+    public void relateAuthorWithBook(@PathVariable("id") int id, @PathVariable("bookId") int bookId) {
         Author author = authorRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 

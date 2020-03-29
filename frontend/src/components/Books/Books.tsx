@@ -10,13 +10,17 @@ interface Props{
 class Books extends Component<Props> {
   bookCardMaker = (book: BookProps) => (
     <Book
-      key={book.name}
-      name={book.name}
-      image={book.image}
-      author={book.author}
-      rate={book.rate}
-      voters={book.voters}
-      people={book.people}
+      key={book.id}
+      id={book.id}
+      title={book.title}
+      subtitle={book.subtitle}
+      shortDescription={book.shortDescription}
+      fullPrice={book.fullPrice}
+      price={book.price}
+      authors={book.authors}
+      // rate={book.rate}
+      // voters={book.voters}
+      // people={book.people}
     />
   );
 
