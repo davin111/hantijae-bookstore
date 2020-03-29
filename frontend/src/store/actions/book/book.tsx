@@ -66,6 +66,6 @@ const getCategoriesFailure = (error: any) => ({
   target: error,
 });
 
-export const getCategories = () => (dispatch: Dispatch) => axios.get('/api/category/')
+export const getCategories = () => (dispatch: Dispatch) => axios.get('/api/book/category/')
   .then((res) => dispatch(getCategoriesSuccess(res.data)))
   .catch((err) => dispatch(getCategoriesFailure(err)));
