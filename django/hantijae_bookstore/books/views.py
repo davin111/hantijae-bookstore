@@ -3,8 +3,8 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from books.models import Book, Category, Author
-from books.serializers import BookSerializer, CategorySerializer
+from books.models import Book, Category, Author, Series
+from books.serializers import BookSerializer, CategorySerializer, SeriesSerializer
 
 class BookViewSet(viewsets.GenericViewSet):
     queryset = Book.objects.all()
@@ -22,6 +22,15 @@ class BookViewSet(viewsets.GenericViewSet):
 class CategoryViewSet(viewsets.GenericViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
+
+    def list(self, request):
+        queryset = self.get_queryset()
+        return Response(self.get_serializer(queryset, many=True).data)
+
+
+class SeriesViewSet(viewsets.GenericViewSet):
+    queryset = Series.objects.all()
+    serializer_class = SeriesSerializer
 
     def list(self, request):
         queryset = self.get_queryset()

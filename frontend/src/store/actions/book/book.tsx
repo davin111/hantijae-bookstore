@@ -69,3 +69,18 @@ const getCategoriesFailure = (error: any) => ({
 export const getCategories = () => (dispatch: Dispatch) => axios.get('/api/book/category/')
   .then((res) => dispatch(getCategoriesSuccess(res.data)))
   .catch((err) => dispatch(getCategoriesFailure(err)));
+
+
+const getAllSeriesSuccess = (series: any) => ({
+  type: categoryConstants.GET_CATEGORIES_SUCCESS,
+  target: series,
+});
+
+const getAllSeriesFailure = (error: any) => ({
+  type: categoryConstants.GET_CATEGORIES_FAILURE,
+  target: error,
+});
+
+export const getAllSeries = () => (dispatch: Dispatch) => axios.get('/api/book/series/')
+  .then((res) => dispatch(getAllSeriesSuccess(res.data)))
+  .catch((err) => dispatch(getAllSeriesFailure(err)));

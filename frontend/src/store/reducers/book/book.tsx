@@ -1,12 +1,14 @@
-import { bookConstants, categoryConstants } from '../../actions/actionTypes';
-import { bookStatus, categoryStatus } from '../../../constants/constants';
+import { bookConstants, categoryConstants, seriesConstants } from '../../actions/actionTypes';
+import { bookStatus, categoryStatus, seriesStatus } from '../../../constants/constants';
 
 const initialState = {
   getBookStatus: bookStatus.NONE,
   getCategoryStatus: categoryStatus.NONE,
+  getSeriesStatus: seriesStatus.NONE,
   books: {},
   getBooksByCategories: {},
   getCategories: {},
+  getAllSeries: {},
 };
 
 const reducer = (state = initialState, action: any) => {
@@ -21,6 +23,10 @@ const reducer = (state = initialState, action: any) => {
       return { ...state, getCategoryStatus: categoryStatus.SUCCESS, getCategories: action.target };
     case categoryConstants.GET_CATEGORIES_FAILURE:
       return { ...state, getCategoryStatus: categoryStatus.FAILURE };
+    case seriesConstants.GET_ALL_SERIES_SUCCESS:
+      return { ...state, getSeriesStatus: seriesStatus.SUCCESS, getAllSeries: action.target };
+    case seriesConstants.GET_ALL_SERIES_FAILURE:
+      return { ...state, getSeriesStatus: seriesStatus.FAILURE };
     default:
       return { ...state };
   }
