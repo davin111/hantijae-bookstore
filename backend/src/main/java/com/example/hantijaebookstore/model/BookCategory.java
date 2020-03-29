@@ -3,11 +3,15 @@ package com.example.hantijaebookstore.model;
 import lombok.*;
 
 import javax.persistence.*;
+import java.util.Optional;
 
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
 @Setter
 @Entity
+@Table(uniqueConstraints={
+        @UniqueConstraint(columnNames = {"book_id", "category_id"})
+})
 public class BookCategory {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -21,9 +25,6 @@ public class BookCategory {
     @JoinColumn(name = "category_id")
     private Category category;
 
-    @Column(length = 100)
-    private String type = "normal";
-
     @Builder
     public BookCategory(Book book, Category category) {
         this.book = book;
@@ -31,10 +32,9 @@ public class BookCategory {
     }
 
     @Builder
-    public BookCategory(Integer id, Book book, Category category, String type) {
+    public BookCategory(Integer id, Book book, Category category) {
         this.id = id;
         this.book = book;
         this.category = category;
-        this.type = type;
     }
 }

@@ -24,6 +24,9 @@ public class Category extends BaseTimeEntity {
     @Column(length = 300, nullable = false)
     private String name;
 
+    @Column(length = 100, nullable = false)
+    private String type = "normal";
+
     @OneToMany(mappedBy = "category")
     @JsonIgnore
     private List<BookCategory> bookCategories = new ArrayList<>();

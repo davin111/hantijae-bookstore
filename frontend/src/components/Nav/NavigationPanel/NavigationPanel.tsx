@@ -6,6 +6,7 @@ import './NavigationPanel.css';
 interface Props{
   activeTab: any;
   onMainFilterClick: (filter: any) => void;
+  categories: any;
 }
 
 class NavigationPanel extends Component<Props> {
@@ -19,7 +20,11 @@ class NavigationPanel extends Component<Props> {
         <div className="PopularBy">
           <span>Popular by Genre</span>
         </div>
-        <NavBar onFilterClick={this.onCategorySelect} activeTab={this.props.activeTab} />
+        <NavBar
+          onFilterClick={this.onCategorySelect}
+          activeTab={this.props.activeTab}
+          categories={this.props.categories}
+        />
       </div>
     );
   }

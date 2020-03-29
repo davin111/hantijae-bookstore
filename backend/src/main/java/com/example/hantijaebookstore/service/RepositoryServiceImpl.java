@@ -10,9 +10,6 @@ public class RepositoryServiceImpl implements RepositoryService {
     private UserRepository userRepository;
 
     @Autowired
-    private BookRepository bookRepository;
-
-    @Autowired
     private BookAuthorRepository bookAuthorRepository;
 
     @Autowired
