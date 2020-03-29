@@ -4,7 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from books.models import Book, Category, Author, Series
-from books.serializers import BookSerializer, CategorySerializer, SeriesSerializer
+from books.serializers import (BookSerializer, CategorySerializer, SeriesSerializer,
+    SimpleSeriesSerializer)
 
 class BookViewSet(viewsets.GenericViewSet):
     queryset = Book.objects.all()
@@ -30,19 +31,17 @@ class CategoryViewSet(viewsets.GenericViewSet):
 
 class SeriesViewSet(viewsets.GenericViewSet):
     queryset = Series.objects.all()
-    serializer_class = SeriesSerializer
+    serializer_class = SimpleSeriesSerializer
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return SeriesSerializer
+        return self.serializer_class
 
     def list(self, request):
-        queryset = self.get_queryset()
-        data = self.get_serializer(queryset, many=True).data
-        
-        include_normal = request.query_params.get('include_normal')
-        if include_normal:
-            normal_books = Book.objects.filter(series__isnull=True)
-            normal = {
-                "id": None,
-                "name": "단행본",
-                "books": BookSerializer(normal_books, many=True).data
-            }
-            data.append(normal)
-        return Response(data)
+        queryset = self.get_queryset()     
+        return Response(self.get_serializer(queryset, many=True).data)
+
+    def retrieve(self, request, pk=None):
+        series = get_object_or_404(Series, pk=pk)
+        return Response(self.get_serializer(series).data)

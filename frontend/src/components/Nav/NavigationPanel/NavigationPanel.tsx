@@ -4,16 +4,10 @@ import NavBar from '../NavBar/NavBar';
 import './NavigationPanel.css';
 
 interface Props{
-  activeTab: any;
-  onMainFilterClick: (filter: any) => void;
-  categories: any;
+  history: any;
 }
 
 class NavigationPanel extends Component<Props> {
-  onCategorySelect = (filter: any) => {
-    this.props.onMainFilterClick(filter);
-  };
-
   render() {
     return (
       <div className="NavigationPanel">
@@ -21,9 +15,7 @@ class NavigationPanel extends Component<Props> {
           <span>Popular by Genre</span>
         </div>
         <NavBar
-          onFilterClick={this.onCategorySelect}
-          activeTab={this.props.activeTab}
-          categories={this.props.categories}
+          history={this.props.history}
         />
       </div>
     );

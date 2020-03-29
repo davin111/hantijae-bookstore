@@ -3,6 +3,7 @@ import {
   getBooks,
   getBooksByCategory,
   getCategories,
+  getSeries,
   getAllSeries,
 } from './book/book';
 
@@ -12,5 +13,6 @@ export const bookActions = {
   getBooks,
   getBooksByCategory,
   getCategories,
+  getSeries,
   getAllSeries,
 };

@@ -3,78 +3,77 @@ import { connect } from 'react-redux';
 
 import { bookActions } from '../../store/actions';
 import './BookShelf.css';
-import NavigationPanel from '../Nav/NavigationPanel/NavigationPanel';
 import Books from '../Books/Books';
 import { seriesStatus } from '../../constants/constants';
 
 interface Props{
-  categories: any;
-  getCategoryStatus: string;
-  onGetCategories: () => any;
   series: any;
+  allSeries: any;
   getSeriesStatus: string;
-  onGetAllSeries: () => any;
+  onGetSeries: (id: number) => any;
+  history: any;
+  seriesId: number;
 }
 interface State{
-  activeTab: string;
+  series: any;
 }
 
 class BookShelf extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
-      activeTab: '',
+      series: null,
     };
   }
 
   componentDidMount() {
-    // this.props.onGetCategories();
-    this.props.onGetAllSeries()
-      .then(() => {
-        let activeTab = '';
-        if (this.props.getSeriesStatus === seriesStatus.SUCCESS) {
-          activeTab = this.props.series[0].name;
-          this.setState({ activeTab });
-        }
-      })
-      .catch(() => {});
+    this.refreshBookShelf();
   }
 
-  onTabChange = (tab: string) => {
-    this.setState({ activeTab: tab });
-  };
+  componentDidUpdate(prevProps: Props) {
+    if ((Object.keys(prevProps.allSeries).length === 0
+        && this.props.allSeries !== prevProps.allSeries)
+        || this.props.seriesId !== prevProps.seriesId) {
+      this.refreshBookShelf();
+    }
+  }
+
+  refreshBookShelf() {
+    if (Object.keys(this.props.allSeries).length !== 0) {
+      let activeSeriesId = 0;
+      if (this.props.seriesId === 0) {
+        activeSeriesId = this.props.allSeries[0].id;
+      } else {
+        activeSeriesId = this.props.seriesId;
+      }
+
+      this.props.onGetSeries(activeSeriesId)
+        .then(() => {
+          this.setState({ series: this.props.series });
+        });
+    }
+  }
 
   render() {
-    let currentBooks: any[] = [];
-    for (let i = 0; i < this.props.series.length; i += 1) {
-      if (this.props.series[i].name === this.state.activeTab) {
-        currentBooks = this.props.series[i].books;
-        break;
-      }
+    let books = null;
+    if (this.state.series != null) {
+      books = <Books books={this.state.series.books} history={this.props.history} />;
     }
-
     return (
       <div className="BookShelf">
-        <NavigationPanel
-          onMainFilterClick={this.onTabChange}
-          activeTab={this.state.activeTab}
-          categories={this.props.series}
-        />
-        <Books books={currentBooks} />
+        {books}
       </div>
     );
   }
 }
 const mapStateToProps = (state: any) => ({
-  getCategoryStatus: state.book.getCategoryStatus,
-  categories: state.book.getCategories,
   getSeriesStatus: state.book.getSeriesStatus,
-  series: state.book.getAllSeries,
+  series: state.book.getSeries,
+  allSeries: state.book.getAllSeries,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
-  onGetCategories: () => dispatch(bookActions.getCategories()),
-  onGetAllSeries: () => dispatch(bookActions.getAllSeries()),
+  onGetSeries: (id: number) => dispatch(bookActions.getSeries(id)),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(BookShelf);

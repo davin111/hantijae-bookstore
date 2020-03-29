@@ -64,6 +64,15 @@ class CategorySerializer(serializers.ModelSerializer):
         return BookSerializer(category.books.all(), many=True, context=self.context).data
 
 
+class SimpleSeriesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Series
+        fields = (
+            'id',
+            'name',
+        )
+
+
 class SeriesSerializer(serializers.ModelSerializer):
     books = serializers.SerializerMethodField()
 

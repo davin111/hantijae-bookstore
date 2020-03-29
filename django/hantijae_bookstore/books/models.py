@@ -21,8 +21,17 @@ class Category(BaseModel):
 
 
 class Series(BaseModel):
+    SERIES = 1
+    NORMAL = 2
+
+    SERIES_TYPES = (
+        (SERIES, 'series'),
+        (NORMAL, 'normal'),
+    )
+
     name = models.CharField(max_length=300)
-    
+    series_type = models.IntegerField(choices=SERIES_TYPES, default=SERIES)
+
     class Meta:
         db_table = 'books_series'
 

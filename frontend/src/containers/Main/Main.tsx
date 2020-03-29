@@ -7,6 +7,7 @@ import './Main.css';
 
 interface Props {
   onGetBooks: () => void;
+  history: any;
 }
 
 class Main extends Component<Props> {
@@ -15,10 +16,16 @@ class Main extends Component<Props> {
     // onGetBooks();
   }
 
-
   render() {
+    let activeSeriesId = 0;
+    if (this.props.history.location.pathname.startsWith('/series=')) {
+      activeSeriesId = this.props.history.location.pathname.split('=')[1];
+    }
     return (
-      <BookShelf />
+      <BookShelf
+        history={this.props.history}
+        seriesId={activeSeriesId}
+      />
     );
   }
 }

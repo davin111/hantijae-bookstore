@@ -1,80 +1,84 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 
+import { bookActions } from '../../../store/actions';
 import './NavBar.css';
 
 interface Props{
-  activeTab: string;
-  categories: any;
-  onFilterClick: (category: any) => void;
+  series: any;
+  history: any;
+  getSeriesStatus: string;
+  onGetAllSeries: () => any;
 }
 
-// interface State{
-//   categories: any;
-//   activeTab: string;
-// }
+interface State{
+  activeSeriesId: number;
+}
 
-class NavBar extends Component<Props> {
-  // constructor(props: Props) {
-  //   super(props);
-  //   this.state = {
-  //     categories: [],
-  //     activeTab: '',
-  //   };
-  // }
+class NavBar extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      activeSeriesId: 0,
+    };
+  }
+
+  componentDidMount() {
+    this.props.onGetAllSeries();
+  }
 
   /* eslint-disable react/no-did-update-set-state */
-  // It's OK to use setState if it is wrapped in a condition
-  // componentDidUpdate(prevProps: Props) {
-  //   if (this.props.categories !== prevProps.categories
-  //         || this.props.activeTab !== prevProps.activeTab) {
-  //     this.setState({
-  //       categories: this.props.categories,
-  //       activeTab: this.props.activeTab,
-  //     });
-  //     console.log('CHANGED');
-  //     console.log(prevProps.categories);
-  //     console.log(this.props.categories);
-  //     console.log(prevProps.activeTab);
-  //     console.log(this.props.activeTab);
-  //   }
-  // }
+  componentDidUpdate(prevProps: Props) {
+    if (this.props.history !== prevProps.history) {
+      this.setState({ activeSeriesId: 0 });
+    }
+  }
   /* eslint-enable react/no-did-update-set-state */
 
-  onFilterSelect = (category: any) => {
-    this.props.onFilterClick(category);
-  };
+  clickSeriesHandler(id: number) {
+    this.props.history.push(`/series=${id}`);
+    this.setState({ activeSeriesId: id });
+  }
 
   render() {
-    let categories = null;
-    if (this.props.categories.length > 0) {
-      categories = this.props.categories.map((category: any) => {
-        const categoryName = category.name.charAt(0).toUpperCase() + category.name.slice(1);
-        const style = `CategoryButton ${this.props.activeTab === category.name ? 'CategoryButtonActive' : ''}`;
-        return (
-          <button
-            type="button"
-            key={categoryName}
-            onClick={() => this.onFilterSelect(category.name)}
-            className={style}
-          >
-            {categoryName}
-          </button>
-        );
-      });
+    let series = null;
+    if (this.props.series.length > 0) {
+      let activeSeriesId = 0;
+      const { pathname } = this.props.history.location;
+      if (pathname.startsWith('/series=')) {
+        activeSeriesId = pathname.split('=')[1];
+      } else if (pathname === '/') {
+        activeSeriesId = this.props.series[0].id;
+      } else {
+        activeSeriesId = this.state.activeSeriesId;
+      }
+
+      series = this.props.series.map((oneSeries: any) => (
+        <button
+          type="button"
+          key={`${oneSeries.id} ${activeSeriesId}`}
+          onClick={() => this.clickSeriesHandler(oneSeries.id)}
+          className={`CategoryButton ${oneSeries.id === Number(activeSeriesId) ? 'CategoryButtonActive' : ''}`}
+        >
+          {oneSeries.name}
+        </button>
+      ));
     }
     return (
       <div className="NavBar">
-        {categories}
+        {series}
       </div>
     );
   }
 }
 
 const mapStateToProps = (state: any) => ({
+  getSeriesStatus: state.book.getSeriesStatus,
+  series: state.book.getAllSeries,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
+  onGetAllSeries: () => dispatch(bookActions.getAllSeries()),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(NavBar);

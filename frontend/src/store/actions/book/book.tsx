@@ -4,7 +4,7 @@ import { bookConstants, categoryConstants, seriesConstants } from '../actionType
 
 const getBookSuccess = (book: any) => ({
   type: bookConstants.GET_BOOK_SUCCESS,
-  target: book.book,
+  target: book,
 });
 
 const getBookFailure = (error: any) => {
@@ -22,7 +22,7 @@ const getBookFailure = (error: any) => {
   };
 };
 
-export const getBook = (bookId: string) => (dispatch: Dispatch) => axios.get('/api/book/', { params: bookId })
+export const getBook = (id: number) => (dispatch: Dispatch) => axios.get(`/api/book/${id}/`)
   .then((res) => dispatch(getBookSuccess(res.data)))
   .catch((err) => dispatch(getBookFailure(err)));
 
@@ -40,6 +40,7 @@ const getBooksFailure = (error: any) => ({
 export const getBooks = () => (dispatch: Dispatch) => axios.get('/api/book/')
   .then((res) => dispatch(getBooksSuccess(res.data)))
   .catch((err) => dispatch(getBooksFailure(err)));
+
 
 const getBooksByCategorySuccess = (books: any) => ({
   type: bookConstants.GET_BOOKS_SUCCESS,
@@ -71,6 +72,21 @@ export const getCategories = () => (dispatch: Dispatch) => axios.get('/api/book/
   .catch((err) => dispatch(getCategoriesFailure(err)));
 
 
+const getSeriesSuccess = (series: any) => ({
+  type: seriesConstants.GET_SERIES_SUCCESS,
+  target: series,
+});
+
+const getSeriesFailure = (error: any) => ({
+  type: seriesConstants.GET_ALL_SERIES_FAILURE,
+  target: error,
+});
+
+export const getSeries = (id: number) => (dispatch: Dispatch) => axios.get(`/api/book/series/${id}`)
+  .then((res) => dispatch(getSeriesSuccess(res.data)))
+  .catch((err) => dispatch(getSeriesFailure(err)));
+
+
 const getAllSeriesSuccess = (series: any) => ({
   type: seriesConstants.GET_ALL_SERIES_SUCCESS,
   target: series,
@@ -81,6 +97,6 @@ const getAllSeriesFailure = (error: any) => ({
   target: error,
 });
 
-export const getAllSeries = () => (dispatch: Dispatch) => axios.get('/api/book/series/', { params: { include_normal: true } })
+export const getAllSeries = () => (dispatch: Dispatch) => axios.get('/api/book/series/')
   .then((res) => dispatch(getAllSeriesSuccess(res.data)))
   .catch((err) => dispatch(getAllSeriesFailure(err)));

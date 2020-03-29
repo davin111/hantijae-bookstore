@@ -2,18 +2,27 @@ import React, { Component } from 'react';
 
 import Title from './Title/Title';
 import SearchBar from './SearchBar/SearchBar';
+import NavigationPanel from '../Nav/NavigationPanel/NavigationPanel';
 
 import './Header.css';
 
+interface Props {
+  history: any;
+}
 
 // eslint-disable-next-line react/prefer-stateless-function
-class Header extends Component {
+class Header extends Component<Props> {
   render() {
     return (
-      <header>
-        <SearchBar />
-        <Title />
-      </header>
+      <div>
+        <header>
+          <SearchBar />
+          <Title history={this.props.history} />
+        </header>
+        <NavigationPanel
+          history={this.props.history}
+        />
+      </div>
     );
   }
 }

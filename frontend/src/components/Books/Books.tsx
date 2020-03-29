@@ -5,6 +5,7 @@ import Book, { BookProps } from '../Book/Book';
 
 interface Props{
   books: BookProps[];
+  history: any;
 }
 
 class Books extends Component<Props> {
@@ -18,6 +19,7 @@ class Books extends Component<Props> {
       fullPrice={book.fullPrice}
       price={book.price}
       authors={book.authors}
+      history={this.props.history}
       // rate={book.rate}
       // voters={book.voters}
       // people={book.people}

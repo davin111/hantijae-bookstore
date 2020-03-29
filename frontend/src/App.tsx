@@ -3,7 +3,7 @@ import { Route, Switch } from 'react-router-dom';
 import { ConnectedRouter } from 'connected-react-router';
 
 import { Header } from './components';
-import { Main } from './containers';
+import { Main, BookDetail } from './containers';
 
 import './App.css';
 
@@ -16,9 +16,11 @@ function App(props: Props): JSX.Element {
   return (
     <div className="App">
       <ConnectedRouter history={history}>
-        <Header />
+        <Header history={props.history} />
         <Switch>
-          <Route path="/" exact component={Main} />
+          <Route path="/" exact component={Main} history={props.history} />
+          <Route path="/series=:series_id" exact component={Main} history={props.history} />
+          <Route path="/book=:book_id" exact component={BookDetail} history={props.history} />
         </Switch>
       </ConnectedRouter>
     </div>

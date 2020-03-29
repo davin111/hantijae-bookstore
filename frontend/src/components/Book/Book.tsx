@@ -14,6 +14,7 @@ export interface BookProps {
   // rate: any;
   // voters: any;
   // people: any;
+  history: any;
 }
 
 interface State{
@@ -50,7 +51,8 @@ class Book extends Component<BookProps, State> {
     );
 
     return (
-      <div className="Book">
+      // eslint-disable-next-line
+      <div className="Book" onClick={() => this.props.history.push(`/book=${this.props.id}`)}>
         <div className="BookCover">
           {/* eslint-disable-next-line */}
           <img src={require(`./booksImgs/3.jpg`)} />
