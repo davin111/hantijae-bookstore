@@ -4,8 +4,8 @@ from django.core.exceptions import ObjectDoesNotExist
 
 from books.models import Book, Category, Author, Series, BookSeries, BookAuthor
 
-TSV_FILE = '/Users/dan/Documents/hantijae-bookstore/data/한티재_도서목록200325.tsv'
-STARTING_ROW = 2
+TSV_FILE = ''
+STARTING_ROW = 0
 
 def download_book_data():
     with open(TSV_FILE) as f:

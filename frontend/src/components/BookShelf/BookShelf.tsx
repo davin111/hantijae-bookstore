@@ -28,7 +28,7 @@ class BookShelf extends Component<Props, State> {
   }
 
   componentDidMount() {
-    this.props.onGetCategories();
+    // this.props.onGetCategories();
     this.props.onGetAllSeries()
       .then(() => {
         let activeTab = '';

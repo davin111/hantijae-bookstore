@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Dispatch } from 'redux';
-import { bookConstants, categoryConstants } from '../actionTypes';
+import { bookConstants, categoryConstants, seriesConstants } from '../actionTypes';
 
 const getBookSuccess = (book: any) => ({
   type: bookConstants.GET_BOOK_SUCCESS,
@@ -72,15 +72,15 @@ export const getCategories = () => (dispatch: Dispatch) => axios.get('/api/book/
 
 
 const getAllSeriesSuccess = (series: any) => ({
-  type: categoryConstants.GET_CATEGORIES_SUCCESS,
+  type: seriesConstants.GET_ALL_SERIES_SUCCESS,
   target: series,
 });
 
 const getAllSeriesFailure = (error: any) => ({
-  type: categoryConstants.GET_CATEGORIES_FAILURE,
+  type: seriesConstants.GET_ALL_SERIES_FAILURE,
   target: error,
 });
 
-export const getAllSeries = () => (dispatch: Dispatch) => axios.get('/api/book/series/')
+export const getAllSeries = () => (dispatch: Dispatch) => axios.get('/api/book/series/', { params: { include_normal: true } })
   .then((res) => dispatch(getAllSeriesSuccess(res.data)))
   .catch((err) => dispatch(getAllSeriesFailure(err)));

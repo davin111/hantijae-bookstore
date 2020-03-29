@@ -34,4 +34,15 @@ class SeriesViewSet(viewsets.GenericViewSet):
 
     def list(self, request):
         queryset = self.get_queryset()
-        return Response(self.get_serializer(queryset, many=True).data)
+        data = self.get_serializer(queryset, many=True).data
+        
+        include_normal = request.query_params.get('include_normal')
+        if include_normal:
+            normal_books = Book.objects.filter(series__isnull=True)
+            normal = {
+                "id": None,
+                "name": "단행본",
+                "books": BookSerializer(normal_books, many=True).data
+            }
+            data.append(normal)
+        return Response(data)

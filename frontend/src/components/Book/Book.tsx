@@ -44,10 +44,7 @@ class Book extends Component<BookProps, State> {
     const authors = this.props.authors.map(
       (author: any) => (
         <p className="Author" key={author.id}>
-          by
-          {' '}
-          {author.familyName}
-          {author.givenName}
+          {author.name}
         </p>
       ),
     );

@@ -12,7 +12,7 @@ interface Props {
 class Main extends Component<Props> {
   componentDidMount() {
     const { onGetBooks } = this.props;
-    onGetBooks();
+    // onGetBooks();
   }
 
 
