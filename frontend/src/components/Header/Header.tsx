@@ -17,6 +17,7 @@ class Header extends Component<Props> {
       <div>
         <header>
           <Title history={this.props.history} />
+          <User />
         </header>
         <NavigationPanel
           history={this.props.history}

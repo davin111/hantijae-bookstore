@@ -12,3 +12,23 @@ class SimpleUserSerializer(serializers.ModelSerializer):
             'email',
             'last_login',
         )
+
+
+class UserSerializer(serializers.ModelSerializer):
+    book_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            'id',
+            'username',
+            'email',
+            'last_login',
+            'book_count'
+        )
+    
+    def get_book_count(self, user):
+        if user.baskets.exists():
+            last_basket = user.baskets.last()
+            return last_basket.books.count()
+        return None

@@ -2,10 +2,11 @@ import React from 'react';
 import { Route, Switch } from 'react-router-dom';
 import { ConnectedRouter } from 'connected-react-router';
 
-import { Header } from './components';
+import { Header, Auth } from './components';
 import {
   Main, BookDetail, Login, Signup,
 } from './containers';
+
 
 import './App.css';
 
@@ -18,6 +19,7 @@ function App(props: Props): JSX.Element {
   return (
     <div className="App">
       <ConnectedRouter history={history}>
+        <Auth history={history} />
         <Header history={props.history} />
         <Switch>
           <Route path="/login" exact component={Login} history={props.history} />

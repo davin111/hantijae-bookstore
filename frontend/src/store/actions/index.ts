@@ -10,6 +10,7 @@ import {
 import {
   login,
   signup,
+  getMe,
 } from './user/user';
 
 
@@ -25,4 +26,5 @@ export const bookActions = {
 export const userActions = {
   login,
   signup,
+  getMe,
 };

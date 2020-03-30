@@ -6,10 +6,15 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounts.serializers import SimpleUserSerializer
+from accounts.serializers import SimpleUserSerializer, UserSerializer
 
 class UserViewSet(viewsets.GenericViewSet):
     serializer_class = SimpleUserSerializer
+
+    def get_serializer_class(self):
+        if self.action == 'me':
+            return UserSerializer
+        return self.serializer_class
 
     @action(detail=False, methods=['PUT'])
     def login(self, request):
@@ -28,3 +33,10 @@ class UserViewSet(viewsets.GenericViewSet):
             logout(request)
             return Response()
         return Response(status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['GET'])
+    def me(self, request):
+        user = request.user
+        if user.is_authenticated:
+            return Response(UserSerializer(user).data)
+        return Response(status=status.HTTP_403_FORBIDDEN)

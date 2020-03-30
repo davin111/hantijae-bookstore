@@ -5,11 +5,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    margin-right: 2%;
   }
   .UserPictire {
     background-color: pink;
-    height: 8vh;
-    width: 8vh;
+    height: 6vh;
+    width: 6vh;
     border: 1px solid #FAFAFA;
     border-radius: 50%;
     display: flex;
