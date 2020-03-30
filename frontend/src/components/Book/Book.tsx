@@ -63,8 +63,7 @@ class Book extends Component<BookProps, State> {
           {/* <Rate rate={this.props.rate} voters={this.props.voters} textColor="#607D8B" /> */}
           <div className="BookDescription">
             <p>
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit,
-              sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+              {this.props.shortDescription}
             </p>
           </div>
         </div>

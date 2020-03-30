@@ -44,6 +44,7 @@ class BookDetail extends Component<Props, State> {
     const { book } = this.props;
 
     return (
+      <div>
       <div className="BookDetail">
         <div className="BookCoverStand">
           {/* eslint-disable-next-line */}
@@ -94,11 +95,11 @@ class BookDetail extends Component<Props, State> {
           </div>
 
         </div>
+      </div>
         <div className="BookDescriptions">
           <h2 id="ShortDescription">{book.short_description}</h2>
           <p className="DetailDescription">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit,
-            sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+            {book.description}
           </p>
         </div>
       </div>

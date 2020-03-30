@@ -14,6 +14,7 @@ const getBookFailure = (error: any) => {
       actionType = bookConstants.GET_BOOK_FAILURE;
       break;
     default:
+      actionType = bookConstants.GET_BOOK_FAILURE;
       break;
   }
   return {

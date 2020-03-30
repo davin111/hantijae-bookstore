@@ -3,7 +3,9 @@ import { Route, Switch } from 'react-router-dom';
 import { ConnectedRouter } from 'connected-react-router';
 
 import { Header } from './components';
-import { Main, BookDetail, Login } from './containers';
+import {
+  Main, BookDetail, Login, Signup,
+} from './containers';
 
 import './App.css';
 
@@ -19,6 +21,7 @@ function App(props: Props): JSX.Element {
         <Header history={props.history} />
         <Switch>
           <Route path="/login" exact component={Login} history={props.history} />
+          <Route path="/signup" exact component={Signup} history={props.history} />
           <Route path="/" exact component={Main} history={props.history} />
           <Route path="/series=:series_id" exact component={Main} history={props.history} />
           <Route path="/book=:book_id" exact component={BookDetail} history={props.history} />

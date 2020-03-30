@@ -4,8 +4,8 @@ from django.core.exceptions import ObjectDoesNotExist
 
 from books.models import Book, Category, Author, Series, BookSeries, BookAuthor
 
-TSV_FILE = ''
-STARTING_ROW = 0
+TSV_FILE = '/Users/dan/Documents/hantijae-bookstore/data/한티재_도서목록200325.tsv'
+STARTING_ROW = 2
 
 def download_book_data():
     with open(TSV_FILE) as f:
@@ -45,6 +45,13 @@ def download_book_data():
                 print(author)
                 ba = BookAuthor.objects.create(book=book, author=author)
                 print(ba)
+
+    normal_books = Book.objects.filter(series__isnull=True)
+    print("normal books:", normal_books.count())
+    normal_series = Series.objects.create(name="단행본",  series_type=Series.NORMAL)
+    for normal_book in normal_books:
+        bs = BookSeries.objects.create(book=normal_book, series=normal_series)
+        print(bs)
 
 class Command(BaseCommand):
     def handle(self, *args, **options):

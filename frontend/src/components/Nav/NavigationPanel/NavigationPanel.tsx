@@ -12,7 +12,7 @@ class NavigationPanel extends Component<Props> {
     return (
       <div className="NavigationPanel">
         <div className="PopularBy">
-          <span>Popular by Genre</span>
+          <span>카테고리</span>
         </div>
         <NavBar
           history={this.props.history}

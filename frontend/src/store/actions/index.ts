@@ -7,7 +7,12 @@ import {
   getAllSeries,
 } from './book/book';
 
-// eslint-disable-next-line import/prefer-default-export
+import {
+  login,
+  signup,
+} from './user/user';
+
+
 export const bookActions = {
   getBook,
   getBooks,
@@ -15,4 +20,9 @@ export const bookActions = {
   getCategories,
   getSeries,
   getAllSeries,
+};
+
+export const userActions = {
+  login,
+  signup,
 };

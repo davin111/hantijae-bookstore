@@ -9,14 +9,14 @@ interface Props{
 }
 
 class Books extends Component<Props> {
-  bookCardMaker = (book: BookProps) => (
+  bookCardMaker = (book: any) => (
     <Book
       key={book.id}
       id={book.id}
       title={book.title}
       subtitle={book.subtitle}
-      shortDescription={book.shortDescription}
-      fullPrice={book.fullPrice}
+      shortDescription={book.short_description}
+      fullPrice={book.full_price}
       price={book.price}
       authors={book.authors}
       history={this.props.history}

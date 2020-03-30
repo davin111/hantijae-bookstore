@@ -179,3 +179,4 @@ fixtures/
 # redis
 dump.rdb
 
+secret_info.json

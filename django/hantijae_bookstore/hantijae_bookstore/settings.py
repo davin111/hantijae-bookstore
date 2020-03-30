@@ -11,6 +11,9 @@ https://docs.djangoproject.com/en/3.0/ref/settings/
 """
 
 import os
+import json
+
+ENV_MODE = os.getenv('MODE', 'devel')
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -40,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'books.apps.BooksConfig',
     'core.apps.CoreConfig',
+    'accounts.apps.AccountsConfig',
 ]
 
 MIDDLEWARE = [
@@ -76,16 +80,34 @@ WSGI_APPLICATION = 'hantijae_bookstore.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'hantijae',
-        'USER': 'davin',
-        'PASSWORD': 'hantijae',
-        'HOST': 'localhost',
-        'PORT': '3306',
+if ENV_MODE == 'prod':
+    secret_file = os.path.join(os.path.dirname(__file__), 'secret_info.json')
+    if os.path.exists(secret_file):
+        with open(secret_file) as f:
+            secret_info = json.loads(f.read())
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.mysql',
+                    'NAME': secret_info['DATABASE_NAME'],
+                    'USER': secret_info['DATABASE_USER'],
+                    'PASSWORD': secret_info['DATABASE_PASSWORD'],
+                    'HOST': secret_info['DATABASE_HOST'],
+                    'PORT': secret_info['DATABASE_PORT'],
+                }
+            }
+    else:
+        raise Exception("Check your 'secret_info.json' file!")
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': 'hantijae',
+            'USER': 'davin',
+            'PASSWORD': 'hantijae',
+            'HOST': 'localhost',
+            'PORT': '3306',
+        }
     }
-}
 
 
 # Password validation
@@ -125,3 +147,6 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
 
 STATIC_URL = '/static/'
+
+# CSRF
+CSRF_COOKIE_NAME = 'csrftoken'
