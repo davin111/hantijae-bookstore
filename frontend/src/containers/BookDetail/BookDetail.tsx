@@ -31,6 +31,8 @@ class BookDetail extends Component<Props, State> {
 
   render() {
     let authors = null;
+    let desc = '';
+    let shortDesc = '';
     if (Object.keys(this.state.book).length > 0) {
       authors = this.state.book.authors.map(
         (author: any) => (
@@ -39,67 +41,79 @@ class BookDetail extends Component<Props, State> {
           </p>
         ),
       );
+
+      shortDesc = this.state.book.short_description.split('\n').map((line: string) => (
+        <span>
+          {line}
+          <br />
+        </span>
+      ));
+
+      desc = this.state.book.description.split('\n').map((line: string) => (
+        <span>
+          {line}
+          <br />
+        </span>
+      ));
     }
 
     const { book } = this.props;
 
     return (
       <div>
-      <div className="BookDetail">
-        <div className="BookCoverStand">
-          {/* eslint-disable-next-line */}
+        <div className="BookDetail">
+          <div className="BookCoverStand">
+            {/* eslint-disable-next-line */}
           <img src={require(`./example_3d.jpg`)} />
-        </div>
-        <div className="BookDetailInfo">
-          <h1 id="title">{book.title}</h1>
-          <h1 id="subtitle">{book.subtitle}</h1>
-          {authors}
-          {/* <Rate rate={this.props.rate} voters={this.props.voters} textColor="#607D8B" /> */}
-          <div className="BookDetailInfoList">
-            <div className="InfoItem">
-              <div className="LItem">가격</div>
-              <div className="RItem">
-                {book.full_price}
-                원
+          </div>
+          <div className="BookDetailInfo">
+            <h1 id="title">{book.title}</h1>
+            <h1 id="subtitle">{book.subtitle}</h1>
+            {authors}
+            {/* <Rate rate={this.props.rate} voters={this.props.voters} textColor="#607D8B" /> */}
+            <div className="BookDetailInfoList">
+              <div className="InfoItem">
+                <div className="LItem">가격</div>
+                <div className="RItem">
+                  {book.full_price}
+                  원
+                </div>
               </div>
-            </div>
-            <div className="InfoItem">
-              <div className="LItem">발행일</div>
-              <div className="RItem">{book.published_date}</div>
-            </div>
-            <div className="InfoItem">
-              <div className="LItem">
-                쪽수
+              <div className="InfoItem">
+                <div className="LItem">발행일</div>
+                <div className="RItem">{book.published_date}</div>
               </div>
-              <div className="RItem">
-                {book.page_count}
-                쪽
+              <div className="InfoItem">
+                <div className="LItem">
+                  쪽수
+                </div>
+                <div className="RItem">
+                  {book.page_count}
+                  쪽
+                </div>
               </div>
-            </div>
-            <div className="InfoItem">
-              <div className="LItem">
-                판형
+              <div className="InfoItem">
+                <div className="LItem">
+                  판형
+                </div>
+                <div className="RItem">
+                  {book.size}
+                </div>
               </div>
-              <div className="RItem">
-                {book.size}
-              </div>
-            </div>
-            <div className="InfoItem">
-              <div className="LItem">
-                ISBN
-              </div>
-              <div className="RItem">
-                {book.isbn}
+              <div className="InfoItem">
+                <div className="LItem">
+                  ISBN
+                </div>
+                <div className="RItem">
+                  {book.isbn}
+                </div>
               </div>
             </div>
           </div>
-
         </div>
-      </div>
         <div className="BookDescriptions">
-          <h2 id="ShortDescription">{book.short_description}</h2>
           <p className="DetailDescription">
-            {book.description}
+            {desc}
           </p>
         </div>
       </div>
