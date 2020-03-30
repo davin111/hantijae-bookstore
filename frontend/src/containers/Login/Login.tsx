@@ -65,29 +65,28 @@ interface State {
 }
 
 class Login extends Component<Props, State> {
-constructor(props: Props) {
-  super(props);
-  this.state = {
-    username: "",
-    password: "",
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      username: '',
+      password: '',
+    };
   }
-}
 
   clickLoginHandler() {
-    console.log("ABC")
+    console.log('ABC');
     this.props.onLogin(this.state.username, this.state.password)
-    .then(() => {
-      if (this.props.loginStatus === userStatus.SUCCESS) {
-        this.props.history.push("/");
-      }
-      else {
-        console.log("ERROR!");
-      }
-    })
+      .then(() => {
+        if (this.props.loginStatus === userStatus.SUCCESS) {
+          this.props.history.push('/');
+        } else {
+          console.log('ERROR!');
+        }
+      });
   }
 
   render() {
-    const {classes} = this.props;
+    const { classes } = this.props;
     return (
       <Container component="main" maxWidth="xs">
         <CssBaseline />
@@ -109,7 +108,7 @@ constructor(props: Props) {
               name="email"
               autoComplete="email"
               autoFocus
-              onChange={(e) => this.setState({username: e.target.value})}
+              onChange={(e) => this.setState({ username: e.target.value })}
             />
             <TextField
               variant="outlined"
@@ -121,7 +120,7 @@ constructor(props: Props) {
               type="password"
               id="password"
               autoComplete="current-password"
-              onChange={(e) => this.setState({password: e.target.value})}
+              onChange={(e) => this.setState({ password: e.target.value })}
             />
             <FormControlLabel
               control={<Checkbox value="remember" color="primary" />}
@@ -155,7 +154,8 @@ constructor(props: Props) {
           <Copyright />
         </Box>
       </Container>
-    );}
+    );
+  }
 }
 
 const mapStateToProps = (state: any) => ({

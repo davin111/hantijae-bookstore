@@ -7,8 +7,10 @@ class User extends Component {
     return (
       <div className="User">
         <div className="UserPictire">
+          {/* eslint-disable-next-line */}
           <img src={UserImg} />
         </div>
+        {/* eslint-disable-next-line */}
         <div className="Notification" onClick={() => {}}>1</div>
       </div>
     );
