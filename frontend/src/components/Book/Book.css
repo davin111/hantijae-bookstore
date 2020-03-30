@@ -16,6 +16,15 @@
     cursor: pointer;
     transition: 1s;
 }
+.CartIcon {
+    right: 5px;
+    bottom: 0px;
+    color:green;
+    position: absolute;
+    font-size: 50px;
+    cursor: pointer;
+    transition: 1s;
+}
 .Book:hover {
     box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
 }
@@ -38,22 +47,24 @@
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
 }
 .BookInfo {
+    margin-top: 10px;
     background-color: #FFFFFF;
     height: 200px;
-    width: 240px;
+    width: 300px;
     position: absolute;
-    right: 10px;
+    left: 170px;
 }
 .BookInfo h1 {
     color: #263238;
+    margin: auto;
     font-size: 1.5em;
     padding: 5px;
     padding-right: 8px;
     height: 35px;
-    width: 200px;
+    width: 250px;
 }
 .Author {
-    margin-top: 5px;
+    margin: auto;
     color:#607D8B;
     font-size: 1em;
     /* margin-left: 10px; */

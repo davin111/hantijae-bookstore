@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 
 import Title from './Title/Title';
+import User from './User/User';
 import SearchBar from './SearchBar/SearchBar';
 import NavigationPanel from '../Nav/NavigationPanel/NavigationPanel';
 

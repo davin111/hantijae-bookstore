@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { FaHeartO, FaHeart } from 'react-icons/lib/fa';
+import { FaHeartO, FaHeart, FaCartArrowDown } from 'react-icons/lib/fa';
 import './Book.css';
 
 export interface BookProps {
@@ -34,6 +34,10 @@ class Book extends Component<BookProps, State> {
     this.setState({ liked: !prevLiked });
   };
 
+  clickCartHandler = () => {
+
+  };
+
   render() {
     let like = null;
     if (this.state.liked) {
@@ -66,6 +70,10 @@ class Book extends Component<BookProps, State> {
               {this.props.shortDescription}
             </p>
           </div>
+          <FaCartArrowDown
+            className="CartIcon"
+            onClick={() => this.clickCartHandler()}
+          />
         </div>
         {like}
       </div>
