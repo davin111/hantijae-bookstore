@@ -7,18 +7,6 @@ header {
     align-items: center;
 }
 
-.SearchBar {
-    background-color: #FAFAFA;
-    font-size: 16px;
-    height: inherit;
-    flex: 2;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    margin-left: 5%;
-}
-
 .Title {
     background-color: #FAFAFA;
     height: inherit;
@@ -28,7 +16,6 @@ header {
     justify-content: center;
     font-size: 40px;
     color: black;
-    margin-right: 15%;
     font-weight: bold;
     cursor: pointer;
 }

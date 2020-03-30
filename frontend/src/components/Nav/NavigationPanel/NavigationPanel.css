@@ -5,7 +5,7 @@
     border-bottom: 0.5px solid #CFD8DC;
 }
 
-.PopularBy {
+/* .PopularBy {
     background-color: #FAFAFA;
     height: inherit;
     flex: 1;
@@ -16,6 +16,18 @@
 .PopularBy span {
     margin-left: 40px;
     font-weight: bold;
+} */
+
+.SearchBar {
+    background-color: #FAFAFA;
+    font-size: 16px;
+    height: inherit;
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    margin-left: 5%;
 }
 
 .NavBar {

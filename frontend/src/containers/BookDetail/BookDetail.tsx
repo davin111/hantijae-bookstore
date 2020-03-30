@@ -112,7 +112,7 @@ class BookDetail extends Component<Props, State> {
           </div>
         </div>
         <div className="BookDescriptions">
-          <p className="DetailDescription">
+          <p>
             {desc}
           </p>
         </div>

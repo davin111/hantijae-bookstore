@@ -1,3 +1,4 @@
+from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -39,8 +40,17 @@ class SeriesViewSet(viewsets.GenericViewSet):
         return self.serializer_class
 
     def list(self, request):
-        queryset = self.get_queryset()     
-        return Response(self.get_serializer(queryset, many=True).data)
+        queryset = self.get_queryset()
+        fixed_tuple = ("단행본", "한티재 교양문고", "한티재 산문선", "한티재 시선", "한티재 팸플릿")
+        data = []
+        for name in fixed_tuple:
+            try:
+                series = queryset.get(name=name)
+                data.append(self.get_serializer(series).data)
+            except ObjectDoesNotExist:
+                pass
+
+        return Response(data)
 
     def retrieve(self, request, pk=None):
         series = get_object_or_404(Series, pk=pk)

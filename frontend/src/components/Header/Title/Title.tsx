@@ -11,7 +11,12 @@ class Title extends Component<Props> {
     return (
       <div className="Title">
         {/* eslint-disable-next-line */}
-        <div onClick={() => this.props.history.push('/')}>한티재 온라인 책창고</div>
+        <img
+          className="BookStoreTitleImage"
+          onClick={() => this.props.history.push('/')}
+          /* eslint-disable-next-line */
+          src={require('./한티재 책창고.png')}
+        />
       </div>
     );
   }

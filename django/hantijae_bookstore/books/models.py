@@ -41,16 +41,16 @@ class Series(BaseModel):
 
 class Book(BaseModel):
     title = models.CharField(null=False, blank=False, max_length=500)
-    subtitle = models.CharField(null=False, blank=False, max_length=1000)
+    subtitle = models.CharField(null=False, blank=True, max_length=1000)
     short_description = models.TextField(null=False, blank=True)
     description = models.TextField(null=False, blank=True)
     full_price = models.PositiveSmallIntegerField(null=False)
-    price = models.PositiveSmallIntegerField(null=True)
+    price = models.PositiveSmallIntegerField(null=True, blank=True)
     isbn = models.CharField(unique=True, null=True, max_length=200)
     page_count = models.PositiveSmallIntegerField()
     size = models.CharField(max_length=100, null=True)
     category = models.ForeignKey(Category, related_name='books', on_delete=models.CASCADE)
-    published_date = models.DateField()
+    published_date = models.DateField(db_index=True)
     visible = models.BooleanField(default=True)
 
     class Meta:
@@ -69,9 +69,9 @@ class Author(BaseModel):
     )
 
     name = models.CharField(max_length=300, null=False, blank=False)
-    email = models.EmailField(null=True)
-    address = models.CharField(null=True, max_length=1500)
-    phone_number = models.CharField(null=True, max_length=100)
+    email = models.EmailField(null=True, blank=True)
+    address = models.CharField(null=True, blank=True, max_length=1500)
+    phone_number = models.CharField(null=True, blank=True, max_length=100)
     entity_type = models.IntegerField(choices=ENTITY_TYPES, default=HUMAN)
 
     class Meta:

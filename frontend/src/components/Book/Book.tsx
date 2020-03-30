@@ -9,11 +9,7 @@ export interface BookProps {
   shortDescription: string;
   fullPrice: number;
   price: number;
-  // image: string;
   authors: any[];
-  // rate: any;
-  // voters: any;
-  // people: any;
   history: any;
 }
 
@@ -35,7 +31,7 @@ class Book extends Component<BookProps, State> {
   };
 
   clickCartHandler = () => {
-
+    this.props.history.push('/login');
   };
 
   render() {
@@ -45,37 +41,43 @@ class Book extends Component<BookProps, State> {
     } else {
       like = <FaHeartO className="icon" onClick={() => { this.isLiked(); }} />;
     }
+    const authorNames = [];
+    for (let i = 0; i < this.props.authors.length; i += 1) {
+      authorNames.push(this.props.authors[i].name);
+    }
+    const authorStr = authorNames.join(' · ');
 
-    const authors = this.props.authors.map(
-      (author: any) => (
-        <p className="Author" key={author.id}>
-          {author.name}
-        </p>
-      ),
-    );
+    let shortDesc = '';
+    if (this.props.shortDescription.length > 100) {
+      shortDesc = `${this.props.shortDescription.substr(0, 100)} ...`;
+    }
 
     return (
-      // eslint-disable-next-line
-      <div className="Book" onClick={() => this.props.history.push(`/book=${this.props.id}`)}>
-        <div className="BookCover">
+
+      <div className="Book">
+        {/* eslint-disable-next-line */}
+        <div className="BookCover" onClick={() => this.props.history.push(`/book=${this.props.id}`)}>
           {/* eslint-disable-next-line */}
-          <img src={require(`./booksImgs/3.jpg`)} />
+          <img src={require('./book_covers/' + this.props.title.replace(':', '').replace('!', '') + '.png')} />
         </div>
         <div className="BookInfo">
-          <h1>{this.props.title}</h1>
-          {authors}
+          {/* eslint-disable-next-line */}
+          <h1 onClick={() => this.props.history.push(`/book=${this.props.id}`)}>{this.props.title}</h1>
+          {/* eslint-disable-next-line */}
+          <h3 onClick={() => this.props.history.push(`/book=${this.props.id}`)}>{this.props.subtitle}</h3>
+          <h4>{authorStr}</h4>
           {/* <Rate rate={this.props.rate} voters={this.props.voters} textColor="#607D8B" /> */}
           <div className="BookDescription">
             <p>
-              {this.props.shortDescription}
+              {shortDesc}
             </p>
           </div>
-          <FaCartArrowDown
-            className="CartIcon"
-            onClick={() => this.clickCartHandler()}
-          />
         </div>
-        {like}
+        <FaCartArrowDown
+          className="CartIcon"
+          onClick={() => this.clickCartHandler()}
+        />
+        {/* like */}
       </div>
     );
   }

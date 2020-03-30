@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 
 import NavBar from '../NavBar/NavBar';
+import SearchBar from '../../Header/SearchBar/SearchBar';
 import './NavigationPanel.css';
 
 interface Props{
@@ -11,9 +12,7 @@ class NavigationPanel extends Component<Props> {
   render() {
     return (
       <div className="NavigationPanel">
-        <div className="PopularBy">
-          <span>카테고리</span>
-        </div>
+        <SearchBar />
         <NavBar
           history={this.props.history}
         />

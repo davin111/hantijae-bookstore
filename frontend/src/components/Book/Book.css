@@ -1,12 +1,11 @@
 .Book {
     background-color: #FFFFFF;
-    height: 250px;
-    width: 500px;
-    margin: 40px 20px;
+    height: 300px;
+    width: 45%;
+    margin: 3% 1.5%;
     position: relative;
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
     transition: 0.3s;
-    cursor: pointer;
 }
 .icon {
     color:#D32F2F;
@@ -17,26 +16,30 @@
     transition: 1s;
 }
 .CartIcon {
-    right: 5px;
-    bottom: 0px;
-    color:green;
+    right: 4%;
+    bottom: 3%;
+    color:grey;
     position: absolute;
-    font-size: 50px;
+    font-size: 300%;
     cursor: pointer;
     transition: 1s;
+}
+.CartIcon:hover {
+    color: black;
 }
 .Book:hover {
     box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
 }
 .BookCover {
     background-color: #FAFAFA;
-    height: 180px;
+    height: 70%;
     width: auto;
-    max-width: 120px;
+    max-width: 30%;
     position: absolute;
-    top: -30px;
-    left: 10px;
+    top: -8%;
+    left: 3%;
     text-align: center;
+    cursor: pointer;
 }
 .BookCover img {
     min-height: 180px;
@@ -47,27 +50,44 @@
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
 }
 .BookInfo {
-    margin-top: 10px;
+    margin-top: 3.5%;
     background-color: #FFFFFF;
-    height: 200px;
-    width: 300px;
+    height: 70%;
+    width: 70%;
     position: absolute;
-    left: 170px;
+    left: 28%;
 }
 .BookInfo h1 {
     color: #263238;
     margin: auto;
     font-size: 1.5em;
-    padding: 5px;
-    padding-right: 8px;
-    height: 35px;
-    width: 250px;
+    font-weight: bold;
+    margin-top: 2%;
+    height: 20%;
+    width: 100%;
+    cursor: pointer;
+}
+.BookInfo h3 {
+    color: #515280;
+    margin: auto;
+    font-size: 1.25em;
+    height: 20%;
+    width: 100%;
+    cursor: pointer;
+}
+.BookInfo h4 {
+    margin-top: 4%;
+    margin-right: 5%;
+    font-size: 1.25em;
+    text-align: right;
+}
+.BookInfo p {
+    font-size: 1.25em;
 }
 .Author {
     margin: auto;
     color:#607D8B;
     font-size: 1em;
-    /* margin-left: 10px; */
 }
 .BookDescription {
     color: #607D8B;

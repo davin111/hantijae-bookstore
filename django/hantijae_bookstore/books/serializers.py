@@ -85,7 +85,7 @@ class SeriesSerializer(serializers.ModelSerializer):
         )
     
     def get_books(self, series):
-        book_all_series = series.books.all()
+        book_all_series = series.books.all().order_by('-book__published_date')
         books = []
         for book_series in book_all_series:
             book_data = BookSerializer(book_series.book, context=self.context).data
