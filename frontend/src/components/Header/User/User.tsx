@@ -17,7 +17,7 @@ class User extends Component<Props> {
   }
 
   clickBookIconHandler() {
-    console.log('CLICK');
+    console.log(this.props.me);
   }
 
   render() {
