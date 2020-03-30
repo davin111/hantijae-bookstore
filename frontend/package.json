@@ -50,6 +50,8 @@
     ]
   },
   "devDependencies": {
+    "@material-ui/core": "^4.9.8",
+    "@material-ui/icons": "^4.9.1",
     "@types/react": "^16.9.23",
     "@types/react-dom": "^16.9.5",
     "@typescript-eslint/eslint-plugin": "^2.23.0",
