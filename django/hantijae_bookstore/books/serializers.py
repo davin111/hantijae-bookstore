@@ -35,6 +35,32 @@ class BookSerializer(serializers.ModelSerializer):
         #return AuthorSerializer(book.authors, many=True, context=self.context).data
 
 
+class SimpleBookSerializer(serializers.ModelSerializer):
+    authors = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Book
+        fields = (
+            'id',
+            'title',
+            'subtitle',
+            'short_description',
+            'full_price',
+            'price',
+            'category',
+            'authors',
+        )
+
+    def get_authors(self, book):
+        book_authors = book.authors.all()
+        authors = []
+        for book_author in book_authors:
+            authors.append(
+                AuthorSerializer(book_author.author, context=self.context).data
+            )
+        return authors
+
+
 class AuthorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Author
@@ -88,7 +114,7 @@ class SeriesSerializer(serializers.ModelSerializer):
         book_all_series = series.books.all().order_by('-book__published_date')
         books = []
         for book_series in book_all_series:
-            book_data = BookSerializer(book_series.book, context=self.context).data
+            book_data = SimpleBookSerializer(book_series.book, context=self.context).data
             book_data['index'] = book_series.index
             books.append(book_data)
         return books

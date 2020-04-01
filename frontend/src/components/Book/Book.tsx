@@ -1,6 +1,11 @@
-import React, { Component } from 'react';
+import React, { Component, Dispatch } from 'react';
+import { connect } from 'react-redux';
 import { FaHeartO, FaHeart, FaCartArrowDown } from 'react-icons/lib/fa';
+
+import { userActions } from '../../store/actions';
 import './Book.css';
+import { basketStatus } from '../../constants/constants';
+
 
 export interface BookProps {
   id: number;
@@ -11,6 +16,10 @@ export interface BookProps {
   price: number;
   authors: any[];
   history: any;
+  me: any;
+  basket: any;
+  basketStatus: string;
+  onPostBookInBasket: (id: number) => any;
 }
 
 interface State{
@@ -31,7 +40,15 @@ class Book extends Component<BookProps, State> {
   };
 
   clickCartHandler = () => {
-    this.props.history.push('/login');
+    this.props.onPostBookInBasket(this.props.id)
+    .then(() => {
+      if (this.props.basketStatus === basketStatus.SUCCESS) {
+
+      };
+      if (this.props.basketStatus === basketStatus.FAILURE_MAX_BOOK) {
+        
+      };
+    })
   };
 
   render() {
@@ -83,4 +100,14 @@ class Book extends Component<BookProps, State> {
   }
 }
 
-export default Book;
+const mapStateToProps = (state: any) => ({
+  basketStatus: state.user.basketStatus,
+  me: state.user.me,
+  basket: state.user.basket,
+});
+
+const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
+  onPostBookInBasket: (id: number) => dispatch(userActions.postBookInBasket(id)),
+});
+
+export default connect(mapStateToProps, mapDispatchToProps)(Book);

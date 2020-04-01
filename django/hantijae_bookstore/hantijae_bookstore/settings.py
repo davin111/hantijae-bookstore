@@ -150,3 +150,6 @@ STATIC_URL = '/static/'
 
 # CSRF
 CSRF_COOKIE_NAME = 'csrftoken'
+
+AUTH_USER_MODEL = 'accounts.User'
+SESSION_SAVE_EVERY_REQUEST = True

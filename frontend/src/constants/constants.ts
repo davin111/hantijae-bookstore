@@ -32,3 +32,11 @@ export const userStatus = {
   SUCCESS: 'SUCCESS',
   FAILURE: 'FAILURE',
 };
+
+export const basketStatus = {
+  NONE: 'NONE',
+  WAITING: 'WAITING',
+  SUCCESS: 'SUCCESS',
+  FAILURE: 'FAILURE',
+  FAILURE_MAX_BOOK: 'FAILURE_MAX_BOOK',
+};

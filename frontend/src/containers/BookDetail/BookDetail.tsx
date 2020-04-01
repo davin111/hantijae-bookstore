@@ -1,7 +1,6 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 
-import { BookShelf } from '../../components';
 import { bookActions } from '../../store/actions';
 import './BookDetail.css';
 
@@ -32,7 +31,7 @@ class BookDetail extends Component<Props, State> {
   render() {
     let authors = null;
     let desc = '';
-    let shortDesc = '';
+    // let shortDesc = '';
     if (Object.keys(this.state.book).length > 0) {
       authors = this.state.book.authors.map(
         (author: any) => (
@@ -42,12 +41,12 @@ class BookDetail extends Component<Props, State> {
         ),
       );
 
-      shortDesc = this.state.book.short_description.split('\n').map((line: string) => (
-        <span>
-          {line}
-          <br />
-        </span>
-      ));
+      // shortDesc = this.state.book.short_description.split('\n').map((line: string) => (
+      //   <span>
+      //     {line}
+      //     <br />
+      //   </span>
+      // ));
 
       desc = this.state.book.description.split('\n').map((line: string) => (
         <span>

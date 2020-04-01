@@ -9,8 +9,10 @@ import {
 
 import {
   login,
+  logout,
   signup,
   getMe,
+  postBookInBasket,
 } from './user/user';
 
 
@@ -25,6 +27,8 @@ export const bookActions = {
 
 export const userActions = {
   login,
+  logout,
   signup,
   getMe,
+  postBookInBasket,
 };

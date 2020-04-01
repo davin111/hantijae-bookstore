@@ -6,13 +6,12 @@ import { bookActions } from '../../store/actions';
 import './Main.css';
 
 interface Props {
-  onGetBooks: () => void;
   history: any;
 }
 
 class Main extends Component<Props> {
   componentDidMount() {
-    const { onGetBooks } = this.props;
+    // const { onGetBooks } = this.props;
     // onGetBooks();
   }
 

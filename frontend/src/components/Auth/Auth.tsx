@@ -10,9 +10,42 @@ interface Props {
   history: any;
 }
 
-class Auth extends Component<Props> {
+interface State {
+  location: string;
+}
+
+class Auth extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      location: '',
+    };
+  }
+
   componentDidMount() {
-    this.props.onGetMe();
+    this.props.onGetMe()
+      .then(() => {
+        console.log('DIDMOUNT');
+      });
+    this.setState({ location: this.props.history.location.pathname });
+  }
+
+  shouldComponentUpdate() {
+    // console.log(33333);
+    return true;
+  }
+
+
+  componentDidUpdate(prevProps: Props, prevState: State) {
+    // console.log(11111);
+    // console.log(`CUR${this.state.location}`);
+    if (this.props.history.location.pathname !== this.state.location) {
+      this.props.onGetMe().then(() => {
+        // console.log('DIDUPDATE');
+        // console.log(this.props.history.location.pathname);
+        this.setState({ location: this.props.history.location.pathname });
+      });
+    }
   }
 
   render() {

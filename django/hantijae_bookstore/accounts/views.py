@@ -1,20 +1,18 @@
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
+from django.contrib.sessions.models import Session
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounts.serializers import SimpleUserSerializer, UserSerializer
+from accounts.models import User, Basket, BookBasket, MaxBookCountException
+from accounts.serializers import UserSerializer, BasketSerializer
+from accounts.utils import get_user_from_request
+from books.models import Book
 
 class UserViewSet(viewsets.GenericViewSet):
-    serializer_class = SimpleUserSerializer
-
-    def get_serializer_class(self):
-        if self.action == 'me':
-            return UserSerializer
-        return self.serializer_class
+    serializer_class = UserSerializer
 
     @action(detail=False, methods=['PUT'])
     def login(self, request):
@@ -23,7 +21,14 @@ class UserViewSet(viewsets.GenericViewSet):
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
-            return Response(SimpleUserSerializer(user).data)
+            session_key = request.session.session_key
+            try:
+                user.last_session = Session.objects.get(pk=session_key)
+                user.save()
+                print("session saved")
+            except Session.DoesNotExist:
+                pass
+            return Response(UserSerializer(user).data)
         else:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
@@ -36,7 +41,37 @@ class UserViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['GET'])
     def me(self, request):
-        user = request.user
-        if user.is_authenticated:
+        user = get_user_from_request(request)
+        if user:
             return Response(UserSerializer(user).data)
         return Response(status=status.HTTP_403_FORBIDDEN)
+        
+
+class BasketViewSet(viewsets.GenericViewSet):
+    serializer_class = BasketSerializer
+
+    @action(detail=False, methods=['POST'])
+    def book(self, request):
+        book_id = request.data.get('book')
+        if not book_id:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        book = get_object_or_404(Book, id=book_id)
+
+        user = get_user_from_request(request)
+        if not user:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        baskets = Basket.objects.filter(user=user)
+        if baskets.exists():
+            basket = baskets.last()
+        else:
+            basket = Basket.objects.create(user=user)
+
+        try:
+            bookbasket, created = BookBasket.objects.get_or_create(book=book, basket=basket)
+            if not created:
+                bookbasket.count += 1
+                bookbasket.save()
+        except MaxBookCountException:
+            return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        return Response(BasketSerializer(basket).data)

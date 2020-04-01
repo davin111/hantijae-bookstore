@@ -1,5 +1,5 @@
 import React from 'react';
-import { Route, Switch } from 'react-router-dom';
+import { Route, Switch, Redirect } from 'react-router-dom';
 import { ConnectedRouter } from 'connected-react-router';
 
 import { Header, Auth } from './components';
@@ -15,11 +15,10 @@ interface Props {
 }
 
 function App(props: Props): JSX.Element {
-  const { history } = props;
   return (
     <div className="App">
-      <ConnectedRouter history={history}>
-        <Auth history={history} />
+      <ConnectedRouter history={props.history}>
+        <Auth history={props.history} />
         <Header history={props.history} />
         <Switch>
           <Route path="/login" exact component={Login} history={props.history} />
@@ -27,6 +26,7 @@ function App(props: Props): JSX.Element {
           <Route path="/" exact component={Main} history={props.history} />
           <Route path="/series=:series_id" exact component={Main} history={props.history} />
           <Route path="/book=:book_id" exact component={BookDetail} history={props.history} />
+          <Redirect exact to="/" />
         </Switch>
       </ConnectedRouter>
     </div>
