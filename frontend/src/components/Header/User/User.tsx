@@ -34,24 +34,28 @@ class User extends Component<Props> {
     bookCount = Number.isInteger(this.props.basket.bookCount) ? this.props.basket.bookCount : 0;
     if (this.props.getMeStatus === userStatus.FAILURE) {
       username = '비로그인 유저';
-      logButton = <button type="button" onClick={() => this.props.history.push('/login')}>로그인</button>;
+      logButton = <button className="LogButton" type="button" onClick={() => this.props.history.push('/login')}>로그인</button>;
     } else if (this.props.me.anonymous === true) {
       username = '비로그인 유저';
-      logButton = <button type="button" onClick={() => this.props.history.push('/login')}>로그인</button>;
+      logButton = <button className="LogButton" type="button" onClick={() => this.props.history.push('/login')}>로그인</button>;
     } else {
       username = this.props.me.username;
-      logButton = <button type="button" onClick={() => this.clickLogoutHandler()}>로그아웃</button>;
+      logButton = <button className="LogButton" type="button" onClick={() => this.clickLogoutHandler()}>로그아웃</button>;
     }
 
     return (
       <div className="User">
-        <h5>{username}</h5>
+        <h5>
+          {username}
+          {' '}
+          님
+        </h5>
         <div className="UserPictire">
           {/* eslint-disable-next-line */}
-          <img src={BookBasketImg} />
+          <img src={BookBasketImg} onClick={() => this.props.history.push('/bookbasket')}/>
         </div>
         {/* eslint-disable-next-line */}
-    <div className="Notification" onClick={() => {}}>{bookCount}</div>
+    <div className="Notification" onClick={() => this.props.history.push('/bookbasket')}>{bookCount}</div>
         {logButton}
       </div>
     );

@@ -83,10 +83,10 @@ class BasketViewSet(viewsets.GenericViewSet):
             else:
                 basket = Basket.objects.create(user=user)
 
-            if basket.book_count >= basket.max_book_count:
+            if basket.book_count + book_count > basket.max_book_count:
                 return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
 
-            bookbasket, created = BookBasket.objects.get_or_create(book=book, basket=basket, count=book_count)
+            bookbasket, created = BookBasket.objects.get_or_create(book=book, basket=basket, defaults={'count': book_count})
             if not created:
                 bookbasket.count += book_count
                 bookbasket.save()

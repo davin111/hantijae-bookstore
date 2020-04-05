@@ -10,7 +10,7 @@ header {
 .Title {
     background-color: #FAFAFA;
     height: inherit;
-    flex: 9;
+    flex: 3;
     display: flex;
     align-items: center;
     justify-content: center;

@@ -5,10 +5,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 2%;
+  }
+  .User h5 {
+    font-size: 1.2em;
   }
   .UserPictire {
-    background-color: pink;
     height: 6vh;
     width: 6vh;
     border: 1px solid #FAFAFA;
@@ -20,23 +21,61 @@
   .UserPictire img {
     height: 80%;
     vertical-align: middle;
+    cursor: pointer;
   }
   .Notification {
     background-color: #E57373;
-    color: #FFFFFF;
-    font-size: 8px;
-    height: 2vh;
-    width: 2vh;
+    color: white;
+    font-size: 1.5em;
+    font-weight: bold;
+    height: 40px;
+    width: 40px;
     border-radius: 50%;
     z-index: 13;
     display: flex;
     align-items: center;
     justify-content: center;
     align-self: flex-start;
-    margin-top: 2vh;
-    top: 2vh;
-    right: -15px;
+    margin-top: auto;
+    margin-bottom: auto;
     cursor: pointer;
     visibility: visible;
   }
   
+  .LogButton{
+    margin-left: 5%;
+    background:#FAFAFA;
+    color:black;
+    border:none;
+    position:relative;
+    height:60px;
+    font-size:1.2em;
+    font-weight: bold;
+    cursor:pointer;
+    transition:800ms ease all;
+    outline:none;
+  }
+  .LogButton:hover{
+    background:pink;
+    color:white;
+  }
+  .LogButton:before,button:after{
+    content:'';
+    position:absolute;
+    top:0;
+    right:0;
+    height:2px;
+    width:0;
+    background:pink;
+    transition:400ms ease all;
+  }
+  .LogButton:after{
+    right:inherit;
+    top:inherit;
+    left:0;
+    bottom:0;
+  }
+  .LogButton:hover:before, .LogButton:hover:after{
+    width:100%;
+    transition:800ms ease all;
+  }

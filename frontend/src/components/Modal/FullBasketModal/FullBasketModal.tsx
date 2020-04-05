@@ -50,7 +50,7 @@ class FullBasketModal extends Component<Props> {
       >
         <Modal.Header>
           <Typography className="FullBookBasket" component="h1" variant="h5">
-            책바구니가 가득 찼어요!
+            책바구니를 초과하는 수량입니다! 책바구니를 정리해주세요.
           </Typography>
         </Modal.Header>
         <Modal.Body>
