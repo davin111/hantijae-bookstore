@@ -1,0 +1,138 @@
+.BookInBasket {
+    background-color: #FFFFFF;
+    height: 200px;
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 2%;
+    margin-bottom: 2%;
+    position: relative;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+    transition: 0.3s;
+}
+.icon {
+    color:#D32F2F;
+    position: absolute;
+    right: 3px;
+    top: 3px;
+    cursor: pointer;
+    transition: 1s;
+}
+.CartIcon {
+    right: 4%;
+    bottom: 3%;
+    color:grey;
+    position: absolute;
+    font-size: 300%;
+    cursor: pointer;
+    transition: 1s;
+}
+.CartIcon:hover {
+    color: black;
+}
+.BookInBasket:hover {
+    box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
+}
+.BookCover {
+    background-color: #FAFAFA;
+    height: 70%;
+    width: auto;
+    max-width: 30%;
+    position: absolute;
+    top: -8%;
+    left: 3%;
+    text-align: center;
+    cursor: pointer;
+}
+.BookCover img {
+    min-height: 180px;
+    max-width: 100%;
+    max-height: 100%;
+    vertical-align: middle;
+    align-self: center;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+}
+.BookInfoInBasket {
+    margin-top: 3.5%;
+    background-color: #FFFFFF;
+    height: 70%;
+    width: 50%;
+    position: absolute;
+    left: 25%;
+}
+.BookInfoInBasket h1 {
+    color: #263238;
+    margin: auto;
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-top: 2%;
+    height: 20%;
+    width: 100%;
+    cursor: pointer;
+}
+.BookInfoInBasket h3 {
+    color: #515280;
+    margin: auto;
+    font-size: 1.25em;
+    height: 20%;
+    width: 100%;
+    cursor: pointer;
+}
+.BookInfoInBasket h4 {
+    margin-top: 4%;
+    margin-right: 5%;
+    font-size: 1.25em;
+    text-align: right;
+}
+.Author {
+    margin: auto;
+    color:#607D8B;
+    font-size: 1em;
+}
+
+.BookCountInBasket {
+    position: absolute;
+    right: 1%;
+    bottom: 15%;
+    width: 10%;
+}
+
+.handle-counter {
+    overflow: hidden;
+}
+
+.handle-counter .counter-minus,  .handle-counter .counter-plus,  .handle-counter input {
+  text-align: center;
+}
+
+.handle-counter input {
+  width: 50%;
+  height: 10%;
+  font-size: 1em;
+  /* border-style: solid;
+  border-color: #009dda;
+  border-width: 1px; */
+}
+
+.btn {
+  border: 1px solid transparent;
+  height: 10%;
+  width: 50%;
+  font-size: 1em;
+  text-align: center;
+  color: #fff;
+  cursor: pointer;
+}
+
+.btn:disabled, .btn:disabled:hover {
+  background-color: darkgrey;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: #009dda;
+}
+
+.btn-primary:hover, .btn-primary:focus {
+    background-color: #0486b9;
+}

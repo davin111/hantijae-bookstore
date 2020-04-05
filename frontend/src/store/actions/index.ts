@@ -13,7 +13,17 @@ import {
   signup,
   getMe,
   postBookInBasket,
+  getBasket,
 } from './user/user';
+
+import {
+  openLoginModal,
+  closeLoginModal,
+  openFullBasketModal,
+  closeFullBasketModal,
+  openBasketInfoModal,
+  closeBasketInfoModal,
+} from './state/state';
 
 
 export const bookActions = {
@@ -31,4 +41,14 @@ export const userActions = {
   signup,
   getMe,
   postBookInBasket,
+  getBasket,
+};
+
+export const stateActions = {
+  openLoginModal,
+  closeLoginModal,
+  openFullBasketModal,
+  closeFullBasketModal,
+  openBasketInfoModal,
+  closeBasketInfoModal,
 };

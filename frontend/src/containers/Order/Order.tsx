@@ -2,7 +2,7 @@ import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 
 import { bookActions } from '../../store/actions';
-import './BookDetail.css';
+import './Order.css';
 
 interface Props {
   location: any;
@@ -15,7 +15,7 @@ interface State {
   book: any;
 }
 
-class BookDetail extends Component<Props, State> {
+class Order extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -41,6 +41,13 @@ class BookDetail extends Component<Props, State> {
         ),
       );
 
+      // shortDesc = this.state.book.short_description.split('\n').map((line: string) => (
+      //   <span>
+      //     {line}
+      //     <br />
+      //   </span>
+      // ));
+
       desc = this.state.book.description.split('\n').map((line: string) => (
         <span>
           {line}
@@ -56,7 +63,7 @@ class BookDetail extends Component<Props, State> {
         <div className="BookDetail">
           <div className="BookCoverStand">
             {/* eslint-disable-next-line */}
-          <img src={require(`./example_3d.jpg`)} />
+          {/* <img src={require(`./example_3d.jpg`)} /> */}
           </div>
           <div className="BookDetailInfo">
             <h1 id="title">{book.title}</h1>
@@ -122,4 +129,4 @@ const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetBook: (id: number) => dispatch(bookActions.getBook(id)),
 });
 
-export default connect(mapStateToProps, mapDispatchToProps)(BookDetail);
+export default connect(mapStateToProps, mapDispatchToProps)(Order);

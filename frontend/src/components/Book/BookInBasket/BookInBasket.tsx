@@ -2,9 +2,9 @@ import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 import { FaHeartO, FaHeart, FaCartArrowDown } from 'react-icons/lib/fa';
 
-import { userActions, stateActions } from '../../store/actions';
-import './Book.css';
-import { basketStatus, userStatus } from '../../constants/constants';
+import { userActions, stateActions } from '../../../store/actions';
+import './BookInBasket.css';
+import { basketStatus, userStatus } from '../../../constants/constants';
 
 
 export interface BookProps {
@@ -14,6 +14,7 @@ export interface BookProps {
   shortDescription: string;
   fullPrice: number;
   price: number;
+  count: number;
   authors: any[];
   history: any;
   me: any;
@@ -30,13 +31,23 @@ interface State{
   count: number;
 }
 
-class Book extends Component<BookProps, State> {
+class BookInBasket extends Component<BookProps, State> {
   constructor(props: BookProps) {
     super(props);
     this.state = {
-      count: 1,
+      count: 0,
     };
   }
+
+  decrease = () => {
+    const { count } = this.state;
+    this.setState({ count: count - 1 });
+  };
+
+  increase = () => {
+    const { count } = this.state;
+    this.setState({ count: count + 1 });
+  };
 
   clickCartHandler = () => {
     if (this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true) {
@@ -54,16 +65,6 @@ class Book extends Component<BookProps, State> {
     }
   };
 
-  decrease = () => {
-    const { count } = this.state;
-    this.setState({ count: count - 1 });
-  };
-
-  increase = () => {
-    const { count } = this.state;
-    this.setState({ count: count + 1 });
-  };
-
   render() {
     const authorNames = [];
     for (let i = 0; i < this.props.authors.length; i += 1) {
@@ -76,41 +77,28 @@ class Book extends Component<BookProps, State> {
       shortDesc = `${this.props.shortDescription.substr(0, 100)} ...`;
     }
 
-    const plusDisabled = this.state.count >= 10;
-    const minusDisabled = this.state.count <= 0;
-
     return (
-      <div className="Book">
+
+      <div className="BookInBasket">
         {/* eslint-disable-next-line */}
         <div className="BookCover" onClick={() => this.props.history.push(`/book=${this.props.id}`)}>
           {/* eslint-disable-next-line */}
-          <img src={require('./book_covers/' + this.props.title.replace(':', '').replace('!', '') + '.png')} />
+          <img src={require('../book_covers/' + this.props.title.replace(':', '').replace('!', '') + '.png')} />
         </div>
-        <div className="BookInfo">
+        <div className="BookInfoInBasket">
           {/* eslint-disable-next-line */}
           <h1 onClick={() => this.props.history.push(`/book=${this.props.id}`)}>{this.props.title}</h1>
           {/* eslint-disable-next-line */}
           <h3 onClick={() => this.props.history.push(`/book=${this.props.id}`)}>{this.props.subtitle}</h3>
           <h4>{authorStr}</h4>
           {/* <Rate rate={this.props.rate} voters={this.props.voters} textColor="#607D8B" /> */}
-          <div className="BookDescription">
-            <p>
-              {shortDesc}
-            </p>
-          </div>
         </div>
-        <div className="BookCountWithCart">
-          <div className="BookCount">
-            <div className="handle-counter" id="handleCounter">
-              <button type="button" className="counter-plus btn btn-primary" disabled={plusDisabled} onClick={() => this.increase()}>+</button>
-              <input type="text" value={this.state.count} disabled />
-              <button type="button" className="counter-minus btn btn-primary" disabled={minusDisabled} onClick={() => this.decrease()}>-</button>
-            </div>
+        <div className="BookCountInBasket">
+          <div className="handle-counter" id="handleCounter">
+            <button type="button" className="counter-plus btn btn-primary" onClick={() => this.increase()}>+</button>
+            <input type="text" value={this.props.count} disabled />
+            <button type="button" className="counter-minus btn btn-primary" onClick={() => this.increase()}>-</button>
           </div>
-          <FaCartArrowDown
-            className="CartIcon"
-            onClick={() => this.clickCartHandler()}
-          />
         </div>
       </div>
     );
@@ -131,4 +119,4 @@ const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onOpenBasketInfoModal: () => dispatch(stateActions.openBasketInfoModal()),
 });
 
-export default connect(mapStateToProps, mapDispatchToProps)(Book);
+export default connect(mapStateToProps, mapDispatchToProps)(BookInBasket);

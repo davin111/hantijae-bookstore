@@ -5,6 +5,7 @@ const initialState = {
   me: {},
   basket: {
     bookCount: 0,
+    books: [],
   },
   getMeStatus: userStatus.NONE,
   loginStatus: userStatus.NONE,
@@ -56,11 +57,35 @@ const reducer = (state = initialState, action: any) => {
         ...state, getMeStatus: userStatus.FAILURE, me: {}, basket: {},
       };
     case basketActions.POST_BOOK_SUCCESS:
-      return { ...state, basketStatus: basketStatus.SUCCESS, basket: { ...state.basket, bookCount: data.book_count } };
+      return {
+        ...state,
+        basketStatus: basketStatus.SUCCESS,
+        basket: { ...state.basket, bookCount: data.book_count },
+      };
     case basketActions.POST_BOOK_FAILURE:
-      return { ...state, basketStatus: basketStatus.FAILURE };
+    case basketActions.GET_BASKET_FAILURE:
+      return {
+        ...state,
+        basketStatus: basketStatus.FAILURE,
+      };
     case basketActions.POST_BOOK_FAILURE_MAX_BOOK:
-      return { ...state, basketStatus: basketStatus.FAILURE_MAX_BOOK };
+      return {
+        ...state,
+        basketStatus: basketStatus.FAILURE_MAX_BOOK,
+      };
+    case basketActions.GET_BASKET_SUCCESS:
+      return {
+        ...state,
+        basketStatus: basketStatus.SUCCESS,
+        basket: {
+          ...state.basket,
+          bookCount: data.book_count,
+          maxBookCount: data.max_book_count,
+          maxPrice: data.max_price,
+          status: data.status,
+          books: data.books,
+        },
+      };
     default:
       return { ...state };
   }

@@ -1,0 +1,9 @@
+.BooksInBasket {
+    background-color: #FAFAFA;
+    height: auto;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+}

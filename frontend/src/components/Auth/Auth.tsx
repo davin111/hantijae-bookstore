@@ -23,10 +23,7 @@ class Auth extends Component<Props, State> {
   }
 
   componentDidMount() {
-    this.props.onGetMe()
-      .then(() => {
-        console.log('DIDMOUNT');
-      });
+    this.props.onGetMe();
     this.setState({ location: this.props.history.location.pathname });
   }
 

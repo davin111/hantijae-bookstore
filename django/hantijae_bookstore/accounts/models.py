@@ -35,6 +35,13 @@ class Basket(BaseModel):
     def book_count(self):
         return self.books.aggregate(book_count=Sum('count'))['book_count'] or 0
 
+    @property
+    def total_price(self):
+        total_price = 0
+        for book_basket in self.books.all():
+            total_price += (book_basket.count * book_basket.book.full_price)
+        return total_price
+
 
 class MaxBookCountException(Exception):
     pass

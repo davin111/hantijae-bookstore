@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { Dispatch } from 'redux';
 import { userConstants, basketActions } from '../actionTypes';
-import { bookActions } from '..';
 
 const loginSuccess = (user: any) => ({
   type: userConstants.LOGIN_SUCCESS,
@@ -89,15 +88,30 @@ const postBookInBasketFailure = (error: any) => {
       actionType = basketActions.POST_BOOK_FAILURE_MAX_BOOK;
       break;
     default:
-      actionType = basketActions.POST_BOOK_FAILURE
+      actionType = basketActions.POST_BOOK_FAILURE;
       break;
   }
   return {
-  type: actionType,
-  target: error,
+    type: actionType,
+    target: error,
   };
 };
 
-export const postBookInBasket = (id: number) => (dispatch: Dispatch) => axios.post('/api/user/basket/book/', { book: id })
+export const postBookInBasket = (id: number, count: number) => (dispatch: Dispatch) => axios.post('/api/user/basket/book/', { book: id, count })
   .then((res) => dispatch(postBookInBasketSuccess(res.data)))
   .catch((err) => dispatch(postBookInBasketFailure(err)));
+
+
+const getBasketSuccess = (basket: any) => ({
+  type: basketActions.GET_BASKET_SUCCESS,
+  target: basket,
+});
+
+const getBasketFailure = (error: any) => ({
+  type: basketActions.GET_BASKET_FAILURE,
+  target: error,
+});
+
+export const getBasket = () => (dispatch: Dispatch) => axios.get('/api/user/basket')
+  .then((res) => dispatch(getBasketSuccess(res.data)))
+  .catch((err) => dispatch(getBasketFailure(err)));

@@ -1,7 +1,9 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 
-import { BookShelf } from '../../components';
+import {
+  BookShelf, LoginModal, FullBasketModal, BasketInfoModal,
+} from '../../components';
 import { bookActions } from '../../store/actions';
 import './Main.css';
 
@@ -21,10 +23,15 @@ class Main extends Component<Props> {
       activeSeriesId = this.props.history.location.pathname.split('=')[1];
     }
     return (
-      <BookShelf
-        history={this.props.history}
-        seriesId={activeSeriesId}
-      />
+      <div>
+        <BookShelf
+          history={this.props.history}
+          seriesId={activeSeriesId}
+        />
+        <LoginModal history={this.props.history} />
+        <FullBasketModal history={this.props.history} />
+        <BasketInfoModal history={this.props.history} />
+      </div>
     );
   }
 }

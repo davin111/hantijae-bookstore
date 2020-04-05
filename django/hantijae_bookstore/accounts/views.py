@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.models import User, Basket, BookBasket, MaxBookCountException
-from accounts.serializers import UserSerializer, BasketSerializer
+from accounts.serializers import UserSerializer, BasketSerializer, SimpleBasketSerializer
 from accounts.utils import get_user_from_request
 from books.models import Book
 
@@ -50,9 +50,28 @@ class UserViewSet(viewsets.GenericViewSet):
 class BasketViewSet(viewsets.GenericViewSet):
     serializer_class = BasketSerializer
 
+    def get_serializer_class(self):
+        if self.action == 'book':
+            return SimpleBasketSerializer
+        return self.serializer_class
+
+    def list(self, request):
+        user = get_user_from_request(request)
+        if not user:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        baskets = Basket.objects.filter(user=user)
+        if baskets.exists():
+            basket = baskets.last()
+        else:
+            basket = Basket.objects.create(user=user)
+
+        return Response(self.get_serializer(basket).data)
+
     @action(detail=False, methods=['POST'])
     def book(self, request):
         book_id = request.data.get('book')
+        book_count = request.data.get('count', 1)
         if not book_id:
             return Response(status=status.HTTP_400_BAD_REQUEST)
         book = get_object_or_404(Book, id=book_id)
@@ -67,11 +86,11 @@ class BasketViewSet(viewsets.GenericViewSet):
             basket = Basket.objects.create(user=user)
 
         try:
-            bookbasket, created = BookBasket.objects.get_or_create(book=book, basket=basket)
+            bookbasket, created = BookBasket.objects.get_or_create(book=book, basket=basket, count=book_count)
             if not created:
-                bookbasket.count += 1
+                bookbasket.count += book_count
                 bookbasket.save()
         except MaxBookCountException:
             return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
 
-        return Response(BasketSerializer(basket).data)
+        return Response(self.get_serializer(basket).data)
