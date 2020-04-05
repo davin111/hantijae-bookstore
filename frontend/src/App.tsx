@@ -18,9 +18,6 @@ function App(props: Props): JSX.Element {
   return (
     <div className="App">
       <ConnectedRouter history={props.history}>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        </head>
         <Auth history={props.history} />
         <Header history={props.history} />
         <Switch>

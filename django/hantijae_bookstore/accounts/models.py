@@ -58,11 +58,6 @@ class BookBasket(BaseModel):
     def __str__(self):
         return f'{self.basket.id} - {self.book.title}'
 
-    def save(self, *args, **kwargs):
-        if self and self.basket.book_count >= self.basket.max_book_count:
-            raise MaxBookCountException()
-        return super(BookBasket, self).save(*args, **kwargs)
-
 
 class User(AbstractUser):
     last_session = models.OneToOneField(Session, null=True, blank=True, on_delete=models.SET_NULL)

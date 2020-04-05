@@ -13,6 +13,7 @@ import {
   signup,
   getMe,
   postBookInBasket,
+  putBookInBasket,
   getBasket,
 } from './user/user';
 
@@ -41,6 +42,7 @@ export const userActions = {
   signup,
   getMe,
   postBookInBasket,
+  putBookInBasket,
   getBasket,
 };
 

@@ -102,6 +102,32 @@ export const postBookInBasket = (id: number, count: number) => (dispatch: Dispat
   .catch((err) => dispatch(postBookInBasketFailure(err)));
 
 
+const putBookInBasketSuccess = (basket: any) => ({
+  type: basketActions.PUT_BOOK_SUCCESS,
+  target: basket,
+});
+
+const putBookInBasketFailure = (error: any) => {
+  let actionType = null;
+  switch (error.response.status) {
+    case 406:
+      actionType = basketActions.PUT_BOOK_FAILURE_MAX_BOOK;
+      break;
+    default:
+      actionType = basketActions.PUT_BOOK_FAILURE;
+      break;
+  }
+  return {
+    type: actionType,
+    target: error,
+  };
+};
+
+export const putBookInBasket = (bookId: number, count: number, basketId: number) => (dispatch: Dispatch) => axios.put('/api/user/basket/book/', { book: bookId, count, basket: basketId })
+  .then((res) => dispatch(putBookInBasketSuccess(res.data)))
+  .catch((err) => dispatch(putBookInBasketFailure(err)));
+
+
 const getBasketSuccess = (basket: any) => ({
   type: basketActions.GET_BASKET_SUCCESS,
   target: basket,

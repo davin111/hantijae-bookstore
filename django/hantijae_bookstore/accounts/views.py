@@ -50,11 +50,6 @@ class UserViewSet(viewsets.GenericViewSet):
 class BasketViewSet(viewsets.GenericViewSet):
     serializer_class = BasketSerializer
 
-    def get_serializer_class(self):
-        if self.action == 'book':
-            return SimpleBasketSerializer
-        return self.serializer_class
-
     def list(self, request):
         user = get_user_from_request(request)
         if not user:
@@ -68,10 +63,11 @@ class BasketViewSet(viewsets.GenericViewSet):
 
         return Response(self.get_serializer(basket).data)
 
-    @action(detail=False, methods=['POST'])
+    @action(detail=False, methods=['POST', 'PUT'])
     def book(self, request):
         book_id = request.data.get('book')
         book_count = request.data.get('count', 1)
+
         if not book_id:
             return Response(status=status.HTTP_400_BAD_REQUEST)
         book = get_object_or_404(Book, id=book_id)
@@ -79,18 +75,36 @@ class BasketViewSet(viewsets.GenericViewSet):
         user = get_user_from_request(request)
         if not user:
             return Response(status=status.HTTP_403_FORBIDDEN)
-        baskets = Basket.objects.filter(user=user)
-        if baskets.exists():
-            basket = baskets.last()
-        else:
-            basket = Basket.objects.create(user=user)
 
-        try:
+        if self.request.method == 'POST':
+            baskets = Basket.objects.filter(user=user)
+            if baskets.exists():
+                basket = baskets.last()
+            else:
+                basket = Basket.objects.create(user=user)
+
+            if basket.book_count >= basket.max_book_count:
+                return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
+
             bookbasket, created = BookBasket.objects.get_or_create(book=book, basket=basket, count=book_count)
             if not created:
                 bookbasket.count += book_count
                 bookbasket.save()
-        except MaxBookCountException:
-            return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        else: # PUT
+            basket_id = request.data.get('basket')
+            if not basket_id:
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+            basket = get_object_or_404(Basket, id=basket_id)
+            bookbasket = BookBasket.objects.get(book=book, basket=basket)
+            if book_count > 0:
+                if basket.book_count - bookbasket.count + book_count > basket.max_book_count:
+                    return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
+                bookbasket.count = book_count
+                bookbasket.save()
+            elif book_count == 0:
+                bookbasket.delete()
+            else:
+                return Response(status=status.HTTP_400_BAD_REQUEST)
 
         return Response(self.get_serializer(basket).data)

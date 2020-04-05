@@ -1,6 +1,6 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
-import { FaHeartO, FaHeart, FaCartArrowDown } from 'react-icons/lib/fa';
+import { FaCartArrowDown } from 'react-icons/lib/fa';
 
 import { userActions, stateActions } from '../../store/actions';
 import './Book.css';
@@ -39,6 +39,9 @@ class Book extends Component<BookProps, State> {
   }
 
   clickCartHandler = () => {
+    if (this.state.count === 0) {
+      return;
+    }
     if (this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true) {
       this.props.onOpenLoginModal();
     } else {
@@ -54,14 +57,14 @@ class Book extends Component<BookProps, State> {
     }
   };
 
-  decrease = () => {
-    const { count } = this.state;
-    this.setState({ count: count - 1 });
-  };
-
   increase = () => {
     const { count } = this.state;
     this.setState({ count: count + 1 });
+  };
+
+  decrease = () => {
+    const { count } = this.state;
+    this.setState({ count: count - 1 });
   };
 
   render() {
@@ -125,7 +128,9 @@ const mapStateToProps = (state: any) => ({
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
-  onPostBookInBasket: (id: number, count: number) => dispatch(userActions.postBookInBasket(id, count)),
+  onPostBookInBasket: (id: number, count: number) => dispatch(
+    userActions.postBookInBasket(id, count),
+  ),
   onOpenLoginModal: () => dispatch(stateActions.openLoginModal()),
   onOpenFullBasketModal: () => dispatch(stateActions.openFullBasketModal()),
   onOpenBasketInfoModal: () => dispatch(stateActions.openBasketInfoModal()),

@@ -4,7 +4,11 @@ import { userStatus, basketStatus } from '../../../constants/constants';
 const initialState = {
   me: {},
   basket: {
+    id: 0,
     bookCount: 0,
+    maxBookCount: 0,
+    totalPrice: 0,
+    maxPrice: 0,
     books: [],
   },
   getMeStatus: userStatus.NONE,
@@ -57,34 +61,34 @@ const reducer = (state = initialState, action: any) => {
         ...state, getMeStatus: userStatus.FAILURE, me: {}, basket: {},
       };
     case basketActions.POST_BOOK_SUCCESS:
-      return {
-        ...state,
-        basketStatus: basketStatus.SUCCESS,
-        basket: { ...state.basket, bookCount: data.book_count },
-      };
-    case basketActions.POST_BOOK_FAILURE:
-    case basketActions.GET_BASKET_FAILURE:
-      return {
-        ...state,
-        basketStatus: basketStatus.FAILURE,
-      };
-    case basketActions.POST_BOOK_FAILURE_MAX_BOOK:
-      return {
-        ...state,
-        basketStatus: basketStatus.FAILURE_MAX_BOOK,
-      };
+    case basketActions.PUT_BOOK_SUCCESS:
     case basketActions.GET_BASKET_SUCCESS:
       return {
         ...state,
         basketStatus: basketStatus.SUCCESS,
         basket: {
           ...state.basket,
+          id: data.id,
           bookCount: data.book_count,
           maxBookCount: data.max_book_count,
+          totalPrice: data.total_price,
           maxPrice: data.max_price,
           status: data.status,
           books: data.books,
         },
+      };
+    case basketActions.POST_BOOK_FAILURE:
+    case basketActions.PUT_BOOK_FAILURE:
+    case basketActions.GET_BASKET_FAILURE:
+      return {
+        ...state,
+        basketStatus: basketStatus.FAILURE,
+      };
+    case basketActions.POST_BOOK_FAILURE_MAX_BOOK:
+    case basketActions.PUT_BOOK_FAILURE_MAX_BOOK:
+      return {
+        ...state,
+        basketStatus: basketStatus.FAILURE_MAX_BOOK,
       };
     default:
       return { ...state };

@@ -70,7 +70,10 @@ class BasketInfoModal extends Component<Props> {
             variant="contained"
             color="primary"
             className={classes.submit}
-            onClick={() => this.props.history.push('/bookbasket')}
+            onClick={() => {
+              this.clickCancelHandler();
+              this.props.history.push('/bookbasket');
+            }}
           >
             책바구니 내역 확인하러 가기
           </Button>

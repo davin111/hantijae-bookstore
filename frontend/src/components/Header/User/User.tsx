@@ -3,7 +3,7 @@ import { connect } from 'react-redux';
 
 import { userActions } from '../../../store/actions';
 import './User.css';
-import UserImg from './bookcart.png';
+import BookBasketImg from './bookbasket.png';
 import { userStatus } from '../../../constants/constants';
 
 interface Props {
@@ -48,7 +48,7 @@ class User extends Component<Props> {
         <h5>{username}</h5>
         <div className="UserPictire">
           {/* eslint-disable-next-line */}
-          <img src={UserImg} />
+          <img src={BookBasketImg} />
         </div>
         {/* eslint-disable-next-line */}
     <div className="Notification" onClick={() => {}}>{bookCount}</div>

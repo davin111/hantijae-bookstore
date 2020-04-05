@@ -4,6 +4,7 @@ import { connect } from 'react-redux';
 import { userActions } from '../../store/actions';
 import { BooksInBasket } from '../../components';
 import './BookBasket.css';
+import BookBasketImg from './bookbasket_won.png';
 import { basketStatus } from '../../constants/constants';
 
 interface Props {
@@ -27,14 +28,15 @@ class BookBasket extends Component<Props> {
       books = <BooksInBasket books={this.props.basket.books} history={this.props.history} />;
     }
 
-    let totalPrice = 0;
-    for (let i = 0; i < this.props.basket.books.length; i += 1) {
-      totalPrice += (this.props.basket.books[i].full_price * this.props.basket.books[i].count);
-    }
-
     return (
       <div className="BookBasketPage">
-        <h1 className="BookBasketTitle">책바구니 내역</h1>
+        <div className="BookBasketTitle">
+          {/* eslint-disable-next-line */}
+          <img className="BookBasketWonImg" src={BookBasketImg} />
+          <h1>
+            책바구니 내역
+          </h1>
+        </div>
         <h2 className="BookBasketTotalCount">
           {this.props.basket.bookCount}
           /
@@ -43,10 +45,10 @@ class BookBasket extends Component<Props> {
         </h2>
         {books}
         <div className="BookBasketSummary">
-          {totalPrice}
+          {this.props.basket.totalPrice}
           원
           {' '}
-          ->
+          -&gt;
           {' '}
           {this.props.basket.maxPrice}
           원
