@@ -24,6 +24,7 @@ class BookDetail extends Component<Props, State> {
   }
 
   componentDidMount() {
+    window.scrollTo(0, 0);
     this.props.onGetBook(this.props.location.pathname.split('=')[1])
       .then(() => this.setState({ book: this.props.book }));
   }
@@ -31,7 +32,7 @@ class BookDetail extends Component<Props, State> {
   render() {
     let authors = null;
     let desc = '';
-    // let shortDesc = '';
+    let img = null;
     if (Object.keys(this.state.book).length > 0) {
       authors = this.state.book.authors.map(
         (author: any) => (
@@ -47,6 +48,8 @@ class BookDetail extends Component<Props, State> {
           <br />
         </span>
       ));
+      /* eslint-disable-next-line */
+      img = <img src={require(`./book_covers_3d/${this.state.book.title.replace(':', '').replace('!', '')}.png`)} />;
     }
 
     const { book } = this.props;
@@ -55,8 +58,7 @@ class BookDetail extends Component<Props, State> {
       <div>
         <div className="BookDetail">
           <div className="BookCoverStand">
-            {/* eslint-disable-next-line */}
-          <img src={require(`./example_3d.jpg`)} />
+            {img}
           </div>
           <div className="BookDetailInfo">
             <h1 id="title">{book.title}</h1>
