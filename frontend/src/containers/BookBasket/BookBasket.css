@@ -28,3 +28,9 @@
     font-weight: bold;
     border-radius: 2em;
 }
+
+#OrderButton {
+    width: 55%;
+    height: 50px;
+    font-size: x-large;
+}

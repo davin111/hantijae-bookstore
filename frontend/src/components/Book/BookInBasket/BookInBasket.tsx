@@ -57,7 +57,10 @@ class BookInBasket extends Component<BookProps> {
           {/* eslint-disable-next-line */}
           <h3 onClick={() => this.props.history.push(`/book=${this.props.id}`)}>{this.props.subtitle}</h3>
           <h4>{authorStr}</h4>
-          {/* <Rate rate={this.props.rate} voters={this.props.voters} textColor="#607D8B" /> */}
+          <h4 className="FullPrice">
+            {this.props.fullPrice}
+            원
+          </h4>
         </div>
         <div className="BookCountInBasket">
           <div className="handle-counter" id="handleCounter">

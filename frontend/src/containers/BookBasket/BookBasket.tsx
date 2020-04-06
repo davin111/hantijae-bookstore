@@ -1,5 +1,8 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
+import Button from '@material-ui/core/Button';
+import ReceiptIcon from '@material-ui/icons/Receipt';
+import { createStyles, withStyles } from '@material-ui/core/styles';
 
 import { userActions } from '../../store/actions';
 import { BooksInBasket } from '../../components';
@@ -13,7 +16,14 @@ interface Props {
   basketStatus: string;
   onGetBasket: () => any;
   history: any;
+  classes: any;
 }
+
+const styles = (theme: any) => createStyles({
+  button: {
+    margin: theme.spacing(1),
+  },
+});
 
 
 class BookBasket extends Component<Props> {
@@ -22,6 +32,7 @@ class BookBasket extends Component<Props> {
   }
 
   render() {
+    const { classes } = this.props;
     let books = null;
     console.log(this.props.basket);
     if (this.props.basketStatus === basketStatus.SUCCESS) {
@@ -53,6 +64,16 @@ class BookBasket extends Component<Props> {
           {this.props.basket.maxPrice}
           원
         </div>
+        <Button
+          id="OrderButton"
+          variant="contained"
+          color="primary"
+          className={classes.button}
+          onClick={() => this.props.history.push('/order')}
+          endIcon={<ReceiptIcon className="ReceiptIcon" />}
+        >
+          주문하기
+        </Button>
       </div>
     );
   }
@@ -67,4 +88,4 @@ const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetBasket: () => dispatch(userActions.getBasket()),
 });
 
-export default connect(mapStateToProps, mapDispatchToProps)(BookBasket);
+export default connect(mapStateToProps, mapDispatchToProps)(withStyles(styles)(BookBasket));
