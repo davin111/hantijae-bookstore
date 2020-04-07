@@ -49,14 +49,28 @@ const signupSuccess = (user: any) => ({
   target: user,
 });
 
-const signupFailure = (error: any) => ({
-  type: userConstants.SIGNUP_FAILURE,
-  target: error,
-});
+const signupFailure = (error: any) => {
+  let actionType = null;
+  switch (error.response.status) {
+    case 406:
+      actionType = userConstants.SIGNUP_FAILURE_USERNAME;
+      break;
+    default:
+      actionType = userConstants.SIGNUP_FAILURE;
+      break;
+  }
+  return {
+    type: actionType,
+    target: error,
+  };
+};
 
 export const signup = (
   username: string, email: string, password: string,
-) => (dispatch: Dispatch) => axios.post('/api/user/signup/')
+  familyName: string, givenName: string, notifiable: boolean,
+) => (dispatch: Dispatch) => axios.post('/api/user/signup/', {
+  username, email, password, family_name: familyName, given_name: givenName, notifiable,
+})
   .then((res) => dispatch(signupSuccess(res.data)))
   .catch((err) => dispatch(signupFailure(err)));
 

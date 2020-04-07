@@ -62,6 +62,7 @@ class BookBasket(BaseModel):
 class User(AbstractUser):
     last_session = models.OneToOneField(Session, null=True, blank=True, on_delete=models.SET_NULL)
     anonymous = models.BooleanField(default=False)
+    notifiable = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'accounts_user'

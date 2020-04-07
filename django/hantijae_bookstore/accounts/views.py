@@ -1,5 +1,6 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.sessions.models import Session
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
@@ -13,6 +14,27 @@ from books.models import Book
 
 class UserViewSet(viewsets.GenericViewSet):
     serializer_class = UserSerializer
+
+    def create(self, request, *args, **kwargs):
+        username = request.data.get('username')
+        email = request.data.get('email')
+        password = request.data.get('password')
+        last_name = request.data.get('family_name')
+        first_name = request.data.get('given_name')
+        notifiable = request.data.get('notifiable')
+
+        if not (username and email and password and last_name and first_name and notifiable):
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.create_user(username, email, password)
+        except IntegrityError:
+            return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
+        user.last_name = last_name
+        user.first_name = first_name
+        user.notifiable = notifiable.lower() == 'true'
+        user.save()
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['PUT'])
     def login(self, request):

@@ -11,15 +11,51 @@ interface Props {
   changeGivenName: (e: any) => any;
   changeEmail: (e: any) => any;
   changePhoneNumber: (e: any) => any;
+  sameReceiver: boolean;
+  changeSameReceiver: () => any;
   changeReceiverFamilyName: (e: any) => any;
   changeReceiverGivenName: (e: any) => any;
   changeAddress1: (e: any) => any;
   changeAddress2: (e: any) => any;
   changePostalCode: (e: any) => any;
+  confirmed: boolean;
+  changeConfirmed: () => any;
 }
 
 class AddressForm extends Component<Props> {
   render() {
+    let receiverFamilyNameField = null;
+    let receiverGivenNameField = null;
+    if (!this.props.sameReceiver) {
+      receiverFamilyNameField = (
+        <Grid item xs={12} sm={6}>
+          <TextField
+            required
+            id="lastName"
+            name="lastName"
+            label="성 (받으시는 분)"
+            fullWidth
+            autoComplete="lname"
+            onChange={(e) => this.props.changeReceiverFamilyName(e)}
+          />
+        </Grid>
+      );
+      receiverGivenNameField = (
+        <Grid item xs={12} sm={6}>
+          <TextField
+            required
+            id="firstName"
+            name="firstName"
+            label="이름 (받으시는 분)"
+            fullWidth
+            autoComplete="fname"
+            onChange={(e) => this.props.changeReceiverGivenName(e)}
+          />
+        </Grid>
+      );
+    }
+
+
     return (
       <>
         <Typography variant="h6" gutterBottom>
@@ -72,32 +108,20 @@ class AddressForm extends Component<Props> {
           </Grid>
           <Grid item xs={12}>
             <FormControlLabel
-              control={<Checkbox color="secondary" name="saveAddress" value="yes" />}
+              control={(
+                <Checkbox
+                  color="secondary"
+                  name="saveAddress"
+                  value="yes"
+                  checked={this.props.sameReceiver}
+                  onChange={() => this.props.changeSameReceiver()}
+                />
+              )}
               label="받으시는 분이 주문하시는 분과 같습니다."
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              id="lastName"
-              name="lastName"
-              label="성 (받으시는 분)"
-              fullWidth
-              autoComplete="lname"
-              onChange={(e) => this.props.changeReceiverFamilyName(e)}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              id="firstName"
-              name="firstName"
-              label="이름 (받으시는 분)"
-              fullWidth
-              autoComplete="fname"
-              onChange={(e) => this.props.changeReceiverGivenName(e)}
-            />
-          </Grid>
+          {receiverFamilyNameField}
+          {receiverGivenNameField}
           <Grid item xs={12}>
             <TextField
               required
@@ -134,6 +158,8 @@ class AddressForm extends Component<Props> {
           <Grid item xs={12}>
             <FormControlLabel
               control={<Checkbox color="secondary" name="saveAddress" value="yes" />}
+              checked={this.props.confirmed}
+              onChange={() => this.props.changeConfirmed()}
               label="위의 정보가 정확함을 확인했습니다."
             />
           </Grid>

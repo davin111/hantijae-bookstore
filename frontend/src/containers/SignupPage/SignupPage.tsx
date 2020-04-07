@@ -53,14 +53,19 @@ const styles = (theme: any) => createStyles({
 interface Props {
   history: any;
   classes: any;
-  loginStatus: string;
+  signupStatus: string;
   user: any;
-  onLogin: (username: string, password: string) => any;
+  onSignup: (username: string, email: string, password: string,
+    familyName: string, givenName: string, notifiable: boolean) => any;
 }
 
 interface State {
   username: string;
+  email: string;
   password: string;
+  familyName: string;
+  givenName: string;
+  notifiable: boolean;
 }
 
 class SignupPage extends Component<Props, State> {
@@ -68,15 +73,22 @@ class SignupPage extends Component<Props, State> {
     super(props);
     this.state = {
       username: '',
+      email: '',
       password: '',
+      familyName: '',
+      givenName: '',
+      notifiable: false,
     };
   }
 
   clickLoginHandler() {
-    this.props.onLogin(this.state.username, this.state.password)
+    this.props.onSignup(this.state.username, this.state.email, this.state.password,
+      this.state.familyName, this.state.givenName, this.state.notifiable)
       .then(() => {
-        if (this.props.loginStatus === userStatus.SUCCESS) {
+        if (this.props.signupStatus === userStatus.SUCCESS) {
           this.props.history.push('/');
+        } else if (this.props.signupStatus === userStatus.FAILURE_USERNAME) {
+          console.log('중복된 username입니다!');
         } else {
           console.log('ERROR!');
         }
@@ -106,6 +118,7 @@ class SignupPage extends Component<Props, State> {
                   label="성"
                   name="lastName"
                   autoComplete="lname"
+                  onChange={(e) => this.setState({ familyName: e.target.value })}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -118,6 +131,7 @@ class SignupPage extends Component<Props, State> {
                   id="firstName"
                   label="이름"
                   autoFocus
+                  onChange={(e) => this.setState({ givenName: e.target.value })}
                 />
               </Grid>
               <Grid item xs={12}>
@@ -129,6 +143,7 @@ class SignupPage extends Component<Props, State> {
                   label="사용자 이름"
                   name="username"
                   autoComplete="off"
+                  onChange={(e) => this.setState({ username: e.target.value })}
                 />
               </Grid>
               <Grid item xs={12}>
@@ -140,6 +155,7 @@ class SignupPage extends Component<Props, State> {
                   label="이메일"
                   name="email"
                   autoComplete="email"
+                  onChange={(e) => this.setState({ email: e.target.value })}
                 />
               </Grid>
               <Grid item xs={12}>
@@ -157,7 +173,17 @@ class SignupPage extends Component<Props, State> {
               </Grid>
               <Grid item xs={12}>
                 <FormControlLabel
-                  control={<Checkbox value="allowExtraEmails" color="primary" />}
+                  control={(
+                    <Checkbox
+                      value="allowExtraEmails"
+                      color="primary"
+                      checked={this.state.notifiable}
+                      onChange={() => {
+                        const checked = this.state.notifiable;
+                        this.setState({ notifiable: !checked });
+                      }}
+                    />
+)}
                   label="한티재의 소식을 이메일을 통해 받겠습니다."
                 />
               </Grid>
@@ -189,12 +215,15 @@ class SignupPage extends Component<Props, State> {
 }
 
 const mapStateToProps = (state: any) => ({
-  loginStatus: state.user.loginStatus,
+  signupStatus: state.user.signupStatus,
   user: state.user.login,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
-  onLogin: (username: string, password: string) => dispatch(userActions.login(username, password)),
+  onSignup: (username: string, email: string, password: string,
+    familyName: string, givenName: string, notifiable: boolean) => dispatch(
+    userActions.signup(username, email, password, familyName, givenName, notifiable),
+  ),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(withStyles(styles)(SignupPage));

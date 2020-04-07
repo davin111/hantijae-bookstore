@@ -8,6 +8,8 @@ import Checkbox from '@material-ui/core/Checkbox';
 
 interface Props{
   changePayer: (e: any) => any;
+  confirmed2: boolean;
+  changeConfirmed2: () => any;
 }
 
 class PaymentForm extends Component<Props> {
@@ -36,6 +38,8 @@ class PaymentForm extends Component<Props> {
             <FormControlLabel
               control={<Checkbox color="secondary" name="saveCard" value="yes" />}
               label="입금 확인 후 배송해 드리겠습니다."
+              checked={this.props.confirmed2}
+              onChange={() => this.props.changeConfirmed2()}
             />
           </Grid>
         </Grid>

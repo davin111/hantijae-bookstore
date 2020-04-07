@@ -80,11 +80,14 @@ interface State {
   givenName: string;
   email: string;
   phoneNumber: string;
+  sameReceiver: boolean;
   receiverFamilyName: string;
   receiverGivenName: string;
   address1: string;
   address2: string;
   postalCode: string;
+  confirmed: boolean;
+  confirmed2: boolean;
   payer: string;
 }
 
@@ -99,12 +102,15 @@ class Order extends Component<Props, State> {
       givenName: '',
       email: '',
       phoneNumber: '',
+      sameReceiver: true,
       receiverFamilyName: '',
       receiverGivenName: '',
       address1: '',
       address2: '',
       postalCode: '',
+      confirmed: false,
       payer: '',
+      confirmed2: false,
     };
   }
 
@@ -133,15 +139,25 @@ class Order extends Component<Props, State> {
             changeGivenName={this.changeGivenName}
             changeEmail={this.changeEmail}
             changePhoneNumber={this.changePhoneNumber}
+            sameReceiver={this.state.sameReceiver}
+            changeSameReceiver={this.changeSameReceiver}
             changeReceiverFamilyName={this.changeReceiverFamilyName}
             changeReceiverGivenName={this.changeReceiverGivenName}
             changeAddress1={this.changeAddress1}
             changeAddress2={this.changeAddress2}
             changePostalCode={this.changePostalCode}
+            confirmed={this.state.confirmed}
+            changeConfirmed={this.changeConfirmed}
           />
         );
       case 1:
-        return <PaymentForm changePayer={this.changePayer} />;
+        return (
+          <PaymentForm
+            changePayer={this.changePayer}
+            confirmed2={this.state.confirmed2}
+            changeConfirmed2={this.changeConfirmed2}
+          />
+        );
       case 2:
         return (
           <Review
@@ -179,6 +195,11 @@ class Order extends Component<Props, State> {
     this.setState({ phoneNumber: e.target.value });
   };
 
+  changeSameReceiver = () => {
+    const checked = this.state.sameReceiver;
+    this.setState({ sameReceiver: !checked });
+  };
+
   changeReceiverFamilyName = (e: any) => {
     this.setState({ receiverFamilyName: e.target.value });
   };
@@ -199,8 +220,43 @@ class Order extends Component<Props, State> {
     this.setState({ postalCode: e.target.value });
   };
 
+  changeConfirmed = () => {
+    const checked = this.state.confirmed;
+    this.setState({ confirmed: !checked });
+  };
+
   changePayer = (e: any) => {
     this.setState({ payer: e.target.value });
+  };
+
+  changeConfirmed2 = () => {
+    const checked = this.state.confirmed2;
+    this.setState({ confirmed2: !checked });
+  };
+
+  nextButtonDisabled = (step: number) => {
+    switch (step) {
+      case 0:
+        if (this.state.familyName && this.state.givenName && this.state.confirmed
+            && this.state.email && this.state.phoneNumber
+            && this.state.address1 && this.state.address2 && this.state.postalCode) {
+          if (!this.state.sameReceiver
+              && !(this.state.receiverFamilyName && this.state.receiverGivenName)) {
+            return true;
+          }
+          return false;
+        }
+        return true;
+      case 1:
+        if (this.state.payer && this.state.confirmed2) {
+          return false;
+        }
+        return true;
+      case 2:
+        return false;
+      default:
+        return true;
+    }
   };
 
   render() {
@@ -245,6 +301,7 @@ class Order extends Component<Props, State> {
                       color="primary"
                       onClick={this.handleNext}
                       className={classes.button}
+                      disabled={this.nextButtonDisabled(this.state.activeStep)}
                     >
                       {this.state.activeStep === steps.length - 1 ? '주문하기' : '다음'}
                     </Button>

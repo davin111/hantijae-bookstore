@@ -28,9 +28,12 @@ const reducer = (state = initialState, action: any) => {
         me: {
           username: data.username,
           email: data.email,
+          familyName: data.family_name,
+          givenName: data.given_name,
           id: data.id,
           lastLogin: data.last_login,
           anonymous: data.anonymous,
+          notifiable: data.notifiable,
         },
         basket: { ...state.basket, bookCount: data.book_count },
       };
@@ -40,9 +43,25 @@ const reducer = (state = initialState, action: any) => {
     case userConstants.LOGOUT_SUCCESS:
       return { ...state, logoutStatus: userStatus.SUCCESS };
     case userConstants.SIGNUP_SUCCESS:
-      return { ...state, signupStatus: userStatus.SUCCESS };
+      return {
+        ...state,
+        signupStatus: userStatus.SUCCESS,
+        me: {
+          username: data.username,
+          email: data.email,
+          familyName: data.family_name,
+          givenName: data.given_name,
+          id: data.id,
+          lastLogin: data.last_login,
+          anonymous: data.anonymous,
+          notifiable: data.notifiable,
+        },
+        basket: { ...state.basket, bookCount: data.book_count },
+      };
     case userConstants.SIGNUP_FAILURE:
       return { ...state, signupStatus: userStatus.FAILURE };
+    case userConstants.SIGNUP_FAILURE_USERNAME:
+      return { ...state, signupStatus: userStatus.FAILURE_USERNAME };
     case userConstants.GET_ME_SUCCESS:
       return {
         ...state,

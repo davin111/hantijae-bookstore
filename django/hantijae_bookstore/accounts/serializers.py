@@ -7,6 +7,8 @@ from books.serializers import SimpleBookSerializer
 
 class UserSerializer(serializers.ModelSerializer):
     book_count = serializers.SerializerMethodField()
+    family_name = serializers.CharField(source='last_name')
+    given_name = serializers.CharField(source='first_name')
 
     class Meta:
         model = User
@@ -14,9 +16,12 @@ class UserSerializer(serializers.ModelSerializer):
             'id',
             'username',
             'email',
+            'family_name',
+            'given_name',
             'last_login',
             'book_count',
-            'anonymous'
+            'anonymous',
+            'notifiable',
         )
     
     def get_book_count(self, user):
