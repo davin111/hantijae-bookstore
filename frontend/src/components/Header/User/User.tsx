@@ -2,9 +2,9 @@ import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 
 import { userActions } from '../../../store/actions';
+import { userStatus } from '../../../constants/constants';
 import './User.css';
 import BookBasketImg from './bookbasket.png';
-import { userStatus } from '../../../constants/constants';
 
 interface Props {
   onGetMe: () => any;

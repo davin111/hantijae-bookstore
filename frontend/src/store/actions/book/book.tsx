@@ -43,6 +43,21 @@ export const getBooks = () => (dispatch: Dispatch) => axios.get('/api/book/')
   .catch((err) => dispatch(getBooksFailure(err)));
 
 
+const searchBooksSuccess = (books: any) => ({
+  type: bookConstants.GET_BOOKS_SUCCESS,
+  target: books,
+});
+
+const searchBooksFailure = (error: any) => ({
+  type: bookConstants.GET_BOOKS_FAILURE,
+  target: error,
+});
+
+export const searchBooks = (search: string) => (dispatch: Dispatch) => axios.get('/api/book/', { params: { search } })
+  .then((res) => dispatch(searchBooksSuccess(res.data)))
+  .catch((err) => dispatch(searchBooksFailure(err)));
+
+
 const getBooksByCategorySuccess = (books: any) => ({
   type: bookConstants.GET_BOOKS_SUCCESS,
   target: books,

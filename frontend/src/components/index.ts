@@ -6,9 +6,11 @@ import Login from './Login/Login';
 import LoginModal from './Modal/LoginModal/LoginModal';
 import FullBasketModal from './Modal/FullBasketModal/FullBasketModal';
 import BasketInfoModal from './Modal/BasketInfoModal/BasketInfoModal';
+import Books from './Books/Books';
 import BooksInBasket from './Books/BooksInBasket/BooksInBasket';
 
 export {
+  Books,
   BookShelf,
   Header,
   Auth,

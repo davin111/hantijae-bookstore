@@ -1,4 +1,5 @@
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -6,14 +7,29 @@ from rest_framework.response import Response
 
 from books.models import Book, Category, Author, Series
 from books.serializers import (BookSerializer, CategorySerializer, SeriesSerializer,
-    SimpleSeriesSerializer)
+    SimpleBookSerializer, SimpleSeriesSerializer)
 
 class BookViewSet(viewsets.GenericViewSet):
     queryset = Book.objects.all()
     serializer_class = BookSerializer
 
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return SimpleBookSerializer
+        return self.serializer_class
+
     def list(self, request):
-        queryset = self.get_queryset()
+        search_word = request.query_params.get('search')
+        if search_word:
+            search_word = search_word.strip()
+            searched_titles = self.get_queryset().filter(
+                Q(title__icontains=search_word) | Q(subtitle__icontains=search_word)).values_list('id', flat=True)
+            searched_authors = self.get_queryset().filter(
+                authors__author__name__icontains=search_word
+            ).values_list('id', flat=True)
+            queryset = Book.objects.filter(Q(id__in=searched_titles) | Q(id__in=searched_authors))
+        else:
+            queryset = self.get_queryset()
         return Response(self.get_serializer(queryset, many=True).data)
 
     def retrieve(self, request, pk=None):

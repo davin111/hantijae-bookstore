@@ -1,6 +1,7 @@
 import {
   getBook,
   getBooks,
+  searchBooks,
   getBooksByCategory,
   getCategories,
   getSeries,
@@ -31,6 +32,7 @@ import {
 export const bookActions = {
   getBook,
   getBooks,
+  searchBooks,
   getBooksByCategory,
   getCategories,
   getSeries,

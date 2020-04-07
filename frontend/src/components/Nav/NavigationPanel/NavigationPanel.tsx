@@ -12,7 +12,7 @@ class NavigationPanel extends Component<Props> {
   render() {
     return (
       <div className="NavigationPanel">
-        <SearchBar />
+        <SearchBar history={this.props.history} />
         <NavBar
           history={this.props.history}
         />
