@@ -85,6 +85,7 @@ const reducer = (state = initialState, action: any) => {
     case basketActions.POST_BOOK_SUCCESS:
     case basketActions.PUT_BOOK_SUCCESS:
     case basketActions.GET_BASKET_SUCCESS:
+    case basketActions.PUT_ORDER_SUCCESS:
       return {
         ...state,
         basketStatus: basketStatus.SUCCESS,
@@ -102,6 +103,7 @@ const reducer = (state = initialState, action: any) => {
     case basketActions.POST_BOOK_FAILURE:
     case basketActions.PUT_BOOK_FAILURE:
     case basketActions.GET_BASKET_FAILURE:
+    case basketActions.PUT_ORDER_FAILURE:
       return {
         ...state,
         basketStatus: basketStatus.FAILURE,

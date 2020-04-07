@@ -15,6 +15,7 @@ import {
   postBookInBasket,
   putBookInBasket,
   getBasket,
+  orderBasket,
 } from './user/user';
 
 import {
@@ -44,6 +45,7 @@ export const userActions = {
   postBookInBasket,
   putBookInBasket,
   getBasket,
+  orderBasket,
 };
 
 export const stateActions = {

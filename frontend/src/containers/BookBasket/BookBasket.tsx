@@ -17,6 +17,7 @@ interface Props {
   onGetBasket: () => any;
   history: any;
   classes: any;
+  onGetMe: () => any;
 }
 
 const styles = (theme: any) => createStyles({
@@ -28,15 +29,27 @@ const styles = (theme: any) => createStyles({
 
 class BookBasket extends Component<Props> {
   componentDidMount() {
-    this.props.onGetBasket();
+    this.props.onGetMe()
+      .then(() => {
+        this.props.onGetBasket();
+      });
   }
 
   render() {
     const { classes } = this.props;
     let books = null;
-    console.log(this.props.basket);
-    if (this.props.basketStatus === basketStatus.SUCCESS) {
+
+    if (this.props.basketStatus === basketStatus.SUCCESS && Object.keys(this.props.basket).length > 0) {
       books = <BooksInBasket books={this.props.basket.books} history={this.props.history} />;
+    }
+
+    let bookBasketStatus = '책 담는 중';
+    if (this.props.basket.status === 2) {
+      bookBasketStatus = '주문 완료';
+    } else if (this.props.basket.status === 3) {
+      bookBasketStatus = '결제 확인';
+    } else if (this.props.basket.status === 4) {
+      bookBasketStatus = '배송 완료';
     }
 
     return (
@@ -48,6 +61,9 @@ class BookBasket extends Component<Props> {
             책바구니 내역
           </h1>
         </div>
+        <h2 className="BookBasketStatus">
+          {bookBasketStatus}
+        </h2>
         <h2 className="BookBasketTotalCount">
           {this.props.basket.bookCount}
           /
@@ -86,6 +102,7 @@ const mapStateToProps = (state: any) => ({
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetBasket: () => dispatch(userActions.getBasket()),
+  onGetMe: () => dispatch(userActions.getMe()),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(withStyles(styles)(BookBasket));

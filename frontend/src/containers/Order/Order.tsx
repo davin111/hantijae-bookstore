@@ -75,6 +75,9 @@ interface Props {
   getMeStatus: string;
   me: any;
   onGetBasket: () => any;
+  onOrderBasket: (basketId: number, familyName: string, givenName: string, email: string,
+    phoneNumber: string, receiverFamilyName: string, receiverGivenName: string,
+    address: string, postalCode: string, payer: string) => any;
 }
 
 interface State {
@@ -136,7 +139,25 @@ class Order extends Component<Props, State> {
     const step = this.state.activeStep;
     this.setState({ activeStep: step + 1 });
     if (step === 2) {
-      this.props.onGetMe();
+      let receiverFamilyName = this.state.familyName;
+      let receiverGivenName = this.state.givenName;
+      if (!this.state.sameReceiver) {
+        receiverFamilyName = this.state.receiverFamilyName;
+        receiverGivenName = this.state.receiverGivenName;
+      }
+
+      this.props.onOrderBasket(
+        this.props.basket.id,
+        this.state.familyName,
+        this.state.givenName,
+        this.state.email,
+        this.state.phoneNumber,
+        receiverFamilyName,
+        receiverGivenName,
+        [this.state.address1, this.state.address2].join(','),
+        this.state.postalCode,
+        this.state.payer,
+      );
     }
   };
 
@@ -154,6 +175,12 @@ class Order extends Component<Props, State> {
             familyName={this.state.familyName}
             givenName={this.state.givenName}
             email={this.state.email}
+            phoneNumber={this.state.phoneNumber}
+            receiverFamilyName={this.state.receiverFamilyName}
+            receiverGivenName={this.state.receiverGivenName}
+            address1={this.state.address1}
+            address2={this.state.address2}
+            postalCode={this.state.postalCode}
             changeFamilyName={this.changeFamilyName}
             changeGivenName={this.changeGivenName}
             changeEmail={this.changeEmail}
@@ -175,6 +202,7 @@ class Order extends Component<Props, State> {
             changePayer={this.changePayer}
             confirmed2={this.state.confirmed2}
             changeConfirmed2={this.changeConfirmed2}
+            payer={this.state.payer}
           />
         );
       case 2:
@@ -299,11 +327,12 @@ class Order extends Component<Props, State> {
               {this.state.activeStep === steps.length ? (
                 <>
                   <Typography variant="h5" gutterBottom>
-                    Thank you for your order.
+                    고맙습니다. 입금 확인 후 책을 발송해드리겠습니다.
                   </Typography>
                   <Typography variant="subtitle1">
-                    Your order number is #2001539. We have emailed your order confirmation, and will
-                    send you an update when your order has shipped.
+                    문의: 053-743-8368
+                    <br />
+                    hantibooks@gmail.com
                   </Typography>
                 </>
               ) : (
@@ -346,6 +375,20 @@ const mapStateToProps = (state: any) => ({
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetMe: () => dispatch(userActions.getMe()),
   onGetBasket: () => dispatch(userActions.getBasket()),
+  onOrderBasket: (basketId: number, familyName: string, givenName: string, email: string,
+    phoneNumber: string, receiverFamilyName: string, receiverGivenName: string,
+    address: string, postalCode: string, payer: string) => dispatch(userActions.orderBasket(
+    basketId,
+    familyName,
+    givenName,
+    email,
+    phoneNumber,
+    receiverFamilyName,
+    receiverGivenName,
+    address,
+    postalCode,
+    payer,
+  )),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(withStyles(styles)(Order));

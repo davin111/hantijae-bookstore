@@ -10,6 +10,12 @@ interface Props {
   familyName: string;
   givenName: string;
   email: string;
+  phoneNumber: string;
+  receiverFamilyName: string;
+  receiverGivenName: string;
+  address1: string;
+  address2: string;
+  postalCode: string;
   changeFamilyName: (e: any) => any;
   changeGivenName: (e: any) => any;
   changeEmail: (e: any) => any;
@@ -34,12 +40,13 @@ class AddressForm extends Component<Props> {
         <Grid item xs={12} sm={6}>
           <TextField
             required
-            id="lastName"
+            id="receiverLastName"
             name="lastName"
             label="성 (받으시는 분)"
             fullWidth
             autoComplete="lname"
             onChange={(e) => this.props.changeReceiverFamilyName(e)}
+            value={this.props.receiverFamilyName}
           />
         </Grid>
       );
@@ -47,12 +54,13 @@ class AddressForm extends Component<Props> {
         <Grid item xs={12} sm={6}>
           <TextField
             required
-            id="firstName"
+            id="receiverFirstName"
             name="firstName"
             label="이름 (받으시는 분)"
             fullWidth
             autoComplete="fname"
             onChange={(e) => this.props.changeReceiverGivenName(e)}
+            value={this.props.receiverGivenName}
           />
         </Grid>
       );
@@ -110,6 +118,7 @@ class AddressForm extends Component<Props> {
               fullWidth
               autoComplete="tel"
               onChange={(e) => this.props.changePhoneNumber(e)}
+              value={this.props.phoneNumber}
             />
           </Grid>
           <Grid item xs={12}>
@@ -138,6 +147,7 @@ class AddressForm extends Component<Props> {
               fullWidth
               autoComplete="billing address-line1"
               onChange={(e) => this.props.changeAddress1(e)}
+              value={this.props.address1}
             />
           </Grid>
           <Grid item xs={12} sm={6}>
@@ -148,6 +158,7 @@ class AddressForm extends Component<Props> {
               fullWidth
               autoComplete="billing address-line2"
               onChange={(e) => this.props.changeAddress2(e)}
+              value={this.props.address2}
             />
           </Grid>
           <Grid item xs={12} sm={6}>
@@ -159,6 +170,7 @@ class AddressForm extends Component<Props> {
               fullWidth
               autoComplete="billing postal-code"
               onChange={(e) => this.props.changePostalCode(e)}
+              value={this.props.postalCode}
             />
           </Grid>
           <Grid item xs={12}>

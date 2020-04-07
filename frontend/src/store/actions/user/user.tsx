@@ -155,3 +155,33 @@ const getBasketFailure = (error: any) => ({
 export const getBasket = () => (dispatch: Dispatch) => axios.get('/api/user/basket')
   .then((res) => dispatch(getBasketSuccess(res.data)))
   .catch((err) => dispatch(getBasketFailure(err)));
+
+
+const orderBasketSuccess = (basket: any) => ({
+  type: basketActions.PUT_ORDER_SUCCESS,
+  target: basket,
+});
+
+const orderBasketFailure = (error: any) => ({
+  type: basketActions.PUT_ORDER_FAILURE,
+  target: error,
+});
+
+export const orderBasket = (basketId: number, familyName: string, givenName: string, email: string,
+  phoneNumber: string, receiverFamilyName: string, receiverGivenName: string,
+  address: string, postalCode: string, payer: string) => (dispatch: Dispatch) => axios.put(
+  '/api/user/basket/order/', {
+    basket: basketId,
+    family_name: familyName,
+    given_name: givenName,
+    email,
+    phone_number: phoneNumber,
+    receiver_family_name: receiverFamilyName,
+    receiver_given_name: receiverGivenName,
+    address,
+    postal_code: postalCode,
+    payer,
+  },
+)
+  .then((res) => dispatch(orderBasketSuccess(res.data)))
+  .catch((err) => dispatch(orderBasketFailure(err)));

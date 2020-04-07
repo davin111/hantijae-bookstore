@@ -10,6 +10,7 @@ interface Props{
   changePayer: (e: any) => any;
   confirmed2: boolean;
   changeConfirmed2: () => any;
+  payer: string;
 }
 
 class PaymentForm extends Component<Props> {
@@ -32,6 +33,7 @@ class PaymentForm extends Component<Props> {
               fullWidth
               autoComplete="lname"
               onChange={(e) => this.props.changePayer(e)}
+              value={this.props.payer}
             />
           </Grid>
           <Grid item xs={12}>
