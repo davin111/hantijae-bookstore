@@ -39,7 +39,8 @@ class BookBasket extends Component<Props> {
     const { classes } = this.props;
     let books = null;
 
-    if (this.props.basketStatus === basketStatus.SUCCESS && Object.keys(this.props.basket).length > 0) {
+    if (this.props.basketStatus === basketStatus.SUCCESS
+      && Object.keys(this.props.basket).length > 0) {
       books = <BooksInBasket books={this.props.basket.books} history={this.props.history} />;
     }
 

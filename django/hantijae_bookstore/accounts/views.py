@@ -22,8 +22,7 @@ class UserViewSet(viewsets.GenericViewSet):
         last_name = request.data.get('family_name')
         first_name = request.data.get('given_name')
         notifiable = request.data.get('notifiable')
-
-        if not (username and email and password and last_name and first_name and notifiable):
+        if not (username and email and password and last_name and first_name and notifiable is not None):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -32,8 +31,17 @@ class UserViewSet(viewsets.GenericViewSet):
             return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
         user.last_name = last_name
         user.first_name = first_name
-        user.notifiable = notifiable.lower() == 'true'
+        user.notifiable = notifiable
         user.save()
+
+        login(request, user)
+        session_key = request.session.session_key
+        try:
+            user.last_session = Session.objects.get(pk=session_key)
+            user.save()
+            print("session saved")
+        except Session.DoesNotExist:
+            pass
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['PUT'])
@@ -129,4 +137,37 @@ class BasketViewSet(viewsets.GenericViewSet):
             else:
                 return Response(status=status.HTTP_400_BAD_REQUEST)
 
+        return Response(self.get_serializer(basket).data)
+
+    @action(detail=False, methods=['PUT'])
+    def order(self, request):
+        basket_id = request.data.get('basket')
+        last_name = request.data.get('family_name')
+        first_name = request.data.get('given_name')
+        email = request.data.get('email')
+        phone_number = request.data.get('phone_number')
+        receiver_last_name = request.data.get('receiver_family_name')
+        receiver_first_name = request.data.get('receiver_given_name')
+        address = request.data.get('address')
+        postal_code = request.data.get('postal_code')
+        payer = request.data.get('payer')
+        if not (basket_id and last_name and first_name and email and phone_number
+                and receiver_last_name and receiver_first_name and address and postal_code and payer):
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+        basket = get_object_or_404(Basket, id=basket_id)
+        if basket.status != Basket.NONE:
+            return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        basket.last_name = last_name
+        basket.first_name = first_name
+        basket.email = email
+        basket.phone_number = phone_number
+        basket.receiver_last_name = receiver_last_name
+        basket.receiver_first_name = receiver_first_name
+        basket.address = address
+        basket.postal_code = postal_code
+        basket.payer = payer
+        basket.status = Basket.ORDERED
+        basket.save()
         return Response(self.get_serializer(basket).data)

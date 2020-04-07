@@ -25,6 +25,16 @@ class Basket(BaseModel):
     max_price = models.PositiveIntegerField(default=100000)
     status = models.IntegerField(choices=BASKET_STATUS, default=NONE)
 
+    last_name = models.CharField(max_length=300, blank=True)
+    first_name = models.CharField(max_length=300, blank=True)
+    email = models.EmailField(blank=True)
+    phone_number = models.CharField(max_length=150, blank=True)
+    receiver_last_name = models.CharField(max_length=300, blank=True)
+    receiver_first_name = models.CharField(max_length=300, blank=True)
+    address = models.CharField(max_length=3000, blank=True)
+    postal_code = models.CharField(max_length=20, blank=True)
+    payer = models.CharField(max_length=300, blank=True)
+
     class Meta:
         db_table = 'accounts_basket'
 
