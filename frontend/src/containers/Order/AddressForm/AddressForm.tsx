@@ -7,6 +7,9 @@ import FormControlLabel from '@material-ui/core/FormControlLabel';
 import Checkbox from '@material-ui/core/Checkbox';
 
 interface Props {
+  familyName: string;
+  givenName: string;
+  email: string;
   changeFamilyName: (e: any) => any;
   changeGivenName: (e: any) => any;
   changeEmail: (e: any) => any;
@@ -71,6 +74,7 @@ class AddressForm extends Component<Props> {
               fullWidth
               autoComplete="lname"
               onChange={(e) => this.props.changeFamilyName(e)}
+              value={this.props.familyName}
             />
           </Grid>
           <Grid item xs={12} sm={6}>
@@ -82,6 +86,7 @@ class AddressForm extends Component<Props> {
               fullWidth
               autoComplete="fname"
               onChange={(e) => this.props.changeGivenName(e)}
+              value={this.props.givenName}
             />
           </Grid>
           <Grid item xs={12} sm={6}>
@@ -93,6 +98,7 @@ class AddressForm extends Component<Props> {
               name="email"
               autoComplete="email"
               onChange={(e) => this.props.changeEmail(e)}
+              value={this.props.email}
             />
           </Grid>
           <Grid item xs={12} sm={6}>

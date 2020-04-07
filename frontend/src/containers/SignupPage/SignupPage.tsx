@@ -81,7 +81,7 @@ class SignupPage extends Component<Props, State> {
     };
   }
 
-  clickLoginHandler() {
+  clickSignupHandler() {
     this.props.onSignup(this.state.username, this.state.email, this.state.password,
       this.state.familyName, this.state.givenName, this.state.notifiable)
       .then(() => {
@@ -189,11 +189,16 @@ class SignupPage extends Component<Props, State> {
               </Grid>
             </Grid>
             <Button
-              type="submit"
+              type="button"
               fullWidth
               variant="contained"
               color="primary"
               className={classes.submit}
+              disabled={
+                Boolean(!(this.state.familyName && this.state.givenName && this.state.username
+                && this.state.email && this.state.password))
+              }
+              onClick={() => this.clickSignupHandler()}
             >
               회원 가입
             </Button>

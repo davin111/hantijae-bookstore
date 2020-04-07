@@ -71,6 +71,9 @@ interface Props {
   classes: any;
   baksetStatus: string;
   basket: any;
+  onGetMe: () => any;
+  getMeStatus: string;
+  me: any;
   onGetBasket: () => any;
 }
 
@@ -115,6 +118,16 @@ class Order extends Component<Props, State> {
   }
 
   componentDidMount() {
+    this.props.onGetMe()
+      .then(() => {
+        if (this.props.getMeStatus === userStatus.SUCCESS) {
+          this.setState({
+            familyName: this.props.me.familyName,
+            givenName: this.props.me.givenName,
+            email: this.props.me.email,
+          });
+        }
+      });
     this.props.onGetBasket();
   }
 
@@ -122,6 +135,9 @@ class Order extends Component<Props, State> {
     // eslint-disable-next-line react/no-access-state-in-setstate
     const step = this.state.activeStep;
     this.setState({ activeStep: step + 1 });
+    if (step === 2) {
+      this.props.onGetMe();
+    }
   };
 
   handleBack = () => {
@@ -135,6 +151,9 @@ class Order extends Component<Props, State> {
       case 0:
         return (
           <AddressForm
+            familyName={this.state.familyName}
+            givenName={this.state.givenName}
+            email={this.state.email}
             changeFamilyName={this.changeFamilyName}
             changeGivenName={this.changeGivenName}
             changeEmail={this.changeEmail}
@@ -318,11 +337,14 @@ class Order extends Component<Props, State> {
 }
 
 const mapStateToProps = (state: any) => ({
+  getMeStatus: state.user.getMeStatus,
+  me: state.user.me,
   basketStatus: state.user.basketStatus,
   basket: state.user.basket,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
+  onGetMe: () => dispatch(userActions.getMe()),
   onGetBasket: () => dispatch(userActions.getBasket()),
 });
 

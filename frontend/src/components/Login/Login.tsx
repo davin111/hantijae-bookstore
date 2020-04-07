@@ -132,6 +132,9 @@ class Login extends Component<Props, State> {
               color="secondary"
               className={classes.submit}
               onClick={() => this.clickLoginHandler()}
+              disabled={
+                Boolean(!(this.state.username && this.state.password))
+              }
             >
               로그인
             </Button>

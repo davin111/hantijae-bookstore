@@ -69,9 +69,12 @@ const reducer = (state = initialState, action: any) => {
         me: {
           username: data.username,
           email: data.email,
+          familyName: data.family_name,
+          givenName: data.given_name,
           id: data.id,
           lastLogin: data.last_login,
           anonymous: data.anonymous,
+          notifiable: data.notifiable,
         },
         basket: { ...state.basket, bookCount: data.book_count },
       };

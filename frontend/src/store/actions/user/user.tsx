@@ -68,7 +68,7 @@ const signupFailure = (error: any) => {
 export const signup = (
   username: string, email: string, password: string,
   familyName: string, givenName: string, notifiable: boolean,
-) => (dispatch: Dispatch) => axios.post('/api/user/signup/', {
+) => (dispatch: Dispatch) => axios.post('/api/user/', {
   username, email, password, family_name: familyName, given_name: givenName, notifiable,
 })
   .then((res) => dispatch(signupSuccess(res.data)))
