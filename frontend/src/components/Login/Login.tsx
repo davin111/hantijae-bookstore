@@ -127,7 +127,7 @@ class Login extends Component<Props, State> {
               required
               fullWidth
               id="username"
-              label="사용자 이름"
+              label="아이디"
               name="username"
               autoComplete="off"
               autoFocus

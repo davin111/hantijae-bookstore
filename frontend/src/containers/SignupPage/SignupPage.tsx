@@ -140,7 +140,7 @@ class SignupPage extends Component<Props, State> {
                   required
                   fullWidth
                   id="username"
-                  label="사용자 이름"
+                  label="아이디"
                   name="username"
                   autoComplete="off"
                   onChange={(e) => this.setState({ username: e.target.value })}

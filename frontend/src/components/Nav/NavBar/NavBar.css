@@ -5,10 +5,14 @@
     border: none;
     outline: none;
     cursor: pointer;
-    padding: 14px 16px;
     font-size: 17px;
     flex: 1;
     height: 100%;
+}
+@media all and (max-width:768px) {
+    .CategoryButton {
+        font-size: 10.5px;
+    }
 }
 .CategoryButtonActive {
     border-bottom: 2px solid #0091EA;

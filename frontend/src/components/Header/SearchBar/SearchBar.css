@@ -15,6 +15,11 @@
     -webkit-transition: margin 0.4s ease-in-out;
     transition: margin 0.4s ease-in-out;
 }
+@media all and (max-width:768px) {
+    .SearchBar input {
+        font-size: 12px;
+    }
+}
 
 .SearchBar input:focus {  
     margin-right: 3px;

@@ -1,81 +1,91 @@
 .User {
-    background-color: #FAFAFA;
-    height: inherit;
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+  background-color: #FAFAFA;
+  height: inherit;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.User h5 {
+  font-size: 1.2em;
+}
+@media all and (max-width:768px) {
   .User h5 {
-    font-size: 1.2em;
+      font-size: 10px;
   }
-  .UserPictire {
-    height: 6vh;
-    width: 6vh;
-    border: 1px solid #FAFAFA;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+}
+.UserPictire {
+  height: 6vh;
+  width: 6vh;
+  border: 1px solid #FAFAFA;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.UserPictire img {
+  height: 80%;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.Notification {
+  background-color: #E57373;
+  color: white;
+  font-size: 1.5em;
+  font-weight: bold;
+  height: 40px;
+  width: 40px;
+  border-radius: 50%;
+  z-index: 13;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  margin-top: auto;
+  margin-bottom: auto;
+  cursor: pointer;
+  visibility: visible;
+}
+
+.LogButton {
+  margin-left: 5%;
+  background:#FAFAFA;
+  color:black;
+  border:none;
+  position:relative;
+  height:60px;
+  font-size:1.2em;
+  font-weight: bold;
+  cursor:pointer;
+  transition:800ms ease all;
+  outline:none;
+}
+@media all and (max-width:768px) {
+  .LogButton {
+      font-size: 10px;
   }
-  .UserPictire img {
-    height: 80%;
-    vertical-align: middle;
-    cursor: pointer;
-  }
-  .Notification {
-    background-color: #E57373;
-    color: white;
-    font-size: 1.5em;
-    font-weight: bold;
-    height: 40px;
-    width: 40px;
-    border-radius: 50%;
-    z-index: 13;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    align-self: flex-start;
-    margin-top: auto;
-    margin-bottom: auto;
-    cursor: pointer;
-    visibility: visible;
-  }
-  
-  .LogButton{
-    margin-left: 5%;
-    background:#FAFAFA;
-    color:black;
-    border:none;
-    position:relative;
-    height:60px;
-    font-size:1.2em;
-    font-weight: bold;
-    cursor:pointer;
-    transition:800ms ease all;
-    outline:none;
-  }
-  .LogButton:hover{
-    background:pink;
-    color:white;
-  }
-  .LogButton:before,button:after{
-    content:'';
-    position:absolute;
-    top:0;
-    right:0;
-    height:2px;
-    width:0;
-    background:pink;
-    transition:400ms ease all;
-  }
-  .LogButton:after{
-    right:inherit;
-    top:inherit;
-    left:0;
-    bottom:0;
-  }
-  .LogButton:hover:before, .LogButton:hover:after{
-    width:100%;
-    transition:800ms ease all;
-  }
+}
+.LogButton:hover{
+  background:pink;
+  color:white;
+}
+.LogButton:before,button:after{
+  content:'';
+  position:absolute;
+  top:0;
+  right:0;
+  height:2px;
+  width:0;
+  background:pink;
+  transition:400ms ease all;
+}
+.LogButton:after{
+  right:inherit;
+  top:inherit;
+  left:0;
+  bottom:0;
+}
+.LogButton:hover:before, .LogButton:hover:after{
+  width:100%;
+  transition:800ms ease all;
+}

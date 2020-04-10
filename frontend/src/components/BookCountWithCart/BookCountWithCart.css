@@ -1,0 +1,23 @@
+.BookCountWithCart {
+    width: 100%;
+    height: 100%;
+}
+
+.BookCount {
+    position: absolute;
+    right: 15%;
+    bottom: 2%;
+    width: 10%;
+}
+.CartIcon {
+    right: 4%;
+    bottom: 3%;
+    color:grey;
+    position: absolute;
+    font-size: 300%;
+    cursor: pointer;
+    transition: 1s;
+}
+.CartIcon:hover {
+    color: black;
+}

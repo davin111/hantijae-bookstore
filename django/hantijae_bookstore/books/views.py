@@ -57,7 +57,7 @@ class SeriesViewSet(viewsets.GenericViewSet):
 
     def list(self, request):
         queryset = self.get_queryset()
-        fixed_tuple = ("단행본", "한티재 교양문고", "한티재 산문선", "한티재 시선", "한티재 팸플릿")
+        fixed_tuple = ("단행본", "교양문고", "산문선", "시선", "팸플릿")
         data = []
         for name in fixed_tuple:
             try:

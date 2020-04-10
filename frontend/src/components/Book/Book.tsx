@@ -1,10 +1,9 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
-import { FaCartArrowDown } from 'react-icons/lib/fa';
 
 import { userActions, stateActions } from '../../store/actions';
 import './Book.css';
-import { basketStatus, userStatus } from '../../constants/constants';
+import BookCountWithCart from '../BookCountWithCart/BookCountWithCart';
 
 
 export interface BookProps {
@@ -27,48 +26,8 @@ export interface BookProps {
   suggestLogin: boolean;
 }
 
-interface State{
-  count: number;
-}
-
-class Book extends Component<BookProps, State> {
-  constructor(props: BookProps) {
-    super(props);
-    this.state = {
-      count: 1,
-    };
-  }
-
-  clickCartHandler = () => {
-    if (this.state.count === 0) {
-      return;
-    }
-    if ((this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true)
-      && this.props.suggestLogin) {
-      this.props.onOpenLoginModal();
-    } else {
-      this.props.onPostBookInBasket(this.props.id, this.state.count)
-        .then(() => {
-          if (this.props.basketStatus === basketStatus.SUCCESS) {
-            this.props.onOpenBasketInfoModal();
-          }
-          if (this.props.basketStatus === basketStatus.FAILURE_MAX_BOOK) {
-            this.props.onOpenFullBasketModal();
-          }
-        });
-    }
-  };
-
-  increase = () => {
-    const { count } = this.state;
-    this.setState({ count: count + 1 });
-  };
-
-  decrease = () => {
-    const { count } = this.state;
-    this.setState({ count: count - 1 });
-  };
-
+// eslint-disable-next-line react/prefer-stateless-function
+class Book extends Component<BookProps> {
   render() {
     const authorNames = [];
     for (let i = 0; i < this.props.authors.length; i += 1) {
@@ -80,9 +39,6 @@ class Book extends Component<BookProps, State> {
     if (this.props.shortDescription.length > 100) {
       shortDesc = `${this.props.shortDescription.substr(0, 100)} ...`;
     }
-
-    const plusDisabled = this.state.count >= 10;
-    const minusDisabled = this.state.count <= 0;
 
     return (
       <div className="Book">
@@ -104,19 +60,7 @@ class Book extends Component<BookProps, State> {
             </p>
           </div>
         </div>
-        <div className="BookCountWithCart">
-          <div className="BookCount">
-            <div className="handle-counter" id="handleCounter">
-              <button type="button" className="counter-plus btn btn-primary" disabled={plusDisabled} onClick={() => this.increase()}>+</button>
-              <input type="text" value={this.state.count} disabled />
-              <button type="button" className="counter-minus btn btn-primary" disabled={minusDisabled} onClick={() => this.decrease()}>-</button>
-            </div>
-          </div>
-          <FaCartArrowDown
-            className="CartIcon"
-            onClick={() => this.clickCartHandler()}
-          />
-        </div>
+        <BookCountWithCart bookId={this.props.id} history={this.props.history} />
       </div>
     );
   }

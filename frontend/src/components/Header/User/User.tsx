@@ -33,10 +33,10 @@ class User extends Component<Props> {
     let logButton = null;
     bookCount = Number.isInteger(this.props.basket.bookCount) ? this.props.basket.bookCount : 0;
     if (this.props.getMeStatus === userStatus.FAILURE) {
-      username = '비로그인 유저';
+      username = '비회원';
       logButton = <button className="LogButton" type="button" onClick={() => this.props.history.push('/login')}>로그인</button>;
     } else if (this.props.me.anonymous === true) {
-      username = '비로그인 유저';
+      username = '비회원';
       logButton = <button className="LogButton" type="button" onClick={() => this.props.history.push('/login')}>로그인</button>;
     } else {
       username = this.props.me.username;

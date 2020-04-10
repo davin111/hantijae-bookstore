@@ -8,6 +8,7 @@ import FullBasketModal from './Modal/FullBasketModal/FullBasketModal';
 import BasketInfoModal from './Modal/BasketInfoModal/BasketInfoModal';
 import Books from './Books/Books';
 import BooksInBasket from './Books/BooksInBasket/BooksInBasket';
+import BookCountWithCart from './BookCountWithCart/BookCountWithCart';
 
 export {
   Books,
@@ -19,4 +20,5 @@ export {
   FullBasketModal,
   BasketInfoModal,
   BooksInBasket,
+  BookCountWithCart,
 };

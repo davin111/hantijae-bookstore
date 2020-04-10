@@ -3,12 +3,16 @@ import { connect } from 'react-redux';
 
 import { bookActions } from '../../store/actions';
 import './BookDetail.css';
+import {
+  BookCountWithCart, LoginModal, FullBasketModal, BasketInfoModal,
+} from '../../components';
 
 interface Props {
   location: any;
   book: any;
   getBookStatus: string;
   onGetBook: (id: number) => any;
+  history: any;
 }
 
 interface State {
@@ -56,7 +60,7 @@ class BookDetail extends Component<Props, State> {
 
     return (
       <div>
-        <div className="BookDetail">
+        <div className="BookDetailUpper">
           <div className="BookCoverStand">
             {img}
           </div>
@@ -105,6 +109,12 @@ class BookDetail extends Component<Props, State> {
             </div>
           </div>
         </div>
+        <div className="DetailCart">
+          <BookCountWithCart bookId={book.id} history={this.props.history} />
+        </div>
+        <LoginModal history={this.props.history} />
+        <FullBasketModal history={this.props.history} />
+        <BasketInfoModal history={this.props.history} />
         <div className="BookDescriptions">
           <p>
             {desc}
