@@ -27,7 +27,6 @@ target/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
 
 ### VS Code ###
 .vscode/
@@ -47,7 +46,6 @@ node_modules
 coverage
 
 # production
-build
 
 # misc
 .DS_Store
@@ -73,7 +71,6 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
 develop-eggs/
 dist/
 downloads/
