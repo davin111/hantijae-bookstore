@@ -5,7 +5,7 @@ import Button from '@material-ui/core/Button';
 import Typography from '@material-ui/core/Typography';
 import { withStyles, createStyles } from '@material-ui/core/styles';
 
-import { userActions, stateActions } from '../../../store/actions';
+import { stateActions } from '../../../store/actions';
 import './FullBasketModal.css';
 
 

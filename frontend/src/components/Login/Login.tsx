@@ -15,7 +15,7 @@ import { withStyles, createStyles } from '@material-ui/core/styles';
 import Container from '@material-ui/core/Container';
 
 import { userStatus } from '../../constants/constants';
-import { userActions } from '../../store/actions';
+import { userActions, stateActions } from '../../store/actions';
 import './Login.css';
 
 function Copyright() {
@@ -57,6 +57,9 @@ interface Props {
   loginStatus: string;
   user: any;
   onLogin: (username: string, password: string) => any;
+  withoutLogin: boolean;
+  onCloseLoginModal: () => any;
+  onDontSuggestLogin: () => any;
 }
 
 interface State {
@@ -84,8 +87,29 @@ class Login extends Component<Props, State> {
       });
   }
 
+  clickWithoutLoginHandler() {
+    this.props.onCloseLoginModal();
+    this.props.onDontSuggestLogin();
+  }
+
   render() {
     const { classes } = this.props;
+    let withoutLoginButton = null;
+    if (this.props.withoutLogin) {
+      withoutLoginButton = (
+        <Button
+          type="button"
+          fullWidth
+          variant="contained"
+          color="default"
+          className={classes.submit}
+          onClick={() => this.clickWithoutLoginHandler()}
+        >
+          로그인 없이 이용 (책바구니 내역을 잃을 수 있습니다)
+        </Button>
+      );
+    }
+
     return (
       <Container component="main" maxWidth="xs">
         <CssBaseline />
@@ -148,16 +172,7 @@ class Login extends Component<Props, State> {
             >
               회원 가입하러 가기
             </Button>
-            <Button
-              type="button"
-              fullWidth
-              variant="contained"
-              color="default"
-              className={classes.submit}
-              onClick={() => this.clickLoginHandler()}
-            >
-              로그인 없이 이용 (책바구니 내역을 잃을 수 있습니다)
-            </Button>
+            {withoutLoginButton}
             <Grid container>
               <Grid item xs>
                 <Link href="/findpassword" variant="body2">
@@ -182,6 +197,8 @@ const mapStateToProps = (state: any) => ({
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onLogin: (username: string, password: string) => dispatch(userActions.login(username, password)),
+  onCloseLoginModal: () => dispatch(stateActions.closeLoginModal()),
+  onDontSuggestLogin: () => dispatch(stateActions.dontSuggestLogin()),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(withStyles(styles)(Login));

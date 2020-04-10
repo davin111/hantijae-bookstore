@@ -24,6 +24,7 @@ export interface BookProps {
   onOpenLoginModal: () => any;
   onOpenFullBasketModal: () => any;
   onOpenBasketInfoModal: () => any;
+  suggestLogin: boolean;
 }
 
 interface State{
@@ -42,7 +43,8 @@ class Book extends Component<BookProps, State> {
     if (this.state.count === 0) {
       return;
     }
-    if (this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true) {
+    if ((this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true)
+      && this.props.suggestLogin) {
       this.props.onOpenLoginModal();
     } else {
       this.props.onPostBookInBasket(this.props.id, this.state.count)
@@ -125,6 +127,7 @@ const mapStateToProps = (state: any) => ({
   me: state.user.me,
   getMeStatus: state.user.getMeStatus,
   basket: state.user.basket,
+  suggestLogin: state.state.suggestLogin,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({

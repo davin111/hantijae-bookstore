@@ -5,7 +5,7 @@ import Button from '@material-ui/core/Button';
 import Typography from '@material-ui/core/Typography';
 import { withStyles, createStyles } from '@material-ui/core/styles';
 
-import { userActions, stateActions } from '../../../store/actions';
+import { stateActions } from '../../../store/actions';
 import './BasketInfoModal.css';
 
 
@@ -60,7 +60,10 @@ class BasketInfoModal extends Component<Props> {
             variant="contained"
             color="secondary"
             className={classes.submit}
-            onClick={() => this.clickCancelHandler()}
+            onClick={() => {
+              this.clickCancelHandler();
+              this.props.history.push('/order');
+            }}
           >
             주문하러 가기
           </Button>

@@ -6,6 +6,7 @@ const initialState = {
     fullBasketModal: false,
     basketInfoModal: false,
   },
+  suggestLogin: true,
 };
 
 const reducer = (state = initialState, action: any) => {
@@ -22,6 +23,8 @@ const reducer = (state = initialState, action: any) => {
       return { ...state, modal: { basketInfoModal: true } };
     case stateActions.CLOSE_BASKET_INFO_MODAL:
       return { ...state, modal: { basketInfoModal: false } };
+    case stateActions.DONT_SUGGEST_LOGIN:
+      return { ...state, suggestLogin: false };
     default:
       return { ...state };
   }

@@ -53,3 +53,13 @@ const closeBasketInfoModalSuccess = () => ({
 export const closeBasketInfoModal = () => (dispatch: Dispatch) => dispatch(
   closeBasketInfoModalSuccess(),
 );
+
+
+const dontSuggestLoginSuccess = () => ({
+  type: stateActions.DONT_SUGGEST_LOGIN,
+  target: false,
+});
+
+export const dontSuggestLogin = () => (dispatch: Dispatch) => dispatch(
+  dontSuggestLoginSuccess(),
+);

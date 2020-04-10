@@ -17,7 +17,7 @@ interface State {
 class LoginPage extends Component<Props> {
   render() {
     return (
-      <Login history={this.props.history} />
+      <Login history={this.props.history} withoutLogin={false} />
     );
   }
 }

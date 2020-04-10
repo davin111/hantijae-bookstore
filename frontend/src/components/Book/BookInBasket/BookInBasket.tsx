@@ -3,7 +3,6 @@ import { connect } from 'react-redux';
 
 import { userActions, stateActions } from '../../../store/actions';
 import './BookInBasket.css';
-import { basketStatus, userStatus } from '../../../constants/constants';
 
 
 export interface BookProps {

@@ -26,7 +26,7 @@ class LoginModal extends Component<Props> {
         onHide={() => this.clickCancelHandler()}
       >
         <Modal.Body>
-          <Login history={this.props.history} />
+          <Login history={this.props.history} withoutLogin />
         </Modal.Body>
       </Modal>
     );

@@ -3,7 +3,6 @@ import { connect } from 'react-redux';
 import { FaSearch } from 'react-icons/lib/fa';
 
 import { bookActions } from '../../../store/actions';
-import { bookStatus } from '../../../constants/constants';
 import './SearchBar.css';
 
 interface Props {

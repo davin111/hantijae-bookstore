@@ -26,6 +26,7 @@ import {
   closeFullBasketModal,
   openBasketInfoModal,
   closeBasketInfoModal,
+  dontSuggestLogin,
 } from './state/state';
 
 
@@ -57,4 +58,5 @@ export const stateActions = {
   closeFullBasketModal,
   openBasketInfoModal,
   closeBasketInfoModal,
+  dontSuggestLogin,
 };

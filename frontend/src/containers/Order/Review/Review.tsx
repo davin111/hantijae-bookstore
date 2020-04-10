@@ -7,7 +7,6 @@ import ListItem from '@material-ui/core/ListItem';
 import ListItemText from '@material-ui/core/ListItemText';
 import Grid from '@material-ui/core/Grid';
 
-import { userStatus } from '../../../constants/constants';
 import { userActions } from '../../../store/actions';
 
 
