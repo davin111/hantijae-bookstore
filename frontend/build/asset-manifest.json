@@ -1,22 +1,23 @@
 {
   "files": {
-    "main.css": "/static/css/main.6e4f9ea9.chunk.css",
-    "main.js": "/static/js/main.66092462.chunk.js",
-    "main.js.map": "/static/js/main.66092462.chunk.js.map",
+    "main.css": "/static/css/main.cbac4c08.chunk.css",
+    "main.js": "/static/js/main.64e14ade.chunk.js",
+    "main.js.map": "/static/js/main.64e14ade.chunk.js.map",
     "runtime-main.js": "/static/js/runtime-main.460ed7ea.js",
     "runtime-main.js.map": "/static/js/runtime-main.460ed7ea.js.map",
-    "static/js/2.8276c618.chunk.js": "/static/js/2.8276c618.chunk.js",
-    "static/js/2.8276c618.chunk.js.map": "/static/js/2.8276c618.chunk.js.map",
+    "static/js/2.f6c5b2ad.chunk.js": "/static/js/2.f6c5b2ad.chunk.js",
+    "static/js/2.f6c5b2ad.chunk.js.map": "/static/js/2.f6c5b2ad.chunk.js.map",
     "index.html": "/index.html",
-    "precache-manifest.61fd35c0ed6e373ccb931b74af3eee69.js": "/precache-manifest.61fd35c0ed6e373ccb931b74af3eee69.js",
+    "precache-manifest.741b1ae29be2c3f488a74ed14a8c8904.js": "/precache-manifest.741b1ae29be2c3f488a74ed14a8c8904.js",
     "service-worker.js": "/service-worker.js",
-    "static/css/main.6e4f9ea9.chunk.css.map": "/static/css/main.6e4f9ea9.chunk.css.map",
-    "static/js/2.8276c618.chunk.js.LICENSE.txt": "/static/js/2.8276c618.chunk.js.LICENSE.txt",
+    "static/css/main.cbac4c08.chunk.css.map": "/static/css/main.cbac4c08.chunk.css.map",
+    "static/js/2.f6c5b2ad.chunk.js.LICENSE.txt": "/static/js/2.f6c5b2ad.chunk.js.LICENSE.txt",
     "static/media/1.5   그레타 툰베리와 함께.png": "/static/media/1.5   그레타 툰베리와 함께.e32fb971.png",
     "static/media/57 세상에 말을 걸다.png": "/static/media/57 세상에 말을 걸다.e08d79db.png",
     "static/media/PM 100 꿈을 적는 시간.png": "/static/media/PM 100 꿈을 적는 시간.86a18103.png",
     "static/media/bookbasket.png": "/static/media/bookbasket.9b71b5ad.png",
     "static/media/bookbasket_won.png": "/static/media/bookbasket_won.953bd297.png",
+    "static/media/kiki.jpeg": "/static/media/kiki.98c7c234.jpeg",
     "static/media/詩와 공화국.png": "/static/media/詩와 공화국.f35c9eb8.png",
     "static/media/가지 못한 길.png": "/static/media/가지 못한 길.d63c9a74.png",
     "static/media/강냉이, 공부하다 빵 터지다.png": "/static/media/강냉이, 공부하다 빵 터지다.c642db4f.png",
@@ -127,8 +128,8 @@
   },
   "entrypoints": [
     "static/js/runtime-main.460ed7ea.js",
-    "static/js/2.8276c618.chunk.js",
-    "static/css/main.6e4f9ea9.chunk.css",
-    "static/js/main.66092462.chunk.js"
+    "static/js/2.f6c5b2ad.chunk.js",
+    "static/css/main.cbac4c08.chunk.css",
+    "static/js/main.64e14ade.chunk.js"
   ]
 }
