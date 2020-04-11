@@ -49,9 +49,9 @@ class BookBasket extends Component<Props> {
         <div className="BookBasketTitle">
           {/* eslint-disable-next-line */}
           <img className="BookBasketWonImg" src={BookBasketImg} />
-          <Typography variant="h1" gutterBottom>
+          <h1>
             책바구니 내역
-          </Typography>
+          </h1>
         </div>
         <h2 className="BookBasketTotalCount">
           {this.props.basket.bookCount}
