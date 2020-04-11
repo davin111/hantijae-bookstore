@@ -78,7 +78,7 @@ class BookBasket extends Component<Props> {
             원
           </del>
           {' '}
-          -&gt;
+          →
           {' '}
           {this.props.basket.maxPrice}
           원

@@ -1,3 +1,7 @@
+.ForceMargin {
+    margin-top: 5%;
+}
+
 .OrderElement {
     border-color: black;
     border-width: 2px;

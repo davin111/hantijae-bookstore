@@ -1,4 +1,4 @@
-import React, { Component, Dispatch, Fragment } from 'react';
+import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 import { createStyles, withStyles } from '@material-ui/core/styles';
 import Typography from '@material-ui/core/Typography';
@@ -15,7 +15,7 @@ import './MyPage.css';
 
 const styles = (theme: any) => createStyles({
   listItem: {
-    padding: theme.spacing(1, 0),
+    padding: theme.spacing(1, 1),
   },
   total: {
     fontWeight: 700,
@@ -75,109 +75,110 @@ class MyPage extends Component<Props> {
       }
 
       return (
-      <div className="OrderElement" key={order.id}>
-        <List disablePadding>
-          <ListItemText primary="책바구니 번호" />
-          <Typography variant="subtitle1" className={classes.total}>
-            {order.id}
-          </Typography>
-          <hr />
-          <ListItem className={classes.listItem}>
-            <ListItemText primary="책바구니 상태" />
+        <div className="OrderElement" key={order.id}>
+          <List disablePadding>
+            <ListItemText primary="책바구니 번호" />
             <Typography variant="subtitle1" className={classes.total}>
-              {bookBasketStatus}
+              {order.id}
             </Typography>
-          </ListItem>
-          <hr />
-          {this.makeBookList(order.books)}
-          <hr />
-          <ListItem className={classes.listItem}>
-            <ListItemText primary="정가" />
-            <Typography variant="subtitle1" className={classes.total}>
-              <del>
-                {order.total_price}
-                원
-              </del>
-            </Typography>
-          </ListItem>
-          <ListItem className={classes.listItem}>
-            <ListItemText primary="금액" />
-            <Typography variant="subtitle1" className={classes.total}>
-              {order.max_price}
-              원
-            </Typography>
-          </ListItem>
-        </List>
-        <hr />
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="h6" gutterBottom className={classes.title}>
-              주문 정보
-            </Typography>
-            <Grid container>
-              <Grid item xs={6}>
-                <Typography gutterBottom>주문하시는 분</Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography gutterBottom>
-                  {order.family_name}
-                  {order.given_name}
-                </Typography>
-              </Grid>
-            </Grid>
-            <Grid container>
-              <Grid item xs={6}>
-                <Typography gutterBottom>받으시는 분</Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography gutterBottom>
-                  {order.receiver_family_name}
-                  {order.receiver_given_name}
-                </Typography>
-              </Grid>
-            </Grid>
-            <Grid item xs={12}>
-              <Typography gutterBottom>주소</Typography>
-            </Grid>
-            <Grid item xs={12}>
-              <Typography gutterBottom>{order.address}</Typography>
-              <Typography gutterBottom>
-                우편번호:
-                {' '}
-                {order.postal_code}
+            <hr />
+            <ListItem className={classes.listItem}>
+              <ListItemText primary="책바구니 상태" />
+              <Typography variant="subtitle1" className={classes.total}>
+                {bookBasketStatus}
               </Typography>
-            </Grid>
-          </Grid>
-          <Grid item container direction="column" xs={12} sm={6}>
-            <Typography variant="h6" gutterBottom className={classes.title}>
-              계좌 입금 정보
-            </Typography>
-            <Grid container>
-              <Grid item xs={6}>
-                <Typography gutterBottom>입금자 명의</Typography>
+            </ListItem>
+            <hr />
+            {this.makeBookList(order.books)}
+            <hr />
+            <ListItem className={classes.listItem}>
+              <ListItemText primary="정가" />
+              <Typography variant="subtitle1" className={classes.total}>
+                <del>
+                  {order.total_price}
+                  원
+                </del>
+              </Typography>
+            </ListItem>
+            <ListItem className={classes.listItem}>
+              <ListItemText primary="금액" />
+              <Typography variant="subtitle1" className={classes.total}>
+                {order.max_price}
+                원
+              </Typography>
+            </ListItem>
+          </List>
+          <hr />
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="h6" gutterBottom className={classes.title}>
+                주문 정보
+              </Typography>
+              <Grid container>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>주문하시는 분</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>
+                    {order.family_name}
+                    {order.given_name}
+                  </Typography>
+                </Grid>
               </Grid>
-              <Grid item xs={6}>
-                <Typography gutterBottom>{order.payer}</Typography>
+              <Grid container>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>받으시는 분</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>
+                    {order.receiver_family_name}
+                    {order.receiver_given_name}
+                  </Typography>
+                </Grid>
               </Grid>
-            </Grid>
-            <Grid container justify="center">
-              <Grid item xs={6}>
+              <Grid item xs={12}>
+                <Typography gutterBottom>주소</Typography>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography gutterBottom>{order.address}</Typography>
                 <Typography gutterBottom>
-                  {order.email}
+                  우편번호:
+                  {' '}
+                  {order.postal_code}
                 </Typography>
               </Grid>
             </Grid>
-            <Grid container justify="center">
-              <Grid item xs={6}>
-                <Typography gutterBottom>
-                  {order.phone_number}
-                </Typography>
+            <Grid item container direction="column" xs={12} sm={6}>
+              <Typography variant="h6" gutterBottom className={classes.title}>
+                계좌 입금 정보
+              </Typography>
+              <Grid container>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>입금자 명의</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>{order.payer}</Typography>
+                </Grid>
+              </Grid>
+              <Grid container justify="center">
+                <Grid item xs={6}>
+                  <Typography gutterBottom>
+                    {order.email}
+                  </Typography>
+                </Grid>
+              </Grid>
+              <Grid container justify="center">
+                <Grid item xs={6}>
+                  <Typography gutterBottom>
+                    {order.phone_number}
+                  </Typography>
+                </Grid>
               </Grid>
             </Grid>
           </Grid>
-        </Grid>
-      </div>
-    );});
+        </div>
+      );
+    });
   }
 
   render() {
@@ -186,6 +187,15 @@ class MyPage extends Component<Props> {
     let orders = null;
     if (this.props.orders.length > 0) {
       orders = this.makeOrderList(this.props.orders);
+    } else {
+      orders = (
+        <div>
+          <hr />
+          <Typography variant="h5" gutterBottom>
+            주문 내역이 없습니다. 책을 담으러 가볼까요?
+          </Typography>
+        </div>
+      );
     }
 
     let username = '';
@@ -194,9 +204,10 @@ class MyPage extends Component<Props> {
     } else {
       username = this.props.me.username;
     }
-    
+
     return (
       <Container component="main" fixed maxWidth="xl">
+        <div className="ForceMargin" />
         <main className={classes.layout}>
           <Typography variant="h6" gutterBottom>
             회원 정보
@@ -217,7 +228,9 @@ class MyPage extends Component<Props> {
             <ListItem className={classes.listItem}>
               <ListItemText primary="이름" />
               <Typography variant="subtitle1" className={classes.total}>
-                {this.props.me.familyName}&nbsp;{this.props.me.givenName}
+                {this.props.me.familyName}
+                &nbsp;
+                {this.props.me.givenName}
               </Typography>
             </ListItem>
           </div>

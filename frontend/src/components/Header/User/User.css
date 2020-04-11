@@ -6,14 +6,22 @@
   align-items: center;
   justify-content: center;
 }
+@media all and (max-width:768px) {
+  .User {
+      width: 100%;
+  }
+}
 .User .UserNameButton {
   font-size: 1.2em;
+  cursor: pointer;
+  font-weight: bold;
 }
 @media all and (max-width:768px) {
   .User .UserNameButton {
       font-size: 10px;
   }
 }
+
 .UserPictire {
   height: 6vh;
   width: 6vh;
@@ -28,7 +36,7 @@
   vertical-align: middle;
   cursor: pointer;
 }
-.Notification {
+.BasketCount {
   background-color: #E57373;
   color: white;
   font-size: 1.5em;
@@ -45,47 +53,5 @@
   margin-bottom: auto;
   cursor: pointer;
   visibility: visible;
-}
-
-.LogButton {
-  margin-left: 5%;
-  background:#FAFAFA;
-  color:black;
-  border:none;
-  position:relative;
-  height:60px;
-  font-size:1.2em;
-  font-weight: bold;
-  cursor:pointer;
-  transition:800ms ease all;
-  outline:none;
-}
-@media all and (max-width:768px) {
-  .LogButton {
-      font-size: 10px;
-  }
-}
-.LogButton:hover{
-  background:pink;
-  color:white;
-}
-.LogButton:before,button:after{
-  content:'';
-  position:absolute;
-  top:0;
-  right:0;
-  height:2px;
-  width:0;
-  background:pink;
-  transition:400ms ease all;
-}
-.LogButton:after{
-  right:inherit;
-  top:inherit;
-  left:0;
-  bottom:0;
-}
-.LogButton:hover:before, .LogButton:hover:after{
-  width:100%;
-  transition:800ms ease all;
+  margin-right: 5%;
 }
