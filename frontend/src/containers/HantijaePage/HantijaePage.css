@@ -96,6 +96,7 @@
 }
 
 .EventTitle {
+    padding-top: 3%;
     font-size: 2em;
     font-weight: 350;
     color: #515280;
@@ -115,4 +116,10 @@
     font-size: 1em;
     text-indent: -1.5em;
     line-height: 2em;
+}
+@media all and (max-width:768px) {
+    .EventDescription {
+        font-size: 0.8em;
+        margin-left: 12%;
+     }
 }
