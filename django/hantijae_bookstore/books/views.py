@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -70,4 +71,8 @@ class SeriesViewSet(viewsets.GenericViewSet):
 
     def retrieve(self, request, pk=None):
         series = get_object_or_404(Series, pk=pk)
-        return Response(self.get_serializer(series).data)
+        data = cache.get(f'series_{pk}')
+        if not data:
+            data = self.get_serializer(series).data
+            cache.set(f'series_{pk}', data, 3600)
+        return Response(data)
