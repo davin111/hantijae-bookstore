@@ -63,9 +63,7 @@ class MyPage extends Component<Props> {
     const { classes } = this.props;
     return orders.map((order: any) => (
       <Fragment key={order.id}>
-        <Typography variant="h6" gutterBottom>
-          책바구니 내역 확인
-        </Typography>
+        <hr />
         <List disablePadding>
           {this.makeBookList(order.books)}
           <hr />
@@ -98,8 +96,8 @@ class MyPage extends Component<Props> {
               </Grid>
               <Grid item xs={6}>
                 <Typography gutterBottom>
-                  {order.familyName}
-                  {order.givenName}
+                  {order.family_name}
+                  {order.given_name}
                 </Typography>
               </Grid>
             </Grid>
@@ -109,8 +107,8 @@ class MyPage extends Component<Props> {
               </Grid>
               <Grid item xs={6}>
                 <Typography gutterBottom>
-                  {order.receiverFamilyName}
-                  {order.receiverGivenName}
+                  {order.receiver_family_name}
+                  {order.receiver_given_name}
                 </Typography>
               </Grid>
             </Grid>
@@ -118,12 +116,11 @@ class MyPage extends Component<Props> {
               <Typography gutterBottom>주소</Typography>
             </Grid>
             <Grid item xs={12}>
-              <Typography gutterBottom>{order.address1}</Typography>
-              <Typography gutterBottom>{order.address2}</Typography>
+              <Typography gutterBottom>{order.address}</Typography>
               <Typography gutterBottom>
                 우편번호:
                 {' '}
-                {order.postalCode}
+                {order.postal_code}
               </Typography>
             </Grid>
           </Grid>
@@ -169,6 +166,9 @@ class MyPage extends Component<Props> {
     return (
       <Container component="main" fixed maxWidth="xl">
         <main className={classes.layout}>
+          <Typography variant="h6" gutterBottom>
+            주문 내역
+          </Typography>
           {orders}
         </main>
       </Container>

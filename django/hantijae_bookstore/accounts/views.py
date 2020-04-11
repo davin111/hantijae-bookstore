@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.models import User, Basket, BookBasket, MaxBookCountException
-from accounts.serializers import UserSerializer, BasketSerializer, SimpleBasketSerializer
+from accounts.serializers import UserSerializer, BasketSerializer, OrderSerializer
 from accounts.utils import get_user_from_request
 from books.models import Book
 
@@ -80,6 +80,11 @@ class UserViewSet(viewsets.GenericViewSet):
 
 class BasketViewSet(viewsets.GenericViewSet):
     serializer_class = BasketSerializer
+
+    def get_serializer_class(self):
+        if self.action == 'order' and self.request.method == 'GET':
+            return OrderSerializer
+        return self.serializer_class
 
     def list(self, request):
         user = get_user_from_request(request)
