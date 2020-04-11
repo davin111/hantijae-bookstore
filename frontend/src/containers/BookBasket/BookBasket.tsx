@@ -38,11 +38,34 @@ class BookBasket extends Component<Props> {
   render() {
     const { classes } = this.props;
     let books = null;
+    let summary = null;
 
     if (this.props.basketStatus === basketStatus.SUCCESS
       && Object.keys(this.props.basket).length > 0) {
-      books = <BooksInBasket books={this.props.basket.books} history={this.props.history} />;
+      if (this.props.basket.books.length > 0) {
+        books = <BooksInBasket books={this.props.basket.books} history={this.props.history} />;
+        summary = (
+          <div className="BookBasketSummary">
+            <del className="OriginalPrice">
+              {this.props.basket.totalPrice}
+              원
+            </del>
+            {' '}
+            →
+            {' '}
+            {this.props.basket.maxPrice}
+            원
+          </div>
+        );
+      } else {
+        books = (
+          <h3 className="NoResultBasket">
+            책바구니 내역이 없습니다. 책을 담으러 가볼까요?
+          </h3>
+        );
+      }
     }
+
     return (
       <div className="BookBasketPage">
         <div className="BookBasketTitle">
@@ -59,17 +82,7 @@ class BookBasket extends Component<Props> {
           권
         </h2>
         {books}
-        <div className="BookBasketSummary">
-          <del className="OriginalPrice">
-            {this.props.basket.totalPrice}
-            원
-          </del>
-          {' '}
-          →
-          {' '}
-          {this.props.basket.maxPrice}
-          원
-        </div>
+        {summary}
         <Button
           id="OrderButton"
           variant="contained"

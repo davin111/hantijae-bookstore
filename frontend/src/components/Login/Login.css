@@ -7,6 +7,10 @@
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
  */
 /*! normalize.css v3.0.3 | MIT License | github.com/necolas/normalize.css */
+.GapMaker {
+  margin-top: 5%;
+}
+
   .modal-open {
     overflow: hidden;
   }
@@ -21,6 +25,11 @@
     overflow: hidden;
     -webkit-overflow-scrolling: touch;
     outline: 0;
+  }
+  @media all and (max-width:768px) {
+    .modal {
+      top: 0%;
+    }
   }
   .modal.fade .modal-dialog {
     /* -webkit-transform: translate(0, -25%);

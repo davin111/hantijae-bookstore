@@ -81,6 +81,10 @@ class SignupPage extends Component<Props, State> {
     };
   }
 
+  componentDidMount() {
+    window.scrollTo(0, 0);
+  }
+
   clickSignupHandler() {
     this.props.onSignup(this.state.username, this.state.email, this.state.password,
       this.state.familyName, this.state.givenName, this.state.notifiable)

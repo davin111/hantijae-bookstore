@@ -15,6 +15,7 @@ import { userActions } from '../../store/actions';
 import AddressForm from './AddressForm/AddressForm';
 import PaymentForm from './PaymentForm/PaymentForm';
 import Review from './Review/Review';
+import Preview from './Preview/Preview';
 
 function Copyright() {
   return (
@@ -103,7 +104,7 @@ class Order extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
-      activeStep: 0,
+      activeStep: -1,
       familyName: '',
       givenName: '',
       email: '',
@@ -132,7 +133,12 @@ class Order extends Component<Props, State> {
           });
         }
       });
-    this.props.onGetBasket();
+    this.props.onGetBasket()
+      .then(() => {
+        if (this.props.basket.books.length === 0) {
+          this.props.history.push('/');
+        }
+      });
   }
 
   handleNext = () => {
@@ -183,6 +189,10 @@ class Order extends Component<Props, State> {
 
   getStepContent = (step: number) => {
     switch (step) {
+      case -1:
+        return (
+          <Preview basket={this.props.basket} />
+        );
       case 0:
         return (
           <AddressForm
@@ -298,6 +308,8 @@ class Order extends Component<Props, State> {
 
   nextButtonDisabled = (step: number) => {
     switch (step) {
+      case -1:
+        return false;
       case 0:
         if (this.state.familyName && this.state.givenName && this.state.confirmed
             && this.state.email && this.state.phoneNumber
@@ -341,7 +353,7 @@ class Order extends Component<Props, State> {
             <>
               {this.state.activeStep === steps.length ? (
                 <>
-                  <Typography variant="h5" gutterBottom>
+                  <Typography variant="h6" gutterBottom>
                     한티재 10주년 기념 특판 이벤트에 참여해 주셔서 고맙습니다!
                   </Typography>
                   <Typography variant="subtitle1">
@@ -349,12 +361,20 @@ class Order extends Component<Props, State> {
                     <br />
                     hantibooks@gmail.com
                   </Typography>
+                  <Button
+                    onClick={() => this.props.history.push('/mypage')}
+                    className={classes.button}
+                    color="secondary"
+                    variant="outlined"
+                  >
+                    MyPage에서 확인하기
+                  </Button>
                 </>
               ) : (
                 <>
                   {this.getStepContent(this.state.activeStep)}
                   <div className={classes.buttons}>
-                    {this.state.activeStep !== 0 && (
+                    {this.state.activeStep !== -1 && (
                       <Button onClick={this.handleBack} className={classes.button}>
                         이전
                       </Button>

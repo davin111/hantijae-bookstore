@@ -66,8 +66,19 @@ class MyPage extends Component<Props> {
     const { classes } = this.props;
     return orders.map((order: any) => {
       let bookBasketStatus = '책 담는 중';
+      let accountInfo = null;
       if (order.status === 2) {
         bookBasketStatus = '주문 완료';
+        accountInfo = (
+          <>
+            <Typography variant="body1" gutterBottom>
+              다음 계좌로 입금 부탁드립니다.
+            </Typography>
+            <Typography variant="body1" gutterBottom>
+              국민은행 618701-04-129813 오은지(도서출판 한티재)
+            </Typography>
+          </>
+        );
       } else if (order.status === 3) {
         bookBasketStatus = '입금 확인';
       } else if (order.status === 4) {
@@ -99,6 +110,7 @@ class MyPage extends Component<Props> {
                 {bookBasketStatus}
               </Typography>
             </ListItem>
+            {accountInfo}
             <hr />
             {this.makeBookList(order.books)}
             <hr />
