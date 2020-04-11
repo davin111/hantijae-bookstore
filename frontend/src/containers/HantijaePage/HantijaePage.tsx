@@ -2,9 +2,9 @@ import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 
 import { bookActions } from '../../store/actions';
-import './BookDetail.css';
+import './HantijaePage.css';
 import {
-  BookCountWithCart, LoginModal, FullBasketModal, BasketInfoModal,
+  BookCountWithCart,
 } from '../../components';
 
 interface Props {
@@ -19,7 +19,7 @@ interface State {
   book: any;
 }
 
-class BookDetail extends Component<Props, State> {
+class HantijaePage extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -34,61 +34,14 @@ class BookDetail extends Component<Props, State> {
   }
 
   render() {
-    let authorStr = '';
-    let desc = '';
-    let img = null;
-    let bookCart = null;
-    if (Object.keys(this.state.book).length > 0) {
-      const authorNames = [];
-      for (let i = 0; i < this.state.book.authors.length; i += 1) {
-        authorNames.push(this.state.book.authors[i].name);
-      }
-      authorStr = authorNames.join(' · ');
-
-      desc = this.state.book.description.split('\n').map((line: string) => (
-        <span>
-          {line}
-          <br />
-        </span>
-      ));
-      /* eslint-disable-next-line */
-      img = <img src={require(`./book_covers_3d/${this.state.book.title.replace(':', '').replace('!', '')}.png`)} />;
-
-      if (this.state.book.visible) {
-        if (this.state.book.published_date.split('-')[0] === '2020') {
-          if (this.state.book.id === 108) {
-            bookCart = (
-              // eslint-disable-next-line
-              <h3 className="DetailNotAcceptable"
-                onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=225033583')}
-              >
-                특판 이벤트에서 올해 나온 신간은 제외됩니다
-              </h3>
-            );
-          } else {
-            bookCart = (
-              <h3 className="DetailNotAcceptable">
-                특판 이벤트에서 올해 나온 신간은 제외됩니다
-              </h3>
-            );
-          }
-        } else {
-          bookCart = (
-            <div className="DetailCart">
-              <BookCountWithCart bookId={this.state.book.id} history={this.props.history} />
-            </div>
-          );
-        }
-      } else {
-        bookCart = <h3 className="DetailNotVisible">절판</h3>;
-      }
-    }
+    /* eslint-disable-next-line */
+    img = <img src={require(`./kiki.jpeg`)} />;
 
 
     const { book } = this.props;
 
     return (
-      <div>
+      <div className="HantijaePage">
         <div className="BookDetailUpper">
           <div className="BookCoverStand">
             {img}
@@ -138,9 +91,6 @@ class BookDetail extends Component<Props, State> {
             </div>
           </div>
         </div>
-        <LoginModal history={this.props.history} />
-        <FullBasketModal history={this.props.history} />
-        <BasketInfoModal history={this.props.history} />
         <div className="BookDescriptions">
           <p>
             {desc}
@@ -160,4 +110,4 @@ const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetBook: (id: number) => dispatch(bookActions.getBook(id)),
 });
 
-export default connect(mapStateToProps, mapDispatchToProps)(BookDetail);
+export default connect(mapStateToProps, mapDispatchToProps)(HantijaePage);
