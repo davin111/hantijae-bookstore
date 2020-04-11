@@ -68,6 +68,18 @@ class Review extends Component<Props> {
       receiverFamilyName = this.props.receiverFamilyName;
       receiverGivenName = this.props.receiverGivenName;
     }
+
+    let postalCode = null;
+    if (this.props.postalCode !== '') {
+      postalCode = (
+        <Typography gutterBottom>
+          우편번호:
+          {' '}
+          {this.props.postalCode}
+        </Typography>
+      );
+    }
+
     return (
       <>
         <Typography variant="h6" gutterBottom>
@@ -101,7 +113,7 @@ class Review extends Component<Props> {
             </Typography>
             <Grid container>
               <Grid item xs={6}>
-                <Typography gutterBottom>주문하시는 분</Typography>
+                <Typography gutterBottom>주문하는 분</Typography>
               </Grid>
               <Grid item xs={6}>
                 <Typography gutterBottom>
@@ -112,7 +124,7 @@ class Review extends Component<Props> {
             </Grid>
             <Grid container>
               <Grid item xs={6}>
-                <Typography gutterBottom>받으시는 분</Typography>
+                <Typography gutterBottom>받는 분</Typography>
               </Grid>
               <Grid item xs={6}>
                 <Typography gutterBottom>
@@ -127,11 +139,7 @@ class Review extends Component<Props> {
             <Grid item xs={12}>
               <Typography gutterBottom>{this.props.address1}</Typography>
               <Typography gutterBottom>{this.props.address2}</Typography>
-              <Typography gutterBottom>
-                우편번호:
-                {' '}
-                {this.props.postalCode}
-              </Typography>
+              {postalCode}
             </Grid>
           </Grid>
           <Grid item container direction="column" xs={12} sm={6}>
@@ -140,7 +148,7 @@ class Review extends Component<Props> {
             </Typography>
             <Grid container>
               <Grid item xs={6}>
-                <Typography gutterBottom>입금자 명의</Typography>
+                <Typography gutterBottom>입금자 이름</Typography>
               </Grid>
               <Grid item xs={6}>
                 <Typography gutterBottom>{this.props.payer}</Typography>

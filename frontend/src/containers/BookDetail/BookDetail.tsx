@@ -56,11 +56,22 @@ class BookDetail extends Component<Props, State> {
 
       if (this.state.book.visible) {
         if (this.state.book.published_date.split('-')[0] === '2020') {
-          bookCart = (
-            <h3 className="DetailNotAcceptable">
-              특판 이벤트에서 올해 나온 신간은 제외됩니다
-            </h3>
-          );
+          if (this.state.book.id === 108) {
+            bookCart = (
+              // eslint-disable-next-line
+              <h3 className="DetailNotAcceptable"
+                onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=225033583')}
+              >
+                특판 이벤트에서 올해 나온 신간은 제외됩니다
+              </h3>
+            );
+          } else {
+            bookCart = (
+              <h3 className="DetailNotAcceptable">
+                특판 이벤트에서 올해 나온 신간은 제외됩니다
+              </h3>
+            );
+          }
         } else {
           bookCart = (
             <div className="DetailCart">

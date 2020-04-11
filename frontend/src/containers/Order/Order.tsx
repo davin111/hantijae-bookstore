@@ -10,7 +10,7 @@ import Typography from '@material-ui/core/Typography';
 import { createStyles, withStyles } from '@material-ui/core/styles';
 import Container from '@material-ui/core/Container';
 
-import { userStatus } from '../../constants/constants';
+import { userStatus, basketStatus } from '../../constants/constants';
 import { userActions } from '../../store/actions';
 import AddressForm from './AddressForm/AddressForm';
 import PaymentForm from './PaymentForm/PaymentForm';
@@ -69,7 +69,7 @@ const styles = (theme: any) => createStyles({
 interface Props {
   history: any;
   classes: any;
-  baksetStatus: string;
+  basketStatus: string;
   basket: any;
   onGetMe: () => any;
   getMeStatus: string;
@@ -121,6 +121,7 @@ class Order extends Component<Props, State> {
   }
 
   componentDidMount() {
+    window.scrollTo(0, 0);
     this.props.onGetMe()
       .then(() => {
         if (this.props.getMeStatus === userStatus.SUCCESS) {
@@ -137,13 +138,17 @@ class Order extends Component<Props, State> {
   handleNext = () => {
     // eslint-disable-next-line react/no-access-state-in-setstate
     const step = this.state.activeStep;
-    this.setState({ activeStep: step + 1 });
     if (step === 2) {
       let receiverFamilyName = this.state.familyName;
       let receiverGivenName = this.state.givenName;
       if (!this.state.sameReceiver) {
         receiverFamilyName = this.state.receiverFamilyName;
         receiverGivenName = this.state.receiverGivenName;
+      }
+
+      let address = this.state.address1;
+      if (this.state.address2 !== '') {
+        address = [this.state.address1, this.state.address2].join(', ');
       }
 
       this.props.onOrderBasket(
@@ -154,10 +159,19 @@ class Order extends Component<Props, State> {
         this.state.phoneNumber,
         receiverFamilyName,
         receiverGivenName,
-        [this.state.address1, this.state.address2].join(','),
+        address,
         this.state.postalCode,
         this.state.payer,
-      );
+      ).then(() => {
+        if (this.props.basketStatus === basketStatus.SUCCESS) {
+          this.setState({ activeStep: step + 1 });
+          this.props.onGetBasket();
+        } else {
+          console.log('ERROR!');
+        }
+      });
+    } else {
+      this.setState({ activeStep: step + 1 });
     }
   };
 
@@ -287,7 +301,7 @@ class Order extends Component<Props, State> {
       case 0:
         if (this.state.familyName && this.state.givenName && this.state.confirmed
             && this.state.email && this.state.phoneNumber
-            && this.state.address1 && this.state.postalCode) {
+            && this.state.address1) {
           if (!this.state.sameReceiver
               && !(this.state.receiverFamilyName && this.state.receiverGivenName)) {
             return true;
@@ -328,7 +342,7 @@ class Order extends Component<Props, State> {
               {this.state.activeStep === steps.length ? (
                 <>
                   <Typography variant="h5" gutterBottom>
-                    고맙습니다. 입금 확인 후 책을 발송해드리겠습니다.
+                    한티재 10주년 기념 특판 이벤트에 참여해 주셔서 고맙습니다!
                   </Typography>
                   <Typography variant="subtitle1">
                     문의: 053-743-8368

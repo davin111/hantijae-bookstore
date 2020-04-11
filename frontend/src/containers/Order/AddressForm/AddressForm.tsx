@@ -31,6 +31,7 @@ interface Props {
   changeConfirmed: () => any;
 }
 
+// eslint-disable-next-line react/prefer-stateless-function
 class AddressForm extends Component<Props> {
   render() {
     let receiverFamilyNameField = null;
@@ -42,7 +43,7 @@ class AddressForm extends Component<Props> {
             required
             id="receiverLastName"
             name="lastName"
-            label="성 (받으시는 분)"
+            label="성 (받는 분)"
             fullWidth
             autoComplete="lname"
             onChange={(e) => this.props.changeReceiverFamilyName(e)}
@@ -56,7 +57,7 @@ class AddressForm extends Component<Props> {
             required
             id="receiverFirstName"
             name="firstName"
-            label="이름 (받으시는 분)"
+            label="이름 (받는 분)"
             fullWidth
             autoComplete="fname"
             onChange={(e) => this.props.changeReceiverGivenName(e)}
@@ -78,7 +79,7 @@ class AddressForm extends Component<Props> {
               required
               id="lastName"
               name="lastName"
-              label="성 (주문하시는 분)"
+              label="성 (주문하는 분)"
               fullWidth
               autoComplete="lname"
               onChange={(e) => this.props.changeFamilyName(e)}
@@ -90,7 +91,7 @@ class AddressForm extends Component<Props> {
               required
               id="firstName"
               name="firstName"
-              label="이름 (주문하시는 분)"
+              label="이름 (주문하는 분)"
               fullWidth
               autoComplete="fname"
               onChange={(e) => this.props.changeGivenName(e)}
@@ -132,7 +133,7 @@ class AddressForm extends Component<Props> {
                   onChange={() => this.props.changeSameReceiver()}
                 />
               )}
-              label="받으시는 분이 주문하시는 분과 같습니다."
+              label="받는 분이 주문하는 분과 같습니다."
             />
           </Grid>
           {receiverFamilyNameField}
@@ -143,7 +144,7 @@ class AddressForm extends Component<Props> {
               id="address1"
               name="address1"
               label="주소"
-              helperText="가급적 도로명 주소를 사용해주세요."
+              helperText="되도록 도로명 주소를 입력해주세요."
               fullWidth
               autoComplete="billing address-line1"
               onChange={(e) => this.props.changeAddress1(e)}
@@ -154,7 +155,7 @@ class AddressForm extends Component<Props> {
             <TextField
               id="address2"
               name="address2"
-              label="상세주소(건물 이름, 층, 호 등)"
+              label="상세 주소(건물 이름, 층, 호 등)"
               fullWidth
               autoComplete="billing address-line2"
               onChange={(e) => this.props.changeAddress2(e)}
@@ -163,10 +164,10 @@ class AddressForm extends Component<Props> {
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
-              required
               id="zip"
               name="zip"
               label="우편번호"
+              helperText="입력하는 경우 5자리 체계를 이용해주세요."
               fullWidth
               autoComplete="billing postal-code"
               onChange={(e) => this.props.changePostalCode(e)}
@@ -178,7 +179,7 @@ class AddressForm extends Component<Props> {
               control={<Checkbox color="secondary" name="saveAddress" value="yes" />}
               checked={this.props.confirmed}
               onChange={() => this.props.changeConfirmed()}
-              label="위의 정보가 정확함을 확인했습니다."
+              label="입력한 정보가 모두 맞습니다."
             />
           </Grid>
         </Grid>

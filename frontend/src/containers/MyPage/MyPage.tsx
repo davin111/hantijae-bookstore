@@ -74,6 +74,17 @@ class MyPage extends Component<Props> {
         bookBasketStatus = '배송 완료';
       }
 
+      let postalCode = null;
+      if (order.postal_code !== '') {
+        postalCode = (
+          <Typography gutterBottom>
+            우편번호:
+            {' '}
+            {order.postal_code}
+          </Typography>
+        );
+      }
+
       return (
         <div className="OrderElement" key={order.id}>
           <List disablePadding>
@@ -116,7 +127,7 @@ class MyPage extends Component<Props> {
               </Typography>
               <Grid container>
                 <Grid item xs={6}>
-                  <Typography gutterBottom>주문하시는 분</Typography>
+                  <Typography gutterBottom>주문하는 분</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography gutterBottom>
@@ -127,7 +138,7 @@ class MyPage extends Component<Props> {
               </Grid>
               <Grid container>
                 <Grid item xs={6}>
-                  <Typography gutterBottom>받으시는 분</Typography>
+                  <Typography gutterBottom>받는 분</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography gutterBottom>
@@ -141,11 +152,7 @@ class MyPage extends Component<Props> {
               </Grid>
               <Grid item xs={12}>
                 <Typography gutterBottom>{order.address}</Typography>
-                <Typography gutterBottom>
-                  우편번호:
-                  {' '}
-                  {order.postal_code}
-                </Typography>
+                {postalCode}
               </Grid>
             </Grid>
             <Grid item container direction="column" xs={12} sm={6}>

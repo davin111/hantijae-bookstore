@@ -131,6 +131,7 @@
     color: white;
     text-align: center;
     font-size: 1em;
+    cursor: pointer;
 }
 @media all and (max-width:768px) {
     .NotAcceptable {

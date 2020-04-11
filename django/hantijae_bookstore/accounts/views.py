@@ -168,7 +168,7 @@ class BasketViewSet(viewsets.GenericViewSet):
             postal_code = request.data.get('postal_code')
             payer = request.data.get('payer')
             if not (basket_id and last_name and first_name and email and phone_number
-                    and receiver_last_name and receiver_first_name and address and postal_code and payer):
+                    and receiver_last_name and receiver_first_name and address and payer):
                 return Response(status=status.HTTP_400_BAD_REQUEST)
 
             basket = get_object_or_404(Basket, id=basket_id)
