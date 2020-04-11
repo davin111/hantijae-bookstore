@@ -133,7 +133,12 @@ class Order extends Component<Props, State> {
           });
         }
       });
-    this.props.onGetBasket();
+    this.props.onGetBasket()
+      .then(() => {
+        if (this.props.basket.books.length === 0) {
+          this.props.history.push('/');
+        }
+      });
   }
 
   handleNext = () => {
@@ -348,7 +353,7 @@ class Order extends Component<Props, State> {
             <>
               {this.state.activeStep === steps.length ? (
                 <>
-                  <Typography variant="h5" gutterBottom>
+                  <Typography variant="h6" gutterBottom>
                     한티재 10주년 기념 특판 이벤트에 참여해 주셔서 고맙습니다!
                   </Typography>
                   <Typography variant="subtitle1">
@@ -356,6 +361,14 @@ class Order extends Component<Props, State> {
                     <br />
                     hantibooks@gmail.com
                   </Typography>
+                  <Button
+                    onClick={() => this.props.history.push('/mypage')}
+                    className={classes.button}
+                    color="secondary"
+                    variant="outlined"
+                  >
+                    MyPage에서 확인하기
+                  </Button>
                 </>
               ) : (
                 <>

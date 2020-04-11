@@ -1,10 +1,10 @@
 .BookStoreTitleImage {
     margin-left: 40%;
-    width: 60%;
+    width: 50%;
 }
 @media all and (max-width:768px) {
     .BookStoreTitleImage {
         margin-left: 0%;
-        width: 90%;
+        width: 80%;
     }
 }

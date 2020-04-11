@@ -28,7 +28,7 @@
   }
   @media all and (max-width:768px) {
     .modal {
-      top: 8%;
+      top: 0%;
     }
   }
   .modal.fade .modal-dialog {
