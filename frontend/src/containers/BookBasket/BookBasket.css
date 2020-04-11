@@ -1,37 +1,36 @@
 .BookBasketTitle {
-    width: 75%;
+    width: 50%;
     height: 50%;
     margin: auto auto;
     display: flex;
 }
 @media all and (max-width:768px) {
     .BookBasketTitle {
-        width: 100%;
+        width: 70%;
     }
 }
+
 .BookBasketTitle .BookBasketWonImg {
-    width: 15%;
+    height: 100px;
     margin-left: 20%;
 }
 @media all and (max-width:768px) {
     .BookBasketTitle .BookBasketWonImg {
-        margin-left: 30%;
-    }
-}
-@media all and (max-width:425px) {
-    .BookBasketTitle .BookBasketWonImg {
-        margin-left: 20%;
+        height: 60px;
+        margin-left: 15%;
+        max-width: 25%;
     }
 }
 
 .BookBasketTitle h1 {
     margin-top: 5%;
-    font-size: 3.2em;
+    font-size: 2em;
     font-weight: bold;
+    margin-bottom: auto;
 }
 @media all and (max-width:768px) {
     .BookBasketTitle h1 {
-        font-size: 2em;
+        font-size: 1.5em;
     }
 }
 
