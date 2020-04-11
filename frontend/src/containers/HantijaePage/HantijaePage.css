@@ -1,0 +1,118 @@
+.HantijaeUpper {
+    background-color: #FAFAFA;
+    height: 100%;
+    width: 100%;
+    position: relative;
+    transition: 0.3s;
+    float: left;
+    margin-bottom: 5%;
+}
+@media all and (max-width:768px) {
+    .HantijaeUpper {
+        display: flex;
+        flex-direction: column-reverse;
+        margin-bottom: 0%;
+    }
+}
+.HantijaeTitle {
+    margin-top: 5%;
+    background-color: #FAFAFA;
+    font-weight: bolder;
+    text-align: center;
+}
+@media all and (max-width:768px) {
+    .HantijaeTitle {
+        margin-top: 10%;
+    }
+}
+.HantijaeImage {
+    background-color: #FAFAFA;
+    height: 100%;
+    width: 100%;
+    max-width: 40%;
+    position: absolute;
+    margin-top: 10%;
+    top: 0%;
+    left: 2%;
+    text-align: center;
+}
+@media all and (max-width:768px) {
+    .HantijaeImage {
+        height: 50%;
+        width: 95%;
+        max-width: 100%;
+        position: relative;
+    }
+}
+.HantijaeImage img {
+    min-height: 200px;
+    max-width: 400px;
+    vertical-align: middle;
+    align-self: center;
+    float: center;
+    box-shadow: 0 8px 10px 0 rgba(0,0,0,0.2);
+    border-radius: 1em;
+}
+@media all and (max-width:1024px) {
+    .HantijaeImage img {
+        min-height: 200px;
+        max-width: 350px;
+    }
+}
+@media all and (max-width:810px) {
+    .HantijaeImage img {
+        min-height: 200px;
+        max-width: 300px;
+    }
+}
+
+.HantijaeDescription {
+    color: rgb(0, 0, 0);
+    font-size: 1.1em;
+    margin-left: 45%;
+    margin-right: 5%;
+    margin-bottom: 15%;
+    text-align: justify;
+    float: left;
+    line-height: 180%;
+    text-indent: 1.1em;
+}
+@media all and (max-width:768px) {
+    .HantijaeDescription {
+        font-size: 0.9em;
+        margin-left: 5%;
+        margin-right: 5%;
+        margin-bottom: 5%;
+     }
+}
+
+.HantijaeCenterLine {
+    width: 90%;
+}
+@media all and (max-width:768px) {
+    .HantijaeCenterLine {
+        width: 80%;
+     }
+}
+
+.EventTitle {
+    font-size: 2em;
+    font-weight: 350;
+    color: #515280;
+    margin: auto auto;
+}
+@media all and (max-width:768px) {
+    .EventTitle {
+        font-size: 1.5em;
+        width: 80%;
+     }
+}
+.EventDescription {
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
+    font-size: 1em;
+    text-indent: -1.5em;
+    line-height: 2em;
+}

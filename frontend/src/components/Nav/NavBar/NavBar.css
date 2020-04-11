@@ -6,6 +6,7 @@
     outline: none;
     cursor: pointer;
     font-size: 17px;
+    font-weight: bold;
     flex: 1;
     height: 100%;
 }
