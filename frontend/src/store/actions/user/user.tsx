@@ -185,3 +185,18 @@ export const orderBasket = (basketId: number, familyName: string, givenName: str
 )
   .then((res) => dispatch(orderBasketSuccess(res.data)))
   .catch((err) => dispatch(orderBasketFailure(err)));
+
+
+const getOrdersSuccess = (basket: any) => ({
+  type: basketActions.GET_ORDERS_SUCCESS,
+  target: basket,
+});
+
+const getOrdersFailure = (error: any) => ({
+  type: basketActions.GET_ORDERS_FAILURE,
+  target: error,
+});
+
+export const getOrders = () => (dispatch: Dispatch) => axios.get('/api/user/basket/order')
+  .then((res) => dispatch(getOrdersSuccess(res.data)))
+  .catch((err) => dispatch(getOrdersFailure(err)));

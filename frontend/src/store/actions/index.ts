@@ -17,6 +17,7 @@ import {
   putBookInBasket,
   getBasket,
   orderBasket,
+  getOrders,
 } from './user/user';
 
 import {
@@ -49,6 +50,7 @@ export const userActions = {
   putBookInBasket,
   getBasket,
   orderBasket,
+  getOrders,
 };
 
 export const stateActions = {

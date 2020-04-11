@@ -1,5 +1,7 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
+import Button from '@material-ui/core/Button';
+import PermIdentityIcon from '@material-ui/icons/PermIdentity';
 
 import { userActions } from '../../../store/actions';
 import { userStatus } from '../../../constants/constants';
@@ -34,28 +36,63 @@ class User extends Component<Props> {
     bookCount = Number.isInteger(this.props.basket.bookCount) ? this.props.basket.bookCount : 0;
     if (this.props.getMeStatus === userStatus.FAILURE) {
       username = '비회원';
-      logButton = <button className="LogButton" type="button" onClick={() => this.props.history.push('/login')}>로그인</button>;
+      logButton = (
+        <Button
+          type="button"
+          onClick={() => this.props.history.push('/login')}
+          variant="contained"
+          color="primary"
+          size="small"
+        >
+          로그인
+        </Button>
+      );
     } else if (this.props.me.anonymous === true) {
       username = '비회원';
-      logButton = <button className="LogButton" type="button" onClick={() => this.props.history.push('/login')}>로그인</button>;
+      logButton = (
+        <Button
+          type="button"
+          onClick={() => this.props.history.push('/login')}
+          variant="contained"
+          color="primary"
+          size="small"
+        >
+          로그인
+        </Button>
+      );
     } else {
       username = this.props.me.username;
-      logButton = <button className="LogButton" type="button" onClick={() => this.clickLogoutHandler()}>로그아웃</button>;
+      logButton = (
+        <Button
+          type="button"
+          onClick={() => this.clickLogoutHandler()}
+          variant="contained"
+          color="default"
+          size="small"
+        >
+          로그아웃
+        </Button>
+      );
     }
 
     return (
       <div className="User">
-        <h5>
+        <Button
+          type="button"
+          variant="contained"
+          color="default"
+          size="small"
+          onClick={() => this.props.history.push('/mypage')}
+          endIcon={<PermIdentityIcon />}
+        >
           {username}
-          {' '}
-          님
-        </h5>
+        </Button>
         <div className="UserPictire">
           {/* eslint-disable-next-line */}
           <img src={BookBasketImg} onClick={() => this.props.history.push('/bookbasket')}/>
         </div>
         {/* eslint-disable-next-line */}
-    <div className="Notification" onClick={() => this.props.history.push('/bookbasket')}>{bookCount}</div>
+      <div className="BasketCount" onClick={() => this.props.history.push('/bookbasket')}>{bookCount}</div>
         {logButton}
       </div>
     );

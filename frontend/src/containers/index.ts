@@ -5,6 +5,7 @@ import SignupPage from './SignupPage/SignupPage';
 import BookBasket from './BookBasket/BookBasket';
 import Order from './Order/Order';
 import SearchResult from './SearchResult/SearchResult';
+import MyPage from './MyPage/MyPage';
 
 /* eslint-disable import/prefer-default-export */
 export {
@@ -15,4 +16,5 @@ export {
   BookBasket,
   Order,
   SearchResult,
+  MyPage,
 };

@@ -28,7 +28,7 @@ def download_book_data():
 
             book = Book.objects.create(
                 title=title, subtitle=subtitle, published_date=published_date, page_count=int(page_count[:-1]),
-                full_price=full_price.replace(',', ''), size=size, isbn=isbn, visible=bool(visible), category=category
+                full_price=full_price.replace(',', ''), size=size, isbn=isbn, visible=not bool(visible), category=category
             )
             print(book)
 

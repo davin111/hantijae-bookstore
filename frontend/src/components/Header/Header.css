@@ -1,16 +1,22 @@
 header {
     background-color: #FAFAFA;
-    height: 10vh;
+    height: 14vh;
     width: 100%;
     display: flex;
     flex-direction: row;
     align-items: center;
 }
+@media all and (max-width:768px) {
+    header {
+        display: inline;
+        height: 10vh;
+    }
+}
 
 .Title {
     background-color: #FAFAFA;
     height: inherit;
-    flex: 3;
+    flex: 2;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -19,9 +25,4 @@ header {
     font-weight: bold;
     cursor: pointer;
     margin-bottom: 1%;
-}
-@media all and (max-width:768px) {
-    .Title {
-        flex: 1;
-    }
 }
