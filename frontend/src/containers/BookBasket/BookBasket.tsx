@@ -3,6 +3,7 @@ import { connect } from 'react-redux';
 import Button from '@material-ui/core/Button';
 import ReceiptIcon from '@material-ui/icons/Receipt';
 import { createStyles, withStyles } from '@material-ui/core/styles';
+import Typography from '@material-ui/core/Typography';
 
 import { userActions } from '../../store/actions';
 import { BooksInBasket } from '../../components';
@@ -43,28 +44,15 @@ class BookBasket extends Component<Props> {
       && Object.keys(this.props.basket).length > 0) {
       books = <BooksInBasket books={this.props.basket.books} history={this.props.history} />;
     }
-
-    let bookBasketStatus = '책 담는 중';
-    if (this.props.basket.status === 2) {
-      bookBasketStatus = '주문 완료';
-    } else if (this.props.basket.status === 3) {
-      bookBasketStatus = '결제 확인';
-    } else if (this.props.basket.status === 4) {
-      bookBasketStatus = '배송 완료';
-    }
-
     return (
       <div className="BookBasketPage">
         <div className="BookBasketTitle">
           {/* eslint-disable-next-line */}
           <img className="BookBasketWonImg" src={BookBasketImg} />
-          <h1>
+          <Typography variant="h1" gutterBottom>
             책바구니 내역
-          </h1>
+          </Typography>
         </div>
-        <h2 className="BookBasketStatus">
-          {bookBasketStatus}
-        </h2>
         <h2 className="BookBasketTotalCount">
           {this.props.basket.bookCount}
           /
@@ -90,6 +78,7 @@ class BookBasket extends Component<Props> {
           className={classes.button}
           onClick={() => this.props.history.push('/order')}
           endIcon={<ReceiptIcon className="ReceiptIcon" />}
+          disabled={this.props.basket.books.length === 0}
         >
           주문하기
         </Button>

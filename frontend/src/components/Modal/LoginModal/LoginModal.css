@@ -12,7 +12,6 @@
   }
   .modal {
     position: fixed;
-    top: 15%;
     right: 0;
     bottom: 0;
     left: 0;
@@ -21,11 +20,7 @@
     overflow: hidden;
     -webkit-overflow-scrolling: touch;
     outline: 0;
-  }
-  @media all and (max-width:768px) {
-    .modal {
-        top: 0%;
-    }
+    align-content: center;
   }
   .modal.fade .modal-dialog {
     /* -webkit-transform: translate(0, -25%);
