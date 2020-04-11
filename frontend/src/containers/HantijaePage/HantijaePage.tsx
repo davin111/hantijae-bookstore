@@ -30,6 +30,9 @@ class HantijaePage extends Component<Props> {
           <p>
             도서출판 한티재는 2010년 대구에서 문을 연 작은 출판사입니다.
             사람과 사람, 사람과 자연, 오늘 세대와 내일 세대가 공존하는 사회에 보탬이 되는 책을 만들기 위해 노력하고 있습니다.
+            <br />
+            <br />
+            &nbsp;&nbsp;&nbsp;그동안 성원해 주신 독자들, 함께해 주신 저자들께 감사드립니다.
           </p>
         </div>
         <hr className="HantijaeCenterLine" />

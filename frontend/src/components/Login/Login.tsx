@@ -122,8 +122,7 @@ class Login extends Component<Props, State> {
           존재하지 않는 아이디입니다.
         </Typography>
       );
-    }
-    else if (this.props.loginStatus === userStatus.FAILURE) {
+    } else if (this.props.loginStatus === userStatus.FAILURE) {
       warning = (
         <Typography variant="h6" color="secondary" align="center">
           잘못된 비밀번호입니다.

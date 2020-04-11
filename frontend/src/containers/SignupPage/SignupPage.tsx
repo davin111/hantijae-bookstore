@@ -232,7 +232,7 @@ class SignupPage extends Component<Props, State> {
                   type="password"
                   id="password"
                   autoComplete="current-password"
-                  helperText="숫자와 특수문자를 1회 이상 사용해 8글자 이상으로 만들어주세요."
+                  helperText="숫자와 특수문자를 각 1회 이상 사용해 8글자 이상으로 만들어주세요."
                   onChange={(e) => this.setState({ password: e.target.value })}
                 />
               </Grid>
