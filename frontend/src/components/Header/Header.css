@@ -1,10 +1,15 @@
 header {
     background-color: #FAFAFA;
-    height: 10vh;
+    height: 14vh;
     width: 100%;
     display: flex;
     flex-direction: row;
     align-items: center;
+}
+@media all and (max-width:768px) {
+    header {
+        height: 10vh;
+    }
 }
 
 .Title {

@@ -6,3 +6,12 @@
     margin-bottom: 5%;
     padding: 5px;
 }
+
+.UserInfo {
+    border-color: black;
+    border-width: 2px;
+    border-style: solid;
+    border-radius: 1em;
+    margin-bottom: 5%;
+    padding: 5px;
+}

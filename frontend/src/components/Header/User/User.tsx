@@ -45,11 +45,11 @@ class User extends Component<Props> {
 
     return (
       <div className="User">
-        <h5>
+        <div className="UserNameButton" onClick={() => this.props.history.push('/mypage')}>
           {username}
           {' '}
           님
-        </h5>
+        </div>
         <div className="UserPictire">
           {/* eslint-disable-next-line */}
           <img src={BookBasketImg} onClick={() => this.props.history.push('/bookbasket')}/>

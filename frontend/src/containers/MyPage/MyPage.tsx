@@ -8,6 +8,7 @@ import ListItemText from '@material-ui/core/ListItemText';
 import Grid from '@material-ui/core/Grid';
 import Container from '@material-ui/core/Container';
 
+import { userStatus } from '../../constants/constants';
 import { userActions } from '../../store/actions';
 import './MyPage.css';
 
@@ -30,6 +31,7 @@ interface Props {
   onGetMe: () => any;
   onGetOrders: () => any;
   classes: any;
+  getMeStatus: string;
 }
 
 class MyPage extends Component<Props> {
@@ -62,13 +64,30 @@ class MyPage extends Component<Props> {
 
   makeOrderList(orders: any) {
     const { classes } = this.props;
-    return orders.map((order: any) => (
+    return orders.map((order: any) => {
+      let bookBasketStatus = '책 담는 중';
+      if (order.status === 2) {
+        bookBasketStatus = '주문 완료';
+      } else if (order.status === 3) {
+        bookBasketStatus = '입금 확인';
+      } else if (order.status === 4) {
+        bookBasketStatus = '배송 완료';
+      }
+
+      return (
       <div className="OrderElement" key={order.id}>
         <List disablePadding>
-          <ListItemText primary="주문 번호" />
+          <ListItemText primary="책바구니 번호" />
           <Typography variant="subtitle1" className={classes.total}>
             {order.id}
           </Typography>
+          <hr />
+          <ListItem className={classes.listItem}>
+            <ListItemText primary="책바구니 상태" />
+            <Typography variant="subtitle1" className={classes.total}>
+              {bookBasketStatus}
+            </Typography>
+          </ListItem>
           <hr />
           {this.makeBookList(order.books)}
           <hr />
@@ -158,7 +177,7 @@ class MyPage extends Component<Props> {
           </Grid>
         </Grid>
       </div>
-    ));
+    );});
   }
 
   render() {
@@ -168,9 +187,40 @@ class MyPage extends Component<Props> {
     if (this.props.orders.length > 0) {
       orders = this.makeOrderList(this.props.orders);
     }
+
+    let username = '';
+    if (this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true) {
+      username = '비회원';
+    } else {
+      username = this.props.me.username;
+    }
+    
     return (
       <Container component="main" fixed maxWidth="xl">
         <main className={classes.layout}>
+          <Typography variant="h6" gutterBottom>
+            회원 정보
+          </Typography>
+          <div className="UserInfo">
+            <ListItem className={classes.listItem}>
+              <ListItemText primary="아이디" />
+              <Typography variant="subtitle1" className={classes.total}>
+                {username}
+              </Typography>
+            </ListItem>
+            <ListItem className={classes.listItem}>
+              <ListItemText primary="이메일" />
+              <Typography variant="subtitle1" className={classes.total}>
+                {this.props.me.email}
+              </Typography>
+            </ListItem>
+            <ListItem className={classes.listItem}>
+              <ListItemText primary="이름" />
+              <Typography variant="subtitle1" className={classes.total}>
+                {this.props.me.familyName}&nbsp;{this.props.me.givenName}
+              </Typography>
+            </ListItem>
+          </div>
           <Typography variant="h6" gutterBottom>
             주문 내역
           </Typography>
@@ -186,6 +236,7 @@ const mapStateToProps = (state: any) => ({
   orders: state.user.orders,
   user: state.user.login,
   me: state.user.me,
+  getMeStatus: state.user.getMeStatus,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({

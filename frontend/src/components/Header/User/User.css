@@ -6,11 +6,11 @@
   align-items: center;
   justify-content: center;
 }
-.User h5 {
+.User .UserNameButton {
   font-size: 1.2em;
 }
 @media all and (max-width:768px) {
-  .User h5 {
+  .User .UserNameButton {
       font-size: 10px;
   }
 }
