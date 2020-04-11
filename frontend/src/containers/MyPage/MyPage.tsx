@@ -206,7 +206,7 @@ class MyPage extends Component<Props> {
     }
 
     return (
-      <Container component="main" fixed maxWidth="xl">
+      <Container component="main" fixed maxWidth="md">
         <div className="ForceMargin" />
         <main className={classes.layout}>
           <Typography variant="h6" gutterBottom>
