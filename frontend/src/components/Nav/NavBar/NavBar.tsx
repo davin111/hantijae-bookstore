@@ -47,6 +47,8 @@ class NavBar extends Component<Props, State> {
       const { pathname } = this.props.history.location;
       if (pathname.startsWith('/series=')) {
         activeSeriesId = pathname.split('=')[1];
+      } else if (pathname === '/') {
+        activeSeriesId = this.props.series[0].id;
       } else {
         activeSeriesId = this.state.activeSeriesId;
       }
@@ -71,8 +73,7 @@ class NavBar extends Component<Props, State> {
             this.props.history.push('/hantijae');
             this.setState({ activeSeriesId: -2 });
           }}
-          className={`CategoryButton ${(this.props.history.location.pathname === '/hantijae')
-          || (this.props.history.location.pathname === '/') ? 'CategoryButtonActive' : ''}`}
+          className={`CategoryButton ${(this.props.history.location.pathname === '/hantijae') ? 'CategoryButtonActive' : ''}`}
         >
           한티재
         </button>

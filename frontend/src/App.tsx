@@ -23,7 +23,7 @@ function App(props: Props): JSX.Element {
         <Switch>
           <Route path="/login" exact component={LoginPage} history={props.history} />
           <Route path="/signup" exact component={SignupPage} history={props.history} />
-          <Route path="/" exact component={HantijaePage} history={props.history} />
+          <Route path="/" exact component={Main} history={props.history} />
           <Route path="/series=:series_id" exact component={Main} history={props.history} />
           <Route path="/book=:book_id" exact component={BookDetail} history={props.history} />
           <Route path="/bookbasket" exact component={BookBasket} history={props.history} />
