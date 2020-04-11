@@ -73,8 +73,10 @@ class BookBasket extends Component<Props> {
         </h2>
         {books}
         <div className="BookBasketSummary">
-          {this.props.basket.totalPrice}
-          원
+          <del className="OriginalPrice">
+            {this.props.basket.totalPrice}
+            원
+          </del>
           {' '}
           -&gt;
           {' '}
