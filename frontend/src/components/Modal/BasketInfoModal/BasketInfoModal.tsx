@@ -65,7 +65,7 @@ class BasketInfoModal extends Component<Props> {
               this.props.history.push('/order');
             }}
           >
-            주문하러 가기
+            지금까지 담은 책바구니 주문하러 가기
           </Button>
           <Button
             type="button"
