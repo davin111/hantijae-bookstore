@@ -66,6 +66,17 @@ class NavBar extends Component<Props, State> {
     }
     return (
       <div className="NavBar">
+        <button
+          type="button"
+          key={-2}
+          onClick={() => {
+            this.props.history.push('/hantijae');
+            this.setState({ activeSeriesId: -2 });
+          }}
+          className={`CategoryButton ${this.props.history.location.pathname === '/hantijae' ? 'CategoryButtonActive' : ''}`}
+        >
+          한티재
+        </button>
         {series}
       </div>
     );
