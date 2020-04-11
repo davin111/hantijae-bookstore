@@ -35,7 +35,7 @@ class SearchBar extends Component<Props, State> {
       <div className="SearchBar">
         <FaSearch className="iconSearch" />
         <input
-          placeholder="Search"
+          placeholder="검색"
           value={this.state.search}
           onChange={(e) => this.setState({ search: e.target.value })}
           onKeyPress={(e) => this.keyPressHandler(e)}
