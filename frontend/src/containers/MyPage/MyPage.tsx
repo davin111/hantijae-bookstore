@@ -9,6 +9,7 @@ import Grid from '@material-ui/core/Grid';
 import Container from '@material-ui/core/Container';
 
 import { userActions } from '../../store/actions';
+import './MyPage.css';
 
 
 const styles = (theme: any) => createStyles({
@@ -62,16 +63,20 @@ class MyPage extends Component<Props> {
   makeOrderList(orders: any) {
     const { classes } = this.props;
     return orders.map((order: any) => (
-      <Fragment key={order.id}>
-        <hr />
+      <div className="OrderElement" key={order.id}>
         <List disablePadding>
+          <ListItemText primary="주문 번호" />
+          <Typography variant="subtitle1" className={classes.total}>
+            {order.id}
+          </Typography>
+          <hr />
           {this.makeBookList(order.books)}
           <hr />
           <ListItem className={classes.listItem}>
             <ListItemText primary="정가" />
             <Typography variant="subtitle1" className={classes.total}>
               <del>
-                {order.totalPrice}
+                {order.total_price}
                 원
               </del>
             </Typography>
@@ -79,7 +84,7 @@ class MyPage extends Component<Props> {
           <ListItem className={classes.listItem}>
             <ListItemText primary="금액" />
             <Typography variant="subtitle1" className={classes.total}>
-              {order.maxPrice}
+              {order.max_price}
               원
             </Typography>
           </ListItem>
@@ -146,13 +151,13 @@ class MyPage extends Component<Props> {
             <Grid container justify="center">
               <Grid item xs={6}>
                 <Typography gutterBottom>
-                  {order.phoneNumber}
+                  {order.phone_number}
                 </Typography>
               </Grid>
             </Grid>
           </Grid>
         </Grid>
-      </Fragment>
+      </div>
     ));
   }
 
