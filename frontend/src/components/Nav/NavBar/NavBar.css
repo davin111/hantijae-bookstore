@@ -6,12 +6,18 @@
     outline: none;
     cursor: pointer;
     font-size: 17px;
+    font-weight: bold;
     flex: 1;
     height: 100%;
 }
 @media all and (max-width:768px) {
     .CategoryButton {
-        font-size: 10.5px;
+        font-size: 15px;
+    }
+}
+@media all and (max-width:425px) {
+    .CategoryButton {
+        font-size: 10px;
     }
 }
 .CategoryButtonActive {

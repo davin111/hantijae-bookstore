@@ -4,7 +4,7 @@ import { ConnectedRouter } from 'connected-react-router';
 
 import { Header, Auth } from './components';
 import {
-  Main, BookDetail, LoginPage, SignupPage, BookBasket, Order, SearchResult, MyPage,
+  Main, BookDetail, LoginPage, SignupPage, BookBasket, Order, SearchResult, MyPage, HantijaePage,
 } from './containers';
 
 
@@ -30,6 +30,7 @@ function App(props: Props): JSX.Element {
           <Route path="/order" exact component={Order} history={props.history} />
           <Route path="/search=:search" exact component={SearchResult} history={props.history} />
           <Route path="/mypage" exact component={MyPage} history={props.history} />
+          <Route path="/hantijae" exact component={HantijaePage} history={props.history} />
           <Redirect exact to="/" />
         </Switch>
       </ConnectedRouter>

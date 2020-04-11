@@ -6,8 +6,8 @@ import BookBasket from './BookBasket/BookBasket';
 import Order from './Order/Order';
 import SearchResult from './SearchResult/SearchResult';
 import MyPage from './MyPage/MyPage';
+import HantijaePage from './HantijaePage/HantijaePage';
 
-/* eslint-disable import/prefer-default-export */
 export {
   Main,
   BookDetail,
@@ -17,4 +17,5 @@ export {
   Order,
   SearchResult,
   MyPage,
+  HantijaePage,
 };

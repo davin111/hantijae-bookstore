@@ -97,7 +97,6 @@ class BookDetail extends Component<Props, State> {
             <h1 id="title">{book.title}</h1>
             <h1 id="subtitle">{book.subtitle}</h1>
             <h3 id="authors">{authorStr}</h3>
-            {/* <Rate rate={this.props.rate} voters={this.props.voters} textColor="#607D8B" /> */}
             <div className="BookDetailInfoList">
               <div className="InfoItem">
                 <div className="LItem">가격</div>
