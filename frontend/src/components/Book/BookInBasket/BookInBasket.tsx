@@ -33,6 +33,10 @@ class BookInBasket extends Component<BookProps> {
     this.props.onPutBookInBasket(this.props.id, this.props.count - 1, this.props.basket.id);
   };
 
+  makeZero = () => {
+    this.props.onPutBookInBasket(this.props.id, 0, this.props.basket.id);
+  };
+
   render() {
     const authorNames = [];
     for (let i = 0; i < this.props.authors.length; i += 1) {
@@ -61,6 +65,13 @@ class BookInBasket extends Component<BookProps> {
             원
           </h4>
         </div>
+        <button
+          className="MakeZeroButton"
+          type="button"
+          onClick={() => this.makeZero()}
+        >
+          X
+        </button>
         <div className="BookCountInBasket">
           <div className="handle-counter" id="handleCounter">
             <button

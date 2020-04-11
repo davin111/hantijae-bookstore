@@ -37,6 +37,7 @@ class BookDetail extends Component<Props, State> {
     let authorStr = '';
     let desc = '';
     let img = null;
+    let bookCart = null;
     if (Object.keys(this.state.book).length > 0) {
       const authorNames = [];
       for (let i = 0; i < this.state.book.authors.length; i += 1) {
@@ -52,7 +53,26 @@ class BookDetail extends Component<Props, State> {
       ));
       /* eslint-disable-next-line */
       img = <img src={require(`./book_covers_3d/${this.state.book.title.replace(':', '').replace('!', '')}.png`)} />;
+
+      if (this.state.book.visible) {
+        if (this.state.book.published_date.split('-')[0] === '2020') {
+          bookCart = (
+            <h3 className="DetailNotAcceptable">
+              특판 이벤트에서 올해 나온 신간은 제외됩니다
+            </h3>
+          );
+        } else {
+          bookCart = (
+            <div className="DetailCart">
+              <BookCountWithCart bookId={this.state.book.id} history={this.props.history} />
+            </div>
+          );
+        }
+      } else {
+        bookCart = <h3 className="DetailNotVisible">절판</h3>;
+      }
     }
+
 
     const { book } = this.props;
 
@@ -104,9 +124,7 @@ class BookDetail extends Component<Props, State> {
                   {book.isbn}
                 </div>
               </div>
-              <div className="DetailCart">
-                <BookCountWithCart bookId={book.id} history={this.props.history} />
-              </div>
+              {bookCart}
             </div>
           </div>
         </div>

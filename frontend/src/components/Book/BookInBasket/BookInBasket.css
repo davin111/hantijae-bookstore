@@ -1,16 +1,28 @@
 .BookInBasket {
     background-color: #FFFFFF;
     height: 300px;
-    width: 80%;
+    width: 60%;
     margin-left: auto;
     margin-right: auto;
     margin-top: 2%;
     margin-bottom: 2%;
     position: relative;
-    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+    box-shadow: 0 4px 8px 0 rgba(207, 104, 104, 0.2);
     transition: 0.3s;
 }
+@media all and (max-width:1024px) {
+    .BookInBasket {
+        width: 80%;
+    }
+}
 @media all and (max-width:768px) {
+    .BookInBasket {
+        height: 300px;
+        width: 90%;
+        margin-top: 10%;
+    }
+}
+@media all and (max-width:425px) {
     .BookInBasket {
         height: 200px;
         width: 90%;
@@ -57,7 +69,7 @@
     height: 70%;
     width: 50%;
     position: absolute;
-    left: 25%;
+    left: 32%;
 }
 @media all and (max-width:768px) {
     .BookInfoInBasket {
@@ -133,6 +145,27 @@
         width: 20%;
         bottom: 5%;
         right: 0%;
+    }
+}
+
+.MakeZeroButton {
+    position: absolute;
+    color: white;
+    font-weight: bold;
+    font-size: 1.5em;
+    background-color: #E52723;
+    border-radius: 0.5em;
+    right: 1%;
+    top: 2%;
+    cursor: pointer;
+    transition: 0.3s;
+}
+.MakeZeroButton:hover {
+    background-color: red;
+}
+@media all and (max-width:768px) {
+    .MakeZeroButton {
+        font-size: 0.8em;
     }
 }
 

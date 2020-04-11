@@ -118,3 +118,37 @@
         right: 1%;
     }
 }
+
+.NotAcceptable {
+    position: absolute;
+    bottom: 0%;
+    right: 2%;
+    border-style: solid;
+    border-radius: 0.7em;
+    border-width: 0.1em;
+    padding: 8px;
+    background-color: #8AB1DB;
+    color: white;
+    text-align: center;
+    font-size: 1em;
+}
+@media all and (max-width:768px) {
+    .NotAcceptable {
+        bottom: 7%;
+        right: 5%;
+        font-size: 0.8em;
+        padding: 6px;
+    }
+}
+.NotVisible {
+    position: absolute;
+    bottom: 0%;
+    right: 5%;
+    border-style: solid;
+    border-radius: 0.5em;
+    border-width: 0.1em;
+    padding: 5px;
+    background-color: #D32F2F;
+    color: white;
+    text-align: center;
+}
