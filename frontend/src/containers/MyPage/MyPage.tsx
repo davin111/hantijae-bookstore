@@ -1,4 +1,4 @@
-import React, { Component, Dispatch } from 'react';
+import React, { Component, Dispatch, Fragment } from 'react';
 import { connect } from 'react-redux';
 import { createStyles, withStyles } from '@material-ui/core/styles';
 import Typography from '@material-ui/core/Typography';
@@ -6,6 +6,7 @@ import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
 import ListItemText from '@material-ui/core/ListItemText';
 import Grid from '@material-ui/core/Grid';
+import Container from '@material-ui/core/Container';
 
 import { userActions } from '../../store/actions';
 
@@ -61,7 +62,7 @@ class MyPage extends Component<Props> {
   makeOrderList(orders: any) {
     const { classes } = this.props;
     return orders.map((order: any) => (
-      <>
+      <Fragment key={order.id}>
         <Typography variant="h6" gutterBottom>
           책바구니 내역 확인
         </Typography>
@@ -154,20 +155,23 @@ class MyPage extends Component<Props> {
             </Grid>
           </Grid>
         </Grid>
-      </>
+      </Fragment>
     ));
   }
 
   render() {
     const { classes } = this.props;
+
     let orders = null;
     if (this.props.orders.length > 0) {
       orders = this.makeOrderList(this.props.orders);
     }
     return (
-      <div className="MyPage">
-        {orders}
-      </div>
+      <Container component="main" fixed maxWidth="xl">
+        <main className={classes.layout}>
+          {orders}
+        </main>
+      </Container>
     );
   }
 }
