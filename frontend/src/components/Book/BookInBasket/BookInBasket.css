@@ -156,7 +156,7 @@
 .btn {
   border: 1px solid transparent;
   height: 10%;
-  width: 50%;
+  width: 54%;
   font-size: 1em;
   text-align: center;
   color: #fff;
@@ -169,9 +169,9 @@
 }
 
 .btn-primary {
-    background-color: #009dda;
+    background-color: #4250AE;
 }
 
 .btn-primary:hover, .btn-primary:focus {
-    background-color: #0486b9;
+    background-color: #4250AE;
 }
