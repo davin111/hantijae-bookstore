@@ -155,6 +155,7 @@
     font-size: 1.5em;
     background-color: #E52723;
     border-radius: 0.5em;
+    border-style: hidden;
     right: 1%;
     top: 2%;
     cursor: pointer;

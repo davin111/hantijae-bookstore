@@ -118,6 +118,7 @@ class AddressForm extends Component<Props> {
               label="휴대전화 번호"
               fullWidth
               autoComplete="tel"
+              helperText="'-'를 제외하고 입력해주세요."
               onChange={(e) => this.props.changePhoneNumber(e)}
               value={this.props.phoneNumber}
             />

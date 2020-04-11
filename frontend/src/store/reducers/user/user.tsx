@@ -63,6 +63,8 @@ const reducer = (state = initialState, action: any) => {
       return { ...state, signupStatus: userStatus.FAILURE };
     case userConstants.SIGNUP_FAILURE_USERNAME:
       return { ...state, signupStatus: userStatus.FAILURE_USERNAME };
+    case userConstants.LOGIN_FAILURE_USERNAME:
+      return { ...state, loginStatus: userStatus.FAILURE_USERNAME };
     case userConstants.GET_ME_SUCCESS:
       return {
         ...state,
