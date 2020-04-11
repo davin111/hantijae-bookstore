@@ -57,6 +57,7 @@ interface Props {
   loginStatus: string;
   user: any;
   onLogin: (username: string, password: string) => any;
+  onGetMe: () => any;
   withoutLogin: boolean;
   onCloseLoginModal: () => any;
   onDontSuggestLogin: () => any;
@@ -80,7 +81,11 @@ class Login extends Component<Props, State> {
     this.props.onLogin(this.state.username, this.state.password)
       .then(() => {
         if (this.props.loginStatus === userStatus.SUCCESS) {
-          this.props.history.push('/');
+          if (this.props.history.location.pathname === '/login') {
+            this.props.history.push('/');
+          }
+          this.props.onCloseLoginModal();
+          this.props.onGetMe();
         } else {
           console.log('ERROR!');
         }
@@ -197,6 +202,7 @@ const mapStateToProps = (state: any) => ({
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onLogin: (username: string, password: string) => dispatch(userActions.login(username, password)),
+  onGetMe: () => dispatch(userActions.getMe()),
   onCloseLoginModal: () => dispatch(stateActions.closeLoginModal()),
   onDontSuggestLogin: () => dispatch(stateActions.dontSuggestLogin()),
 });

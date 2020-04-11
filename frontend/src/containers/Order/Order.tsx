@@ -35,8 +35,8 @@ const styles = (theme: any) => createStyles({
   },
   layout: {
     width: 'auto',
-    marginLeft: theme.spacing(2),
-    marginRight: theme.spacing(2),
+    // marginLeft: theme.spacing(2),
+    // marginRight: theme.spacing(2),
     [theme.breakpoints.up(600 + theme.spacing(2) * 2)]: {
       width: 600,
       marginLeft: 'auto',
@@ -46,7 +46,7 @@ const styles = (theme: any) => createStyles({
   paper: {
     marginTop: theme.spacing(3),
     marginBottom: theme.spacing(3),
-    padding: theme.spacing(2),
+    padding: theme.spacing(1),
     [theme.breakpoints.up(600 + theme.spacing(3) * 2)]: {
       marginTop: theme.spacing(6),
       marginBottom: theme.spacing(6),
@@ -219,6 +219,7 @@ class Order extends Component<Props, State> {
             address2={this.state.address2}
             postalCode={this.state.postalCode}
             payer={this.state.payer}
+            sameReceiver={this.state.sameReceiver}
           />
         );
       default:
@@ -286,7 +287,7 @@ class Order extends Component<Props, State> {
       case 0:
         if (this.state.familyName && this.state.givenName && this.state.confirmed
             && this.state.email && this.state.phoneNumber
-            && this.state.address1 && this.state.address2 && this.state.postalCode) {
+            && this.state.address1 && this.state.postalCode) {
           if (!this.state.sameReceiver
               && !(this.state.receiverFamilyName && this.state.receiverGivenName)) {
             return true;
