@@ -150,3 +150,43 @@
         font-size: 0.9em;
      }
 }
+
+
+.DetailNotAcceptable {
+    position: absolute;
+    bottom: -20%;
+    right: 2%;
+    border-style: solid;
+    border-radius: 0.7em;
+    border-width: 0.1em;
+    padding: 8px;
+    background-color: #8AB1DB;
+    color: white;
+    text-align: center;
+    font-size: 1em;
+}
+@media all and (max-width:768px) {
+    .DetailNotAcceptable {
+        bottom: 0%;
+        font-size: 0.8em;
+        padding: 6px;
+    }
+}
+.DetailNotVisible {
+    position: absolute;
+    bottom: -7%;
+    right: 5%;
+    border-style: solid;
+    border-radius: 0.7em;
+    border-width: 0.1em;
+    padding: 10px;
+    background-color: #D32F2F;
+    color: white;
+    text-align: center;
+    font-size: 1.2em;
+}
+@media all and (max-width:768px) {
+    .DetailNotVisible {
+        bottom: 0%;
+    }
+}

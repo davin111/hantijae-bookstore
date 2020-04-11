@@ -22,6 +22,7 @@ class BookSerializer(serializers.ModelSerializer):
             'category',
             'published_date',
             'authors',
+            'visible',
         )
 
     def get_authors(self, book):
@@ -48,7 +49,9 @@ class SimpleBookSerializer(serializers.ModelSerializer):
             'full_price',
             'price',
             'category',
+            'published_date',
             'authors',
+            'visible',
         )
 
     def get_authors(self, book):

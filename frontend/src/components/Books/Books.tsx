@@ -19,10 +19,9 @@ class Books extends Component<Props> {
       fullPrice={book.full_price}
       price={book.price}
       authors={book.authors}
+      published_date={book.published_date}
       history={this.props.history}
-      // rate={book.rate}
-      // voters={book.voters}
-      // people={book.people}
+      visible={book.visible}
     />
   );
 

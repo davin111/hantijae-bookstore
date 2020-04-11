@@ -1,6 +1,5 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
-import Button from '@material-ui/core/Button';
 
 import { userActions, stateActions } from '../../../store/actions';
 import './BookInBasket.css';

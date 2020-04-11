@@ -3,7 +3,6 @@ import { connect } from 'react-redux';
 import Button from '@material-ui/core/Button';
 import ReceiptIcon from '@material-ui/icons/Receipt';
 import { createStyles, withStyles } from '@material-ui/core/styles';
-import Typography from '@material-ui/core/Typography';
 
 import { userActions } from '../../store/actions';
 import { BooksInBasket } from '../../components';

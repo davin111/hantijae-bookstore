@@ -13,12 +13,14 @@ export interface BookProps {
   shortDescription: string;
   fullPrice: number;
   price: number;
+  visible: boolean;
   authors: any[];
   history: any;
   me: any;
   basket: any;
   basketStatus: string;
   getMeStatus: string;
+  published_date: string;
   onPostBookInBasket: (id: number, count: number) => any;
   onOpenLoginModal: () => any;
   onOpenFullBasketModal: () => any;
@@ -38,6 +40,25 @@ class Book extends Component<BookProps> {
     let shortDesc = '';
     if (this.props.shortDescription.length > 100) {
       shortDesc = `${this.props.shortDescription.substr(0, 100)} ...`;
+    }
+
+    let bookCart = null;
+    if (this.props.visible) {
+      if (this.props.published_date.split('-')[0] === '2020') {
+        bookCart = (
+          <h3 className="NotAcceptable">
+            특판 이벤트에서 올해 나온 신간은 제외됩니다
+          </h3>
+        );
+      } else {
+        bookCart = (
+          <div className="BookListCart">
+            <BookCountWithCart bookId={this.props.id} history={this.props.history} />
+          </div>
+        );
+      }
+    } else {
+      bookCart = <h3 className="NotVisible">절판</h3>;
     }
 
     return (
@@ -60,9 +81,7 @@ class Book extends Component<BookProps> {
             </p>
           </div>
         </div>
-        <div className="BookListCart">
-          <BookCountWithCart bookId={this.props.id} history={this.props.history} />
-        </div>
+        {bookCart}
       </div>
     );
   }
