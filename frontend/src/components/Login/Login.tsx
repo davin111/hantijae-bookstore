@@ -115,6 +115,22 @@ class Login extends Component<Props, State> {
       );
     }
 
+    let warning = null;
+    if (this.props.loginStatus === userStatus.FAILURE_USERNAME) {
+      warning = (
+        <Typography variant="h6" color="secondary" align="center">
+          존재하지 않는 아이디입니다.
+        </Typography>
+      );
+    }
+    else if (this.props.loginStatus === userStatus.FAILURE) {
+      warning = (
+        <Typography variant="h6" color="secondary" align="center">
+          잘못된 비밀번호입니다.
+        </Typography>
+      );
+    }
+
     return (
       <Container component="main" maxWidth="xs">
         <CssBaseline />
@@ -154,6 +170,7 @@ class Login extends Component<Props, State> {
               control={<Checkbox value="remember" color="primary" />}
               label="다음에 자동 로그인"
             />
+            {warning}
             <Button
               type="button"
               fullWidth

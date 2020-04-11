@@ -10,8 +10,8 @@ const loginSuccess = (user: any) => ({
 const loginFailure = (error: any) => {
   let actionType = null;
   switch (error.response.status) {
-    case 403:
-      actionType = userConstants.LOGIN_FAILURE;
+    case 404:
+      actionType = userConstants.LOGIN_FAILURE_USERNAME;
       break;
     default:
       actionType = userConstants.LOGIN_FAILURE;

@@ -307,6 +307,8 @@ class Order extends Component<Props, State> {
   };
 
   nextButtonDisabled = (step: number) => {
+    const emailRegExp = /^[\w-]+(\.[\w-]+)*@([a-z0-9-]+(\.[a-z0-9-]+)*?\.[a-z]{2,6}|(\d{1,3}\.){3}\d{1,3})(:\d{4})?$/;
+    const phoneRegExp = /^\d{8,12}$/;
     switch (step) {
       case -1:
         return false;
@@ -316,6 +318,9 @@ class Order extends Component<Props, State> {
             && this.state.address1) {
           if (!this.state.sameReceiver
               && !(this.state.receiverFamilyName && this.state.receiverGivenName)) {
+            return true;
+          }
+          if (!emailRegExp.test(this.state.email) || !phoneRegExp.test(this.state.phoneNumber)) {
             return true;
           }
           return false;

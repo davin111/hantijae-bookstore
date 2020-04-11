@@ -49,6 +49,11 @@ class UserViewSet(viewsets.GenericViewSet):
     def login(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
+        try:
+            User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
