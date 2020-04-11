@@ -178,6 +178,7 @@ class Login extends Component<Props, State> {
               회원 가입하러 가기
             </Button>
             {withoutLoginButton}
+            <div className="GapMaker" />
             <Grid container>
               <Grid item xs>
                 <Link href="/findpassword" variant="body2">

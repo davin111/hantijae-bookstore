@@ -15,6 +15,7 @@ import { userActions } from '../../store/actions';
 import AddressForm from './AddressForm/AddressForm';
 import PaymentForm from './PaymentForm/PaymentForm';
 import Review from './Review/Review';
+import Preview from './Preview/Preview';
 
 function Copyright() {
   return (
@@ -103,7 +104,7 @@ class Order extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
-      activeStep: 0,
+      activeStep: -1,
       familyName: '',
       givenName: '',
       email: '',
@@ -183,6 +184,10 @@ class Order extends Component<Props, State> {
 
   getStepContent = (step: number) => {
     switch (step) {
+      case -1:
+        return (
+          <Preview basket={this.props.basket} />
+        );
       case 0:
         return (
           <AddressForm
@@ -298,6 +303,8 @@ class Order extends Component<Props, State> {
 
   nextButtonDisabled = (step: number) => {
     switch (step) {
+      case -1:
+        return false;
       case 0:
         if (this.state.familyName && this.state.givenName && this.state.confirmed
             && this.state.email && this.state.phoneNumber
@@ -354,7 +361,7 @@ class Order extends Component<Props, State> {
                 <>
                   {this.getStepContent(this.state.activeStep)}
                   <div className={classes.buttons}>
-                    {this.state.activeStep !== 0 && (
+                    {this.state.activeStep !== -1 && (
                       <Button onClick={this.handleBack} className={classes.button}>
                         이전
                       </Button>

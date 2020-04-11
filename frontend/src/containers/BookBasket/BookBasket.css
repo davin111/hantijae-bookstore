@@ -43,9 +43,9 @@
     margin-left: auto;
     margin-right: auto;
     height: 5%;
-    width: 80%;
+    width: 60%;
     background-color: rgb(214, 214, 214);
-    font-size: 2.5em;
+    font-size: 2em;
     font-weight: bold;
     border-radius: 2em;
     margin-top: 2%;
@@ -55,10 +55,11 @@
 }
 @media all and (max-width:768px) {
     .BookBasketSummary {
-        font-size: 1.5em;
+        font-size: 1.2em;
         margin-top: 5%;
         margin-bottom: 5%;
         border-radius: 0.5em;
+        width: 80%;
     }
 }
 .BookBasketSummary .OriginalPrice {
@@ -69,4 +70,14 @@
     width: 55%;
     height: 50px;
     font-size: x-large;
+}
+
+.NoResultBasket {
+    font-size: 1.5em;
+    font-weight: 350;
+}
+@media all and (max-width:768px) {
+    .NoResultBasket {
+        font-size: 1em;
+    }
 }
