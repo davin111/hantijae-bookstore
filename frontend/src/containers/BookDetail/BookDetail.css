@@ -27,7 +27,7 @@
 @media all and (max-width:768px) {
     .BookCoverStand {
         height: 50%;
-        width: 100%;
+        width: 95%;
         max-width: 100%;
         position: relative;
     }

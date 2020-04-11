@@ -35,6 +35,7 @@ interface Props {
   address2: string;
   postalCode: string;
   payer: string;
+  sameReceiver: boolean;
 }
 
 class Review extends Component<Props> {
@@ -43,6 +44,13 @@ class Review extends Component<Props> {
     return books.map((book: any) => (
       <ListItem className={classes.listItem} key={book.id}>
         <ListItemText primary={book.title} secondary={book.subtitle} />
+        <Typography variant="body2">
+          {book.count}
+          권
+        </Typography>
+        <Typography variant="body2">
+          &nbsp;*&nbsp;
+        </Typography>
         <Typography variant="body2">
           {book.full_price}
           원
@@ -53,6 +61,13 @@ class Review extends Component<Props> {
 
   render() {
     const { classes } = this.props;
+
+    let receiverFamilyName = this.props.familyName;
+    let receiverGivenName = this.props.givenName;
+    if (!this.props.sameReceiver) {
+      receiverFamilyName = this.props.receiverFamilyName;
+      receiverGivenName = this.props.receiverGivenName;
+    }
     return (
       <>
         <Typography variant="h6" gutterBottom>
@@ -101,8 +116,8 @@ class Review extends Component<Props> {
               </Grid>
               <Grid item xs={6}>
                 <Typography gutterBottom>
-                  {this.props.receiverFamilyName}
-                  {this.props.receiverGivenName}
+                  {receiverFamilyName}
+                  {receiverGivenName}
                 </Typography>
               </Grid>
             </Grid>
