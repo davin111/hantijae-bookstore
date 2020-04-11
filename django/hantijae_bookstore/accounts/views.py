@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.sessions.models import Session
 from django.db import IntegrityError
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
@@ -85,7 +86,7 @@ class BasketViewSet(viewsets.GenericViewSet):
         if not user:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
-        baskets = Basket.objects.filter(user=user)
+        baskets = Basket.objects.filter(user=user, status=Basket.NONE)
         if baskets.exists():
             basket = baskets.last()
         else:
@@ -107,7 +108,7 @@ class BasketViewSet(viewsets.GenericViewSet):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         if self.request.method == 'POST':
-            baskets = Basket.objects.filter(user=user)
+            baskets = Basket.objects.filter(user=user, status=Basket.NONE)
             if baskets.exists():
                 basket = baskets.last()
             else:
@@ -126,6 +127,8 @@ class BasketViewSet(viewsets.GenericViewSet):
             if not basket_id:
                 return Response(status=status.HTTP_400_BAD_REQUEST)
             basket = get_object_or_404(Basket, id=basket_id)
+            if basket.status != Basket.NONE:
+                return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
             bookbasket = BookBasket.objects.get(book=book, basket=basket)
             if book_count > 0:
                 if basket.book_count - bookbasket.count + book_count > basket.max_book_count:
@@ -139,35 +142,43 @@ class BasketViewSet(viewsets.GenericViewSet):
 
         return Response(self.get_serializer(basket).data)
 
-    @action(detail=False, methods=['PUT'])
+    @action(detail=False, methods=['GET', 'PUT'])
     def order(self, request):
-        basket_id = request.data.get('basket')
-        last_name = request.data.get('family_name')
-        first_name = request.data.get('given_name')
-        email = request.data.get('email')
-        phone_number = request.data.get('phone_number')
-        receiver_last_name = request.data.get('receiver_family_name')
-        receiver_first_name = request.data.get('receiver_given_name')
-        address = request.data.get('address')
-        postal_code = request.data.get('postal_code')
-        payer = request.data.get('payer')
-        if not (basket_id and last_name and first_name and email and phone_number
-                and receiver_last_name and receiver_first_name and address and postal_code and payer):
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+        if self.request.method == 'GET':
+            user = get_user_from_request(request)
+            if not user:
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            baskets = Basket.objects.filter(Q(user=user) & ~Q(status=Basket.NONE))
+            return Response(self.get_serializer(baskets, many=True).data)
 
-        basket = get_object_or_404(Basket, id=basket_id)
-        if basket.status != Basket.NONE:
-            return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
+        else:
+            basket_id = request.data.get('basket')
+            last_name = request.data.get('family_name')
+            first_name = request.data.get('given_name')
+            email = request.data.get('email')
+            phone_number = request.data.get('phone_number')
+            receiver_last_name = request.data.get('receiver_family_name')
+            receiver_first_name = request.data.get('receiver_given_name')
+            address = request.data.get('address')
+            postal_code = request.data.get('postal_code')
+            payer = request.data.get('payer')
+            if not (basket_id and last_name and first_name and email and phone_number
+                    and receiver_last_name and receiver_first_name and address and postal_code and payer):
+                return Response(status=status.HTTP_400_BAD_REQUEST)
 
-        basket.last_name = last_name
-        basket.first_name = first_name
-        basket.email = email
-        basket.phone_number = phone_number
-        basket.receiver_last_name = receiver_last_name
-        basket.receiver_first_name = receiver_first_name
-        basket.address = address
-        basket.postal_code = postal_code
-        basket.payer = payer
-        basket.status = Basket.ORDERED
-        basket.save()
-        return Response(self.get_serializer(basket).data)
+            basket = get_object_or_404(Basket, id=basket_id)
+            if basket.status != Basket.NONE:
+                return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
+
+            basket.last_name = last_name
+            basket.first_name = first_name
+            basket.email = email
+            basket.phone_number = phone_number
+            basket.receiver_last_name = receiver_last_name
+            basket.receiver_first_name = receiver_first_name
+            basket.address = address
+            basket.postal_code = postal_code
+            basket.payer = payer
+            basket.status = Basket.ORDERED
+            basket.save()
+            return Response(self.get_serializer(basket).data)

@@ -11,6 +11,7 @@ const initialState = {
     maxPrice: 0,
     books: [],
   },
+  orders: {},
   getMeStatus: userStatus.NONE,
   loginStatus: userStatus.NONE,
   logoutStatus: userStatus.NONE,
@@ -104,6 +105,7 @@ const reducer = (state = initialState, action: any) => {
     case basketActions.PUT_BOOK_FAILURE:
     case basketActions.GET_BASKET_FAILURE:
     case basketActions.PUT_ORDER_FAILURE:
+    case basketActions.GET_ORDERS_FAILURE:
       return {
         ...state,
         basketStatus: basketStatus.FAILURE,
@@ -113,6 +115,12 @@ const reducer = (state = initialState, action: any) => {
       return {
         ...state,
         basketStatus: basketStatus.FAILURE_MAX_BOOK,
+      };
+    case basketActions.GET_ORDERS_SUCCESS:
+      return {
+        ...state,
+        basketStatus: basketStatus.SUCCESS,
+        orders: data,
       };
     default:
       return { ...state };
