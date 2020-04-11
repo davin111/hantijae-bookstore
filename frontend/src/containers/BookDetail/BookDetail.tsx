@@ -34,17 +34,15 @@ class BookDetail extends Component<Props, State> {
   }
 
   render() {
-    let authors = null;
+    let authorStr = '';
     let desc = '';
     let img = null;
     if (Object.keys(this.state.book).length > 0) {
-      authors = this.state.book.authors.map(
-        (author: any) => (
-          <p className="Authors" key={author.id}>
-            {author.name}
-          </p>
-        ),
-      );
+      const authorNames = [];
+      for (let i = 0; i < this.state.book.authors.length; i += 1) {
+        authorNames.push(this.state.book.authors[i].name);
+      }
+      authorStr = authorNames.join(' · ');
 
       desc = this.state.book.description.split('\n').map((line: string) => (
         <span>
@@ -67,7 +65,7 @@ class BookDetail extends Component<Props, State> {
           <div className="BookDetailInfo">
             <h1 id="title">{book.title}</h1>
             <h1 id="subtitle">{book.subtitle}</h1>
-            {authors}
+            <h3 id="authors">{authorStr}</h3>
             {/* <Rate rate={this.props.rate} voters={this.props.voters} textColor="#607D8B" /> */}
             <div className="BookDetailInfoList">
               <div className="InfoItem">
@@ -106,11 +104,11 @@ class BookDetail extends Component<Props, State> {
                   {book.isbn}
                 </div>
               </div>
+              <div className="DetailCart">
+                <BookCountWithCart bookId={book.id} history={this.props.history} />
+              </div>
             </div>
           </div>
-        </div>
-        <div className="DetailCart">
-          <BookCountWithCart bookId={book.id} history={this.props.history} />
         </div>
         <LoginModal history={this.props.history} />
         <FullBasketModal history={this.props.history} />

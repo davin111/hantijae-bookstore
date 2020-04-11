@@ -60,7 +60,9 @@ class Book extends Component<BookProps> {
             </p>
           </div>
         </div>
-        <BookCountWithCart bookId={this.props.id} history={this.props.history} />
+        <div className="BookListCart">
+          <BookCountWithCart bookId={this.props.id} history={this.props.history} />
+        </div>
       </div>
     );
   }

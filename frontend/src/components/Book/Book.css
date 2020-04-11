@@ -109,3 +109,11 @@
         font-size: 0.6em;
     }
 }
+@media all and (max-width:768px) {
+    .BookListCart {
+        position: absolute;
+        width: 150%;
+        bottom: 3%;
+        right: 1%;
+    }
+}
