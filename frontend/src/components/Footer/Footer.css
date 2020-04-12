@@ -5,7 +5,8 @@ footer {
     display: flex;
     flex-direction: row;
     align-items: center;
-    padding-bottom: 5%;
+    padding-top: 5%;
+    padding-bottom: 2%;
 }
 @media all and (max-width:768px) {
     header {
