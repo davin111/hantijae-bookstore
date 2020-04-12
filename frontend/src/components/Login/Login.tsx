@@ -23,7 +23,7 @@ function Copyright() {
     <Typography variant="body2" color="textSecondary" align="center">
       {'Copyright © '}
       <Link color="inherit" href="http://hantijae-bookstore.com/">
-        도서출판 한티재
+        Hantijae publisher.
       </Link>
       {' '}
       {new Date().getFullYear()}
@@ -197,8 +197,9 @@ class Login extends Component<Props, State> {
             <div className="GapMaker" />
             <Grid container>
               <Grid item xs>
-                <Link href="/findpassword" variant="body2">
-                  비밀번호를 잊으셨나요?
+                {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
+                <Link variant="body2">
+                  비밀번호를 잊으셨나요? (현재 지원하지 않습니다)
                 </Link>
               </Grid>
             </Grid>

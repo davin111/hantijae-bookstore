@@ -4,8 +4,7 @@
 }
 
 .FooterLine {
-    width: 80%;
-    size: 3;
+    width: 90%;
 }
 
 footer {
@@ -30,8 +29,11 @@ footer {
     width: 100%;
 }
 
-.LeftFooter {
-
+.FooterButtons {
+    margin-left: 15%;
+    display: flex;
+    flex-direction: column;
+    width: 50%;
 }
 
 .RightFooter {
@@ -40,7 +42,9 @@ footer {
 
 .FooterDetailInfo {
     text-align: right;
-    padding-right: 5%;
+    padding-right: 15%;
+    line-height: 2em;
+    font-size: 1em;
 }
 
 .ButtonGap {

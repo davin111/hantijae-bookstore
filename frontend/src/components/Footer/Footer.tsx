@@ -35,57 +35,61 @@ class Footer extends Component<Props> {
                   </Typography>
                 </Grid> */}
                 <Grid item xs={12} sm={6}>
-                  <Button
-                    type="button"
-                    variant="contained"
-                    color="default"
-                    size="small"
-                    onClick={() => this.props.history.push('/mypage')}
-                    endIcon={<NotesIcon />}
-                  >
-                    한티재 Blog
-                  </Button>
-                  <div className="ButtonGap" />
-                  <Button
-                    type="button"
-                    variant="contained"
-                    color="default"
-                    size="small"
-                    onClick={() => this.props.history.push('/mypage')}
-                    endIcon={<FacebookIcon />}
-                  >
-                    한티재 Facebook
-                  </Button>
-                  <div className="ButtonGap" />
-                  <Button
-                    type="button"
-                    variant="contained"
-                    color="default"
-                    size="small"
-                    onClick={() => this.props.history.push('/mypage')}
-                    endIcon={<InstagramIcon />}
-                  >
-                    한티재 Instagram
-                  </Button>
-                  <div className="ButtonGap" />
-                  <Button
-                    type="button"
-                    variant="contained"
-                    color="default"
-                    size="small"
-                    onClick={() => this.props.history.push('/mypage')}
-                    endIcon={<TwitterIcon />}
-                  >
-                    한티재 Twitter
-                  </Button>
+                  <div className="FooterButtons">
+                    <Button
+                      type="button"
+                      variant="contained"
+                      color="default"
+                      size="small"
+                      onClick={() => window.open('http://blog.naver.com/hanti_books')}
+                      endIcon={<NotesIcon />}
+                    >
+                      한티재 Blog
+                    </Button>
+                    <div className="ButtonGap" />
+                    <Button
+                      type="button"
+                      variant="contained"
+                      color="default"
+                      size="small"
+                      onClick={() => window.open('https://www.facebook.com/hantijae')}
+                      endIcon={<FacebookIcon />}
+                    >
+                      한티재 Facebook
+                    </Button>
+                    <div className="ButtonGap" />
+                    <Button
+                      type="button"
+                      variant="contained"
+                      color="default"
+                      size="small"
+                      onClick={() => window.open('https://www.instagram.com/hantijae')}
+                      endIcon={<InstagramIcon />}
+                    >
+                      한티재 Instagram
+                    </Button>
+                    <div className="ButtonGap" />
+                    <Button
+                      type="button"
+                      variant="contained"
+                      color="default"
+                      size="small"
+                      onClick={() => window.open('https://twitter.com/hantijae_book')}
+                      endIcon={<TwitterIcon />}
+                    >
+                      한티재 Twitter
+                    </Button>
+                  </div>
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <div className="FooterDetailInfo">
                     42087 대구시 수성구 달구벌대로 492길 15
                     <br />
-                    TEL 053-743-8368  FAX 053-743-8367 Email hantibooks@gmail.com
+                    TEL 053-743-8368 | FAX 053-743-8367
                     <br />
-                    Copyright (c) Hantijae publisher. All Rights Reserved.
+                    Email hantibooks@gmail.com
+                    <br />
+                    Copyright © Hantijae publisher. All Rights Reserved.
                   </div>
                 </Grid>
               </Grid>

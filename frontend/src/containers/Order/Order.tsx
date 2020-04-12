@@ -22,7 +22,7 @@ function Copyright() {
     <Typography variant="body2" color="textSecondary" align="center">
       {'Copyright © '}
       <Link color="inherit" href="http://hantijae-bookstore.com/">
-        도서출판 한티재
+        Hantijae publisher.
       </Link>
       {' '}
       {new Date().getFullYear()}
