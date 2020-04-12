@@ -10,6 +10,7 @@ import Books from './Books/Books';
 import BooksInBasket from './Books/BooksInBasket/BooksInBasket';
 import BookCountWithCart from './BookCountWithCart/BookCountWithCart';
 import EventModal from './Modal/EventModal/EventModal';
+import Footer from './Footer/Footer';
 
 export {
   Books,
@@ -23,4 +24,5 @@ export {
   BooksInBasket,
   BookCountWithCart,
   EventModal,
+  Footer,
 };

@@ -2,7 +2,7 @@ import React from 'react';
 import { Route, Switch, Redirect } from 'react-router-dom';
 import { ConnectedRouter } from 'connected-react-router';
 
-import { Header, Auth } from './components';
+import { Header, Auth, Footer } from './components';
 import {
   Main, BookDetail, LoginPage, SignupPage, BookBasket, Order, SearchResult, MyPage, HantijaePage,
 } from './containers';
@@ -33,6 +33,7 @@ function App(props: Props): JSX.Element {
           <Route path="/hantijae" exact component={HantijaePage} history={props.history} />
           <Redirect exact to="/" />
         </Switch>
+        <Footer history={props.history} />
       </ConnectedRouter>
     </div>
   );
