@@ -1,8 +1,11 @@
 import React, { Component } from 'react';
 import Grid from '@material-ui/core/Grid';
-import Box from '@material-ui/core/Box';
+import Button from '@material-ui/core/Button';
 import Typography from '@material-ui/core/Typography';
-import TextField from '@material-ui/core/TextField';
+import FacebookIcon from '@material-ui/icons/Facebook';
+import InstagramIcon from '@material-ui/icons/Instagram';
+import TwitterIcon from '@material-ui/icons/Twitter';
+import NotesIcon from '@material-ui/icons/Notes';
 
 import './Footer.css';
 
@@ -15,6 +18,7 @@ class Footer extends Component<Props> {
   render() {
     return (
       <div>
+        <hr />
         <footer>
           <div className="FooterInfo">
             {/* <div className="LeftFooter">
@@ -24,46 +28,65 @@ class Footer extends Component<Props> {
               그렇다
             </div> */}
             <>
-              <Typography variant="h6" gutterBottom>
-                주문 정보 입력
-              </Typography>
-              <Grid container spacing={3}>
-                <Grid item xs={12} sm={12}>
-                  <TextField
-                    required
-                    id="firstName"
-                    name="firstName"
-                    label="이름 (주문하는 분)"
-                    fullWidth
-                    autoComplete="fname"
-                    onChange={(e) => this.props.changeGivenName(e)}
-                    value={this.props.givenName}
-                  />
+              <Grid container spacing={5}>
+                {/* <Grid item xs={12} sm={12}>
+                  <Typography variant="h6" gutterBottom>
+                    주문 정보 입력
+                  </Typography>
+                </Grid> */}
+                <Grid item xs={12} sm={6}>
+                  <Button
+                    type="button"
+                    variant="contained"
+                    color="default"
+                    size="small"
+                    onClick={() => this.props.history.push('/mypage')}
+                    endIcon={<NotesIcon />}
+                  >
+                    한티재 Blog
+                  </Button>
+                  <div className="ButtonGap" />
+                  <Button
+                    type="button"
+                    variant="contained"
+                    color="default"
+                    size="small"
+                    onClick={() => this.props.history.push('/mypage')}
+                    endIcon={<FacebookIcon />}
+                  >
+                    한티재 Facebook
+                  </Button>
+                  <div className="ButtonGap" />
+                  <Button
+                    type="button"
+                    variant="contained"
+                    color="default"
+                    size="small"
+                    onClick={() => this.props.history.push('/mypage')}
+                    endIcon={<InstagramIcon />}
+                  >
+                    한티재 Instagram
+                  </Button>
+                  <div className="ButtonGap" />
+                  <Button
+                    type="button"
+                    variant="contained"
+                    color="default"
+                    size="small"
+                    onClick={() => this.props.history.push('/mypage')}
+                    endIcon={<TwitterIcon />}
+                  >
+                    한티재 Twitter
+                  </Button>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField
-                    required
-                    fullWidth
-                    id="email"
-                    label="이메일"
-                    name="email"
-                    autoComplete="email"
-                    onChange={(e) => this.props.changeEmail(e)}
-                    value={this.props.email}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    required
-                    id="phonenumber"
-                    name="phonenumber"
-                    label="휴대전화 번호"
-                    fullWidth
-                    autoComplete="tel"
-                    helperText="'-'를 제외하고 입력해주세요."
-                    onChange={(e) => this.props.changePhoneNumber(e)}
-                    value={this.props.phoneNumber}
-                  />
+                  <div className="FooterDetailInfo">
+                    42087 대구시 수성구 달구벌대로 492길 15
+                    <br />
+                    TEL 053-743-8368  FAX 053-743-8367 Email hantibooks@gmail.com
+                    <br />
+                    Copyright (c) Hantijae publisher. All Rights Reserved.
+                  </div>
                 </Grid>
               </Grid>
             </>

@@ -1,10 +1,11 @@
 footer {
     background-color: #FAFAFA;
-    height: 14vh;
+    height: 20vh;
     width: 100%;
     display: flex;
     flex-direction: row;
     align-items: center;
+    padding-bottom: 5%;
 }
 @media all and (max-width:768px) {
     header {
@@ -15,6 +16,7 @@ footer {
 
 .FooterInfo {
     display: flex;
+    width: 100%;
 }
 
 .LeftFooter {
@@ -22,5 +24,14 @@ footer {
 }
 
 .RightFooter {
-    
+
+}
+
+.FooterDetailInfo {
+    text-align: right;
+    padding-right: 5%;
+}
+
+.ButtonGap {
+    margin-top: 2%;
 }
