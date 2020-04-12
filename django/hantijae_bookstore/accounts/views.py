@@ -40,7 +40,7 @@ class UserViewSet(viewsets.GenericViewSet):
         try:
             user.last_session = Session.objects.get(pk=session_key)
             user.save()
-            print("session saved")
+            #print("session saved")
         except Session.DoesNotExist:
             pass
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
@@ -61,7 +61,7 @@ class UserViewSet(viewsets.GenericViewSet):
             try:
                 user.last_session = Session.objects.get(pk=session_key)
                 user.save()
-                print("session saved")
+                #print("session saved")
             except Session.DoesNotExist:
                 pass
             return Response(UserSerializer(user).data)

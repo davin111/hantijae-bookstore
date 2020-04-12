@@ -57,16 +57,18 @@ class SeriesViewSet(viewsets.GenericViewSet):
         return self.serializer_class
 
     def list(self, request):
-        queryset = self.get_queryset()
-        fixed_tuple = ("단행본", "교양문고", "산문선", "시선", "팸플릿")
-        data = []
-        for name in fixed_tuple:
-            try:
-                series = queryset.get(name=name)
-                data.append(self.get_serializer(series).data)
-            except ObjectDoesNotExist:
-                pass
-
+        data = cache.get('series')
+        if not data:
+            queryset = self.get_queryset()
+            fixed_tuple = ("단행본", "교양문고", "산문선", "시선", "팸플릿")
+            data = []
+            for name in fixed_tuple:
+                try:
+                    series = queryset.get(name=name)
+                    data.append(self.get_serializer(series).data)
+                except ObjectDoesNotExist:
+                    pass
+            cache.set('series', data, 3600)
         return Response(data)
 
     def retrieve(self, request, pk=None):

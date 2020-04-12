@@ -7,12 +7,12 @@ def get_session(request):
     session_key = request.session.session_key
     if not request.session.session_key:
         request.session.save()
-        print("after key:", request.session.session_key)
+        #print("after key:", request.session.session_key)
     try:
         session = Session.objects.get(pk=session_key)
         return session
     except Session.DoesNotExist as e:
-        print("ERROR:", e)
+        #print("ERROR:", e)
         return None
 
 def get_user_from_request(request):
@@ -20,9 +20,9 @@ def get_user_from_request(request):
 
     if request.user.is_authenticated:
         user = request.user
-        print(f"login user - anonymous: {user.anonymous}")
+        #print(f"login user - anonymous: {user.anonymous}")
         if not user.last_session:
-            print("session saved")
+            #print("session saved")
             if session:
                 user.last_session = session
                 user.save()
@@ -30,11 +30,11 @@ def get_user_from_request(request):
     elif session:
         session_user = User.objects.filter(last_session=session)
         if session_user.exists():
-            print("session user exists")
+            #print("session user exists")
             user = session_user.first()
             login(request, user)
         else:
             user = User.objects.create(last_session=session, anonymous=True, username=request.session.session_key)
-            print("anony user created")
+            #print("anony user created")
         return user
     return None
