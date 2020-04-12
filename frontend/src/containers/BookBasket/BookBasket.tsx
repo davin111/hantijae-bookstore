@@ -37,12 +37,18 @@ class BookBasket extends Component<Props> {
 
   render() {
     const { classes } = this.props;
-    let books = null;
+    let books = (
+      <h3 className="NoResultBasket">
+        책바구니 내역이 없습니다. 책을 담으러 가볼까요?
+      </h3>
+    );
     let summary = null;
+    let bookCount = 0;
+    let maxBookCount = 10;
 
     if (this.props.basketStatus === basketStatus.SUCCESS
       && Object.keys(this.props.basket).length > 0) {
-      if (this.props.basket.books.length > 0) {
+      if (Array.isArray(this.props.basket.books) && this.props.basket.books.length > 0) {
         books = <BooksInBasket books={this.props.basket.books} history={this.props.history} />;
         summary = (
           <div className="BookBasketSummary">
@@ -57,12 +63,8 @@ class BookBasket extends Component<Props> {
             원
           </div>
         );
-      } else {
-        books = (
-          <h3 className="NoResultBasket">
-            책바구니 내역이 없습니다. 책을 담으러 가볼까요?
-          </h3>
-        );
+        bookCount = this.props.basket.bookCount;
+        maxBookCount = this.props.basket.maxBookCount;
       }
     }
 
@@ -76,9 +78,9 @@ class BookBasket extends Component<Props> {
           </h1>
         </div>
         <h2 className="BookBasketTotalCount">
-          {this.props.basket.bookCount}
+          {bookCount}
           /
-          {this.props.basket.maxBookCount}
+          {maxBookCount}
           권
         </h2>
         {books}
@@ -90,7 +92,7 @@ class BookBasket extends Component<Props> {
           className={classes.button}
           onClick={() => this.props.history.push('/order')}
           endIcon={<ReceiptIcon className="ReceiptIcon" />}
-          disabled={this.props.basket.books.length === 0}
+          disabled={!Array.isArray(this.props.basket.books) || this.props.basket.books.length === 0}
         >
           주문하기
         </Button>
