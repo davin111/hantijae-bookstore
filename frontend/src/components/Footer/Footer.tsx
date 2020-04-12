@@ -17,8 +17,8 @@ interface Props {
 class Footer extends Component<Props> {
   render() {
     return (
-      <div>
-        <hr />
+      <div className="WholeFooter">
+        <hr className="FooterLine" />
         <footer>
           <div className="FooterInfo">
             {/* <div className="LeftFooter">

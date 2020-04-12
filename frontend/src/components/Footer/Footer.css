@@ -1,3 +1,13 @@
+.WholeFooter {
+    margin-top: 5%;
+
+}
+
+.FooterLine {
+    width: 80%;
+    size: 3;
+}
+
 footer {
     background-color: #FAFAFA;
     height: 20vh;
@@ -5,7 +15,7 @@ footer {
     display: flex;
     flex-direction: row;
     align-items: center;
-    padding-top: 5%;
+    padding-top: 1%;
     padding-bottom: 2%;
 }
 @media all and (max-width:768px) {
