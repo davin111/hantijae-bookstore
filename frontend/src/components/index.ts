@@ -9,6 +9,7 @@ import BasketInfoModal from './Modal/BasketInfoModal/BasketInfoModal';
 import Books from './Books/Books';
 import BooksInBasket from './Books/BooksInBasket/BooksInBasket';
 import BookCountWithCart from './BookCountWithCart/BookCountWithCart';
+import EventModal from './Modal/EventModal/EventModal';
 
 export {
   Books,
@@ -21,4 +22,5 @@ export {
   BasketInfoModal,
   BooksInBasket,
   BookCountWithCart,
+  EventModal,
 };

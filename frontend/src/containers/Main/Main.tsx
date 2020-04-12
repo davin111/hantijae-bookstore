@@ -2,7 +2,7 @@ import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 
 import {
-  BookShelf, LoginModal, FullBasketModal, BasketInfoModal,
+  BookShelf, LoginModal, FullBasketModal, BasketInfoModal, EventModal,
 } from '../../components';
 import { bookActions } from '../../store/actions';
 import './Main.css';
@@ -31,6 +31,7 @@ class Main extends Component<Props> {
         <LoginModal history={this.props.history} />
         <FullBasketModal history={this.props.history} />
         <BasketInfoModal history={this.props.history} />
+        <EventModal history={this.props.history} />
       </div>
     );
   }

@@ -1,0 +1,15 @@
+.EventDescriptionModal {
+    width: 90%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
+    font-size: 1em;
+    text-indent: -1.5em;
+    line-height: 2em;
+}
+@media all and (max-width:768px) {
+    .EventDescriptionModal {
+        font-size: 0.8em;
+        margin-left: 12%;
+     }
+}

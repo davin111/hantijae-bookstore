@@ -28,6 +28,8 @@ import {
   openBasketInfoModal,
   closeBasketInfoModal,
   dontSuggestLogin,
+  openEventModal,
+  closeEventModal,
 } from './state/state';
 
 
@@ -61,4 +63,6 @@ export const stateActions = {
   openBasketInfoModal,
   closeBasketInfoModal,
   dontSuggestLogin,
+  openEventModal,
+  closeEventModal,
 };

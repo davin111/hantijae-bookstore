@@ -63,3 +63,22 @@ const dontSuggestLoginSuccess = () => ({
 export const dontSuggestLogin = () => (dispatch: Dispatch) => dispatch(
   dontSuggestLoginSuccess(),
 );
+
+
+const openEventModalSuccess = () => ({
+  type: stateActions.OPEN_EVENT_MODAL,
+  target: true,
+});
+
+export const openEventModal = () => (dispatch: Dispatch) => dispatch(
+  openEventModalSuccess(),
+);
+
+const closeEventModalSuccess = () => ({
+  type: stateActions.CLOSE_EVENT_MODAL,
+  target: false,
+});
+
+export const closeEventModal = () => (dispatch: Dispatch) => dispatch(
+  closeEventModalSuccess(),
+);
