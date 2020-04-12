@@ -218,10 +218,16 @@ class MyPage extends Component<Props> {
     }
 
     let username = '';
+    let email = '';
+    let name = '';
     if (this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true) {
       username = '비회원';
+      email = '비회원';
+      name = '비회원';
     } else {
       username = this.props.me.username;
+      email = this.props.me.email;
+      name = this.props.me.givenName;
     }
 
     return (
@@ -241,15 +247,13 @@ class MyPage extends Component<Props> {
             <ListItem className={classes.listItem}>
               <ListItemText primary="이메일" />
               <Typography variant="subtitle1" className={classes.total}>
-                {this.props.me.email}
+                {email}
               </Typography>
             </ListItem>
             <ListItem className={classes.listItem}>
               <ListItemText primary="이름" />
               <Typography variant="subtitle1" className={classes.total}>
-                {this.props.me.familyName}
-                &nbsp;
-                {this.props.me.givenName}
+                {name}
               </Typography>
             </ListItem>
           </div>

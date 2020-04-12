@@ -313,11 +313,11 @@ class Order extends Component<Props, State> {
       case -1:
         return false;
       case 0:
-        if (this.state.familyName && this.state.givenName && this.state.confirmed
+        if (this.state.givenName && this.state.confirmed
             && this.state.email && this.state.phoneNumber
             && this.state.address1) {
           if (!this.state.sameReceiver
-              && !(this.state.receiverFamilyName && this.state.receiverGivenName)) {
+              && !(this.state.receiverGivenName)) {
             return true;
           }
           if (!emailRegExp.test(this.state.email) || !phoneRegExp.test(this.state.phoneNumber)) {

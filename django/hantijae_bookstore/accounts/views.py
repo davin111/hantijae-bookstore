@@ -23,7 +23,7 @@ class UserViewSet(viewsets.GenericViewSet):
         last_name = request.data.get('family_name')
         first_name = request.data.get('given_name')
         notifiable = request.data.get('notifiable')
-        if not (username and email and password and last_name and first_name and notifiable is not None):
+        if not (username and email and password and last_name is not None and first_name and notifiable is not None):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -172,8 +172,8 @@ class BasketViewSet(viewsets.GenericViewSet):
             address = request.data.get('address')
             postal_code = request.data.get('postal_code')
             payer = request.data.get('payer')
-            if not (basket_id and last_name and first_name and email and phone_number
-                    and receiver_last_name and receiver_first_name and address and payer):
+            if not (basket_id and last_name is not None and first_name and email and phone_number
+                    and receiver_last_name is not None and receiver_first_name and address and payer):
                 return Response(status=status.HTTP_400_BAD_REQUEST)
 
             basket = get_object_or_404(Basket, id=basket_id)

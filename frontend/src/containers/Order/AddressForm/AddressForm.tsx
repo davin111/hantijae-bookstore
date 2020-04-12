@@ -37,22 +37,9 @@ class AddressForm extends Component<Props> {
     let receiverFamilyNameField = null;
     let receiverGivenNameField = null;
     if (!this.props.sameReceiver) {
-      receiverFamilyNameField = (
-        <Grid item xs={12} sm={6}>
-          <TextField
-            required
-            id="receiverLastName"
-            name="lastName"
-            label="성 (받는 분)"
-            fullWidth
-            autoComplete="lname"
-            onChange={(e) => this.props.changeReceiverFamilyName(e)}
-            value={this.props.receiverFamilyName}
-          />
-        </Grid>
-      );
+      receiverFamilyNameField = null;
       receiverGivenNameField = (
-        <Grid item xs={12} sm={6}>
+        <Grid item xs={12} sm={12}>
           <TextField
             required
             id="receiverFirstName"
@@ -74,19 +61,7 @@ class AddressForm extends Component<Props> {
           주문 정보 입력
         </Typography>
         <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              id="lastName"
-              name="lastName"
-              label="성 (주문하는 분)"
-              fullWidth
-              autoComplete="lname"
-              onChange={(e) => this.props.changeFamilyName(e)}
-              value={this.props.familyName}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={12}>
             <TextField
               required
               id="firstName"

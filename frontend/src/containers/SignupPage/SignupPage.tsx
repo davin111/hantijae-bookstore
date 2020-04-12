@@ -171,19 +171,7 @@ class SignupPage extends Component<Props, State> {
           </Typography>
           <form className={classes.form} noValidate>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  variant="outlined"
-                  required
-                  fullWidth
-                  id="lastName"
-                  label="성"
-                  name="lastName"
-                  autoComplete="lname"
-                  onChange={(e) => this.setState({ familyName: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={12}>
                 <TextField
                   autoComplete="fname"
                   name="firstName"
@@ -261,7 +249,7 @@ class SignupPage extends Component<Props, State> {
               color="primary"
               className={classes.submit}
               disabled={
-                Boolean(!(this.state.familyName && this.state.givenName && this.state.username
+                Boolean(!(this.state.givenName && this.state.username
                 && this.state.email && this.state.password))
               }
               onClick={() => this.clickSignupHandler()}
