@@ -80,6 +80,18 @@ class BasketInfoModal extends Component<Props> {
           >
             책바구니 내역 확인하러 가기
           </Button>
+          <Button
+            type="button"
+            fullWidth
+            variant="contained"
+            color="default"
+            className={classes.submit}
+            onClick={() => {
+              this.clickCancelHandler();
+            }}
+          >
+            책 더 둘러보기
+          </Button>
         </Modal.Body>
       </Modal>
     );

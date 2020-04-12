@@ -172,8 +172,6 @@ class Order extends Component<Props, State> {
         if (this.props.basketStatus === basketStatus.SUCCESS) {
           this.setState({ activeStep: step + 1 });
           this.props.onGetBasket();
-        } else {
-          console.log('ERROR!');
         }
       });
     } else {

@@ -28,18 +28,13 @@ class Auth extends Component<Props, State> {
   }
 
   shouldComponentUpdate() {
-    // console.log(33333);
     return true;
   }
 
 
   componentDidUpdate(prevProps: Props, prevState: State) {
-    // console.log(11111);
-    // console.log(`CUR${this.state.location}`);
     if (this.props.history.location.pathname !== this.state.location) {
       this.props.onGetMe().then(() => {
-        // console.log('DIDUPDATE');
-        // console.log(this.props.history.location.pathname);
         this.setState({ location: this.props.history.location.pathname });
       });
     }

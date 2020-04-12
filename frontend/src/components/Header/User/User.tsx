@@ -18,10 +18,6 @@ interface Props {
 }
 
 class User extends Component<Props> {
-  clickBookIconHandler() {
-    console.log(this.props.me);
-  }
-
   clickLogoutHandler() {
     this.props.onLogout()
       .then(() => {

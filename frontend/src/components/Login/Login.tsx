@@ -86,8 +86,6 @@ class Login extends Component<Props, State> {
           }
           this.props.onCloseLoginModal();
           this.props.onGetMe();
-        } else {
-          console.log('ERROR!');
         }
       });
   }

@@ -118,10 +118,6 @@ class SignupPage extends Component<Props, State> {
         .then(() => {
           if (this.props.signupStatus === userStatus.SUCCESS) {
             this.props.history.push('/');
-          } else if (this.props.signupStatus === userStatus.FAILURE_USERNAME) {
-            console.log('중복된 username입니다!');
-          } else {
-            console.log('ERROR!');
           }
         });
     }
