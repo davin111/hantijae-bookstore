@@ -1,6 +1,5 @@
 .WholeFooter {
     margin-top: 5%;
-
 }
 
 .FooterLine {
@@ -18,9 +17,8 @@ footer {
     padding-bottom: 2%;
 }
 @media all and (max-width:768px) {
-    header {
-        display: inline;
-        height: 10vh;
+    footer {
+        height: 30vh;
     }
 }
 
@@ -35,16 +33,27 @@ footer {
     flex-direction: column;
     width: 50%;
 }
-
-.RightFooter {
-
+@media all and (max-width:768px) {
+    .FooterButtons {
+        margin-left: 5%;
+        margin-right: auto;
+        margin-bottom: -5%;
+    }
 }
+
 
 .FooterDetailInfo {
     text-align: right;
     padding-right: 15%;
     line-height: 2em;
     font-size: 1em;
+}
+@media all and (max-width:768px) {
+    .FooterDetailInfo {
+        line-height: 1.5em;
+        font-size: 0.8em;
+        padding-right: 5%;
+    }
 }
 
 .ButtonGap {
