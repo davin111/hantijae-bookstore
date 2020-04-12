@@ -5,6 +5,7 @@ import Button from '@material-ui/core/Button';
 import Typography from '@material-ui/core/Typography';
 import { withStyles, createStyles } from '@material-ui/core/styles';
 
+import { userStatus } from '../../../constants/constants';
 import { stateActions } from '../../../store/actions';
 import './EventModal.css';
 
@@ -34,18 +35,41 @@ interface Props {
   onCloseEventModal: () => any;
   history: any;
   classes: any;
+  me: any;
+  getMeStatus: string;
 }
 
-class EventModal extends Component<Props> {
+interface State{
+  open: boolean;
+}
+
+class EventModal extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      open: false,
+    };
+  }
+
+  componentDidUpdate(prevProps: Props) {
+    const date = new Date();
+    if (this.props.getMeStatus === userStatus.FAILURE) {
+      // eslint-disable-next-line react/no-did-update-set-state
+      this.setState({ open: true });
+    }
+  }
+
   clickCancelHandler() {
-    this.props.onCloseEventModal();
+    this.setState({ open: false });
   }
 
   render() {
     const { classes } = this.props;
+
+
     return (
       <Modal
-        show={this.props.eventModal}
+        show={this.state.open}
         onHide={() => this.clickCancelHandler()}
       >
         <Modal.Header>
@@ -104,6 +128,8 @@ class EventModal extends Component<Props> {
 
 const mapStateToProps = (state: any) => ({
   eventModal: state.state.modal.eventModal,
+  me: state.user.me,
+  getMeStatus: state.user.getMeStatus,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({

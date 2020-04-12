@@ -32,7 +32,7 @@ class PaymentForm extends Component<Props> {
               required
               id="lastName"
               name="lastName"
-              label="입금자 명의"
+              label="입금자 이름"
               fullWidth
               autoComplete="lname"
               onChange={(e) => this.props.changePayer(e)}
