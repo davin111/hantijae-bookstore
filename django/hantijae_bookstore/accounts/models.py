@@ -14,10 +14,10 @@ class Basket(BaseModel):
     COMPLETED = 4
 
     BASKET_STATUS = (
-        (NONE, 'none'),
-        (ORDERED, 'ordered'),
-        (PAID, 'paid'),
-        (COMPLETED, 'completed'),
+        (NONE, '책 담는 중'),
+        (ORDERED, '주문 완료'),
+        (PAID, '입금 확인'),
+        (COMPLETED, '배송 완료'),
     )
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='baskets', on_delete=models.CASCADE)
