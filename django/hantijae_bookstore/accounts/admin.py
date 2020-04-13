@@ -44,7 +44,7 @@ class BasketAdmin(admin.ModelAdmin):
     list_filter = ['status']
     list_display = ['id', 'status', '_user', 'name', 'email', 'phone_number', 'payer', 'receiver_name', 'address',
                     'book_count', 'total_price', '_updated_at']
-    fields = ['_user', 'first_name', 'email', 'phone_number', 'payer', 'receiver_first_name', 'address', 'postal_code',
+    fields = ['status', '_user', 'first_name', 'email', 'phone_number', 'payer', 'receiver_first_name', 'address', 'postal_code',
               'book_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
     readonly_fields = ['_user', 'book_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
     search_fields = ['first_name', 'email', 'receiver_first_name']
