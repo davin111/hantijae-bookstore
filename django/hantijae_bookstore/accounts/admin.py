@@ -40,20 +40,20 @@ class UserAdmin(admin.ModelAdmin):
 
 
 class BasketAdmin(admin.ModelAdmin):
-    actions = ['set_ordered', 'set_paid', 'set_completed']
-    list_filter = ['status']
+    actions = ['set_ordered', 'set_paid', 'set_sent', 'set_received', 'set_invalid', 'mark_manual']
+    list_filter = ['status', 'manual']
     list_display = ['id', 'status', '_user', 'name', 'email', 'phone_number', 'payer', 'receiver_name', 'address',
-                    'book_count', 'total_price', '_updated_at']
+                    'book_count', 'total_price', '_updated_at', '_manual']
     fields = ['status', '_user', 'first_name', 'email', 'phone_number', 'payer', 'receiver_first_name', 'address', 'postal_code',
               'book_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
     readonly_fields = ['_user', 'book_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
-    search_fields = ['first_name', 'email', 'receiver_first_name']
+    search_fields = ['first_name', 'email', 'receiver_first_name', 'user__username', 'user__first_name', 'user__email']
 
     def _user(self, basket):
         user = basket.user
         if user.anonymous:
             return '비회원'
-        return mark_safe(f'<a href="/admin/accounts/user/{user.id}/">{user.username}</a>')
+        return mark_safe(f'<a href="/admin/accounts/user/{user.id}/">{user.username}({user.first_name})</a>')
 
     def name(self, basket):
         return basket.first_name
@@ -73,6 +73,12 @@ class BasketAdmin(admin.ModelAdmin):
     def _updated_at(self, basket):
         return basket.updated_at + timedelta(hours=9)
 
+    def _manual(self, basket):
+        return basket.manual
+
+    _manual.short_description = '직접 입력한 주문'
+    _manual.boolean = True
+
     def set_ordered(self, request, queryset):
         rows_updated = queryset.update(status=Basket.ORDERED)
         self.message_user(request, f"{rows_updated} 개의 책바구니를 '주문 완료' 상태로 만들었습니다.")
@@ -85,11 +91,29 @@ class BasketAdmin(admin.ModelAdmin):
 
     set_paid.short_description = "'입금 확인' 상태로 만들기"
 
-    def set_completed(self, request, queryset):
-        rows_updated = queryset.update(status=Basket.COMPLETED)
-        self.message_user(request, f"{rows_updated} 개의 책바구니를 '배송 완료' 상태로 만들었습니다.")
+    def set_sent(self, request, queryset):
+        rows_updated = queryset.update(status=Basket.SENT)
+        self.message_user(request, f"{rows_updated} 개의 책바구니를 '발송 완료' 상태로 만들었습니다.")
 
-    set_completed.short_description = "'배송 완료' 상태로 만들기"
+    set_sent.short_description = "'발송 완료' 상태로 만들기"
+
+    def set_received(self, request, queryset):
+        rows_updated = queryset.update(status=Basket.RECEIVED)
+        self.message_user(request, f"{rows_updated} 개의 책바구니를 '수령 확인' 상태로 만들었습니다.")
+
+    set_received.short_description = "'수령 확인' 상태로 만들기"
+
+    def set_invalid(self, request, queryset):
+        rows_updated = queryset.update(status=Basket.INVALID)
+        self.message_user(request, f"{rows_updated} 개의 책바구니를 '유효하지 않음' 상태로 만들었습니다.")
+
+    set_invalid.short_description = "'유효하지 않음' 상태로 만들기"
+
+    def mark_manual(self, request, queryset):
+        rows_updated = queryset.update(manual=True)
+        self.message_user(request, f"{rows_updated} 개의 책바구니를 '직접 입력한 주문'으로 표시했습니다.")
+
+    mark_manual.short_description = "'직접 입력한 주문'으로 표시하기"
 
 admin.site.register(User, UserAdmin)
 admin.site.register(Basket, BasketAdmin)

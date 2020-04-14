@@ -60,6 +60,9 @@ class AddressForm extends Component<Props> {
         <Typography variant="h6" gutterBottom>
           주문 정보 입력
         </Typography>
+        <Typography variant="body2" gutterBottom>
+          * 표시가 된 곳만 필수항목입니다.
+        </Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} sm={12}>
             <TextField

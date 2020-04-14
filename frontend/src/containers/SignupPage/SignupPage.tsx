@@ -63,6 +63,7 @@ interface State {
   username: string;
   email: string;
   password: string;
+  passwordConfirm: string;
   familyName: string;
   givenName: string;
   notifiable: boolean;
@@ -78,9 +79,10 @@ class SignupPage extends Component<Props, State> {
       username: '',
       email: '',
       password: '',
+      passwordConfirm: '',
       familyName: '',
       givenName: '',
-      notifiable: false,
+      notifiable: true,
       idValidated: true,
       passwordValidated: true,
       emailValidated: true,
@@ -108,11 +110,10 @@ class SignupPage extends Component<Props, State> {
     if (emailRegExp.test(this.state.email)) {
       this.setState({ emailValidated: true });
     } else {
-      this.setState({ emailValidated: false });
+      this.setState({ emailValidated: true });
     }
 
-    if (idRegExp.test(this.state.username) && passwordRegExp.test(this.state.password)
-      && emailRegExp.test(this.state.email)) {
+    if (idRegExp.test(this.state.username) && passwordRegExp.test(this.state.password)) {
       this.props.onSignup(this.state.username, this.state.email, this.state.password,
         this.state.familyName, this.state.givenName, this.state.notifiable)
         .then(() => {
@@ -151,6 +152,14 @@ class SignupPage extends Component<Props, State> {
       warning = (
         <Typography variant="h6" color="secondary" align="center">
           잘못된 아이디 형식입니다.
+        </Typography>
+      );
+    }
+
+    if (this.state.password !== this.state.passwordConfirm) {
+      warning = (
+        <Typography variant="body1" color="secondary" align="center">
+          비밀번호와 비밀번호 확인 란의 내용이 일치하지 않습니다.
         </Typography>
       );
     }
@@ -218,6 +227,20 @@ class SignupPage extends Component<Props, State> {
                   autoComplete="current-password"
                   helperText="숫자와 특수문자를 각 1회 이상 사용해 8글자 이상으로 만들어주세요."
                   onChange={(e) => this.setState({ password: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  variant="outlined"
+                  required
+                  fullWidth
+                  name="password"
+                  label="비밀번호 확인"
+                  type="password"
+                  id="password"
+                  autoComplete="current-password"
+                  helperText="비밀번호를 한 번 더 입력해주세요."
+                  onChange={(e) => this.setState({ passwordConfirm: e.target.value })}
                 />
               </Grid>
               <Grid item xs={12}>
