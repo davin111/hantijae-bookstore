@@ -44,7 +44,7 @@ class Basket(BaseModel):
         db_table = 'accounts_basket'
 
     def __str__(self):
-        return f'{self.user.username} - Basket {self.id}'
+        return f'{self.user.username}({self.user.first_name}) - Basket {self.id}'
 
     @property
     def book_count(self):
@@ -83,4 +83,4 @@ class User(AbstractUser):
         db_table = 'accounts_user'
     
     def __str__(self):
-        return self.username
+        return f'{self.username}({self.first_name})'
