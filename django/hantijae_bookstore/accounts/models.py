@@ -8,22 +8,27 @@ from books.models import Book
 from core.models import BaseModel
 
 class Basket(BaseModel):
+    INVALID = -1
     NONE = 1
     ORDERED = 2
     PAID = 3
-    COMPLETED = 4
+    SENT = 4
+    RECEIVED = 5
 
     BASKET_STATUS = (
+        (INVALID, '유효하지 않음'),
         (NONE, '책 담는 중'),
         (ORDERED, '주문 완료'),
         (PAID, '입금 확인'),
-        (COMPLETED, '배송 완료'),
+        (SENT, '발송 완료'),
+        (RECEIVED, '수령 확인')
     )
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='baskets', on_delete=models.CASCADE)
     max_book_count = models.PositiveSmallIntegerField(default=10)
     max_price = models.PositiveIntegerField(default=100000)
     status = models.IntegerField(choices=BASKET_STATUS, default=NONE)
+    manual = models.BooleanField(default=False, help_text="직접 입력한 주문")
 
     last_name = models.CharField(max_length=300, blank=True)
     first_name = models.CharField(max_length=300, blank=True)

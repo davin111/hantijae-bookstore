@@ -82,7 +82,9 @@ class MyPage extends Component<Props> {
       } else if (order.status === 3) {
         bookBasketStatus = '입금 확인';
       } else if (order.status === 4) {
-        bookBasketStatus = '배송 완료';
+        bookBasketStatus = '발송 완료';
+      } else if (order.status === 5) {
+        bookBasketStatus = '수령 확인';
       }
 
       let postalCode = null;
