@@ -9,6 +9,7 @@ class UserAdmin(admin.ModelAdmin):
     list_display = ['id', 'username', 'name', 'email', '_notifiable', '_created_at', '_last_login']
     fields = ['username', 'first_name', 'email', '_created_at', '_last_login', 'baskets']
     readonly_fields = ['_created_at', '_last_login', 'baskets']
+    search_fields = ['username', 'first_name', 'email']
 
     def get_queryset(self, request):
         return super().get_queryset(request).filter(anonymous=False)
@@ -87,7 +88,9 @@ class BasketAdmin(admin.ModelAdmin):
         return mark_safe(result)
 
     def _updated_at(self, basket):
-        return basket.updated_at + timedelta(hours=9)
+        if basket.updated_at:
+            return basket.updated_at + timedelta(hours=9)
+        return None
 
     def _manual(self, basket):
         return basket.manual
