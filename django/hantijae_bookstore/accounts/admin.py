@@ -39,12 +39,28 @@ class UserAdmin(admin.ModelAdmin):
         return mark_safe(result)
 
 
+class ManualFilter(admin.SimpleListFilter):
+    title = '직접 입력한 주문'
+    parameter_name = 'manual'
+
+    def lookups(self, request, model_admin):
+        return [
+            (True, '네'),
+            (False, '아니요')
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            queryset = queryset.filter(manual=self.value())
+        return queryset
+
+
 class BasketAdmin(admin.ModelAdmin):
-    actions = ['set_ordered', 'set_paid', 'set_sent', 'set_received', 'set_invalid', 'mark_manual']
-    list_filter = ['status', 'manual']
+    actions = ['set_ordered', 'set_paid', 'set_sent', 'set_received', 'set_invalid', 'mark_manual', 'unmark_manual']
+    list_filter = ['status', ManualFilter]
     list_display = ['id', 'status', '_user', 'name', 'email', 'phone_number', 'payer', 'receiver_name', 'address',
                     'book_count', 'total_price', '_updated_at', '_manual']
-    fields = ['status', '_user', 'first_name', 'email', 'phone_number', 'payer', 'receiver_first_name', 'address', 'postal_code',
+    fields = ['status', 'manual', '_user', 'first_name', 'email', 'phone_number', 'payer', 'receiver_first_name', 'address', 'postal_code',
               'book_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
     readonly_fields = ['_user', 'book_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
     search_fields = ['first_name', 'email', 'receiver_first_name', 'user__username', 'user__first_name', 'user__email']
@@ -114,6 +130,12 @@ class BasketAdmin(admin.ModelAdmin):
         self.message_user(request, f"{rows_updated} 개의 책바구니를 '직접 입력한 주문'으로 표시했습니다.")
 
     mark_manual.short_description = "'직접 입력한 주문'으로 표시하기"
+
+    def unmark_manual(self, request, queryset):
+        rows_updated = queryset.update(manual=False)
+        self.message_user(request, f"{rows_updated} 개의 책바구니의 '직접 입력한 주문' 표시를 취소했습니다.")
+
+    unmark_manual.short_description = "'직접 입력한 주문' 표시 취소하기"
 
 admin.site.register(User, UserAdmin)
 admin.site.register(Basket, BasketAdmin)
