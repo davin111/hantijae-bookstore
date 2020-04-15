@@ -20,7 +20,7 @@ class PaymentForm extends Component<Props> {
         <Typography variant="h6" gutterBottom>
           계좌 입금 정보
         </Typography>
-        <Typography variant="body1" gutterBottom>
+        <Typography variant="body1" color="secondary" gutterBottom>
           입금할 계좌는 주문하기가 완료된 후 알려드리겠습니다.
         </Typography>
         <Grid container spacing={3}>
