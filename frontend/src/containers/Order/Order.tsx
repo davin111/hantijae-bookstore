@@ -359,7 +359,14 @@ class Order extends Component<Props, State> {
                   <Typography variant="h6" gutterBottom>
                     한티재 10주년 기념 특판 이벤트에 참여해 주셔서 고맙습니다!
                   </Typography>
+                  <Typography variant="subtitle1" color="secondary" gutterBottom>
+                    다음 계좌로 입금 부탁드립니다. MyPage에서도 계좌 확인이 가능합니다.
+                  </Typography>
+                  <Typography variant="h6" color="primary" gutterBottom>
+                    국민은행 618701-04-129813 오은지(도서출판 한티재)
+                  </Typography>
                   <Typography variant="subtitle1">
+                    <br />
                     문의: 053-743-8368
                     <br />
                     hantibooks@gmail.com
@@ -370,7 +377,7 @@ class Order extends Component<Props, State> {
                     color="secondary"
                     variant="outlined"
                   >
-                    MyPage에서 확인하기
+                    MyPage에서 주문 확인하기
                   </Button>
                 </>
               ) : (

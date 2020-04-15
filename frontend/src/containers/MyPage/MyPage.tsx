@@ -67,6 +67,9 @@ class MyPage extends Component<Props> {
     return orders.map((order: any) => {
       let bookBasketStatus = '책 담는 중';
       let accountInfo = null;
+      if (order.status === -1) {
+        bookBasketStatus = '유효하지 않음';
+      }
       if (order.status === 2) {
         bookBasketStatus = '주문 완료';
         accountInfo = (

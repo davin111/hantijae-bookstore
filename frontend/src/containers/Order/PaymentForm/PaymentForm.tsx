@@ -20,11 +20,8 @@ class PaymentForm extends Component<Props> {
         <Typography variant="h6" gutterBottom>
           계좌 입금 정보
         </Typography>
-        <Typography variant="body1" gutterBottom>
-          다음 계좌로 입금 부탁드립니다.
-        </Typography>
-        <Typography variant="body1" gutterBottom>
-          국민은행 618701-04-129813 오은지(도서출판 한티재)
+        <Typography variant="body1" color="secondary" gutterBottom>
+          입금할 계좌는 주문하기가 완료된 후 알려드리겠습니다.
         </Typography>
         <Grid container spacing={3}>
           <Grid item xs={12}>
