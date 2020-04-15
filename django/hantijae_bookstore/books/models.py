@@ -51,7 +51,7 @@ class Book(BaseModel):
     size = models.CharField(max_length=100, null=True)
     category = models.ForeignKey(Category, related_name='books', on_delete=models.CASCADE)
     published_date = models.DateField(db_index=True)
-    visible = models.BooleanField(default=True)
+    visible = models.BooleanField(default=True, help_text="판매 중")
 
     class Meta:
         db_table = 'books_book'
@@ -87,11 +87,13 @@ class BookAuthor(models.Model):
     PLANNER = 3
     COMPILER = 4
     AUTHOR_TYPES = (
-        (NORMAL, 'normal'),
-        (TRANSLATOR, 'translator'),
-        (PLANNER, 'planner'),
-        (COMPILER, 'compiler')
+        (NORMAL, '저자'),
+        (TRANSLATOR, '번역자'),
+        (PLANNER, '기획자'),
+        (COMPILER, '엮은이')
     )
+
+    TYPE_TO_KOREAN = {k: v for k, v in AUTHOR_TYPES}
 
     book = models.ForeignKey(Book, related_name='authors', on_delete=models.CASCADE)
     author = models.ForeignKey(Author, related_name='books', on_delete=models.CASCADE)
