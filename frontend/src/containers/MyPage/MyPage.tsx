@@ -262,10 +262,10 @@ class MyPage extends Component<Props> {
               </Typography>
             </ListItem>
           </div>
-          <Typography variant="h6" gutterBottom>
+          {/* <Typography variant="h6" gutterBottom>
             주문 내역
           </Typography>
-          {orders}
+          {orders} */}
         </main>
       </Container>
     );
