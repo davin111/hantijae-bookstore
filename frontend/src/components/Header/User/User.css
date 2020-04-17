@@ -34,7 +34,7 @@
 .UserPictire img {
   height: 80%;
   vertical-align: middle;
-  cursor: pointer;
+  /* cursor: pointer; */
 }
 .BasketCount {
   background-color: #E52723;
@@ -51,7 +51,7 @@
   align-self: flex-start;
   margin-top: auto;
   margin-bottom: auto;
-  cursor: pointer;
+  /* cursor: pointer; */
   visibility: visible;
   margin-right: 5%;
 }

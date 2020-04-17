@@ -1,5 +1,5 @@
 .BookDetailUpper {
-    background-color: #FFFFFF;
+    background-color: #FAFAFA;
     height: 50%;
     width: 100%;
     position: relative;
@@ -41,7 +41,7 @@
     float: left;
 }
 .BookDetailInfo {
-    background-color: #FFFFFF;
+    background-color: #FAFAFA;
     height: 80%;
     width: 70%;
     float: right;

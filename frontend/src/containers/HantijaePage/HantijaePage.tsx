@@ -32,7 +32,7 @@ class HantijaePage extends Component<Props> {
             사람과 사람, 사람과 자연, 오늘 세대와 내일 세대가 공존하는 사회에 보탬이 되는 책을 만들기 위해 노력하고 있습니다.
           </p>
         </div>
-        <hr className="HantijaeCenterLine" />
+        {/* <hr className="HantijaeCenterLine" />
         <h3 className="EventTitle">
           한티재 10주년 기념 ‘10권 10만 원 책바구니’ 특판 이벤트를 진행하고 있습니다!
         </h3>
@@ -50,7 +50,7 @@ class HantijaePage extends Component<Props> {
           <li>
             문의: hantibooks@gmail.com / 053-743-8368
           </li>
-        </p>
+        </p> */}
       </div>
     );
   }

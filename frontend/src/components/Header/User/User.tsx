@@ -85,10 +85,10 @@ class User extends Component<Props> {
         </Button>
         <div className="UserPictire">
           {/* eslint-disable-next-line */}
-          <img src={BookBasketImg} onClick={() => this.props.history.push('/bookbasket')}/>
+          <img src={BookBasketImg} />
         </div>
         {/* eslint-disable-next-line */}
-      <div className="BasketCount" onClick={() => this.props.history.push('/bookbasket')}>{bookCount}</div>
+      {/* <div className="BasketCount" >{bookCount}</div> */}
         {logButton}
       </div>
     );
