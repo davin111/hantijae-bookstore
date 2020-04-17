@@ -55,7 +55,7 @@ class EventModal extends Component<Props, State> {
     if (prevProps.getMeStatus !== this.props.getMeStatus || prevProps.me !== this.props.me) {
       if (this.props.getMeStatus === userStatus.FAILURE) {
       // eslint-disable-next-line react/no-did-update-set-state
-        this.setState({ open: true });
+        this.setState({ open: false });
       }
     }
   }

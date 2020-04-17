@@ -55,30 +55,31 @@ class BookDetail extends Component<Props, State> {
       img = <img src={require(`./book_covers_3d/${this.state.book.title.replace(':', '').replace('!', '')}.png`)} />;
 
       if (this.state.book.visible) {
-        if (this.state.book.published_date.split('-')[0] === '2020') {
-          if (this.state.book.id === 108) {
-            bookCart = (
-              // eslint-disable-next-line
-              <h3 className="DetailNotAcceptable"
-                onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=225033583')}
-              >
-                특판 이벤트에서 올해 나온 신간은 제외됩니다
-              </h3>
-            );
-          } else {
-            bookCart = (
-              <h3 className="DetailNotAcceptable">
-                특판 이벤트에서 올해 나온 신간은 제외됩니다
-              </h3>
-            );
-          }
-        } else {
-          bookCart = (
-            <div className="DetailCart">
-              <BookCountWithCart bookId={this.state.book.id} history={this.props.history} />
-            </div>
-          );
-        }
+        bookCart = null;
+        // if (this.state.book.published_date.split('-')[0] === '2020') {
+        //   if (this.state.book.id === 108) {
+        //     bookCart = (
+        //       // eslint-disable-next-line
+        //       <h3 className="DetailNotAcceptable"
+        //         onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=225033583')}
+        //       >
+        //         특판 이벤트에서 올해 나온 신간은 제외됩니다
+        //       </h3>
+        //     );
+        //   } else {
+        //     bookCart = (
+        //       <h3 className="DetailNotAcceptable">
+        //         특판 이벤트에서 올해 나온 신간은 제외됩니다
+        //       </h3>
+        //     );
+        //   }
+        // } else {
+        //   bookCart = (
+        //     <div className="DetailCart">
+        //       <BookCountWithCart bookId={this.state.book.id} history={this.props.history} />
+        //     </div>
+        //   );
+        // }
       } else {
         bookCart = <h3 className="DetailNotVisible">절판</h3>;
       }
