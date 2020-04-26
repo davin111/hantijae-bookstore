@@ -128,6 +128,7 @@ class SignupPage extends Component<Props, State> {
   render() {
     const { classes } = this.props;
     let warning = null;
+    const koreanRegExp = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/;
     if (this.props.signupStatus === userStatus.FAILURE_USERNAME) {
       warning = (
         <Typography variant="h6" color="secondary" align="center">
@@ -161,6 +162,13 @@ class SignupPage extends Component<Props, State> {
       warning = (
         <Typography variant="body1" color="secondary" align="center">
           비밀번호와 비밀번호 확인 란의 내용이 일치하지 않습니다.
+        </Typography>
+      );
+    }
+    if (koreanRegExp.test(this.state.password) || koreanRegExp.test(this.state.passwordConfirm)) {
+      warning = (
+        <Typography variant="body1" color="secondary" align="center">
+          한영 키를 확인하고 비밀번호를 다시 입력해주세요.
         </Typography>
       );
     }
@@ -232,7 +240,8 @@ class SignupPage extends Component<Props, State> {
                   type="password"
                   id="password"
                   autoComplete="current-password"
-                  helperText="숫자와 특수문자를 각 1회 이상 사용해 8글자 이상으로 만들어주세요."
+                  ime-mode="inactive"
+                  helperText="숫자와 특수문자(~`!@#$%^&*()-+=)를 각 1회 이상, 영문자 2회 이상 사용해 8글자 이상으로 만들어주세요."
                   onChange={(e) => this.setState({ password: e.target.value })}
                 />
               </Grid>
