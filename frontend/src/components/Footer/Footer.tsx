@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import Grid from '@material-ui/core/Grid';
 import Button from '@material-ui/core/Button';
+import YouTubeIcon from '@material-ui/icons/YouTube';
 import FacebookIcon from '@material-ui/icons/Facebook';
 import InstagramIcon from '@material-ui/icons/Instagram';
 import TwitterIcon from '@material-ui/icons/Twitter';
@@ -40,10 +41,10 @@ class Footer extends Component<Props> {
                       variant="contained"
                       color="default"
                       size="small"
-                      onClick={() => window.open('http://blog.naver.com/hanti_books')}
-                      endIcon={<NotesIcon />}
+                      onClick={() => window.open('https://www.youtube.com/channel/UCL_2QimPtgoDX3Y8e0qOBOA')}
+                      endIcon={<YouTubeIcon />}
                     >
-                      한티재 Blog
+                      한티재 YouTube
                     </Button>
                     <div className="ButtonGap" />
                     <Button
@@ -77,6 +78,17 @@ class Footer extends Component<Props> {
                       endIcon={<TwitterIcon />}
                     >
                       한티재 Twitter
+                    </Button>
+                    <div className="ButtonGap" />
+                    <Button
+                      type="button"
+                      variant="contained"
+                      color="default"
+                      size="small"
+                      onClick={() => window.open('http://blog.naver.com/hanti_books')}
+                      endIcon={<NotesIcon />}
+                    >
+                      한티재 Blog
                     </Button>
                   </div>
                 </Grid>

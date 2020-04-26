@@ -141,6 +141,9 @@
         padding: 6px;
     }
 }
+.NotAcceptable:hover {
+    background-color: rgb(93, 140, 190);
+}
 .NotVisible {
     position: absolute;
     bottom: 0%;

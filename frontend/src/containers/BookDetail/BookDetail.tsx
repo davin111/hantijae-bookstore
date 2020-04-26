@@ -1,5 +1,6 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
+import ReactPlayer from 'react-player';
 
 import { bookActions } from '../../store/actions';
 import './BookDetail.css';
@@ -85,6 +86,22 @@ class BookDetail extends Component<Props, State> {
       }
     }
 
+    let video = null;
+    if (this.state.book.id === 109) {
+      video = (
+        <div className="BookDetailYouTubeWrapper">
+          <div className="BookDetailYouTubeTitle">
+            저자 인터뷰
+          </div>
+          <ReactPlayer
+            className="BookDetailYouTube"
+            url="https://www.youtube.com/watch?v=SGU5AzdzMNg"
+            playing
+            controls
+          />
+        </div>
+      );
+    }
 
     const { book } = this.props;
 
@@ -142,6 +159,7 @@ class BookDetail extends Component<Props, State> {
         <LoginModal history={this.props.history} />
         <FullBasketModal history={this.props.history} />
         <BasketInfoModal history={this.props.history} />
+        {video}
         <div className="BookDescriptions">
           <p>
             {desc}

@@ -5,7 +5,7 @@
     position: relative;
     transition: 0.3s;
     float: left;
-    margin-bottom: 5%;
+    margin-bottom: 2%;
 }
 @media all and (max-width:768px) {
     .HantijaeUpper {
@@ -31,9 +31,9 @@
     width: 100%;
     max-width: 40%;
     position: absolute;
-    margin-top: 10%;
-    top: 0%;
-    left: 2%;
+    margin-top: 12%;
+    top: -5%;
+    left: 3%;
     text-align: center;
 }
 @media all and (max-width:768px) {
@@ -45,8 +45,8 @@
     }
 }
 .HantijaeImage img {
-    min-height: 200px;
-    max-width: 400px;
+    min-height: 150px;
+    max-width: 300px;
     vertical-align: middle;
     align-self: center;
     float: center;
@@ -55,8 +55,8 @@
 }
 @media all and (max-width:1024px) {
     .HantijaeImage img {
-        min-height: 200px;
-        max-width: 350px;
+        min-height: 150px;
+        max-width: 300px;
     }
 }
 @media all and (max-width:810px) {
@@ -71,7 +71,7 @@
     font-size: 1.1em;
     margin-left: 45%;
     margin-right: 5%;
-    margin-bottom: 15%;
+    margin-bottom: 10%;
     text-align: justify;
     float: left;
     line-height: 180%;
@@ -95,8 +95,14 @@
      }
 }
 
+.NewBookTitle {
+    padding-top: 2%;
+    padding-bottom: 1%;
+    font-size: 1.2em;
+    text-align: center;
+}
+
 .EventTitle {
-    padding-top: 3%;
     font-size: 2em;
     font-weight: 350;
     color: #515280;
@@ -108,13 +114,50 @@
         width: 80%;
      }
 }
+
+.NewBookStand {
+    background-color: #FAFAFA;
+    padding: 3%;
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+}
+@media all and (max-width:768px) {
+    .NewBookStand {
+        height: 50%;
+        width: 80%;
+        max-width: 100%;
+        position: relative;
+    }
+}
+.NewBookStand img {
+    min-height: 400px;
+    max-width: 400px;
+    vertical-align: middle;
+    align-self: center;
+    border-radius: 1.5em;
+    margin-left: auto;
+    margin-right: auto;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.1);
+}
+
+.HantijaeYouTube {
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 2%;
+}
+@media all and (max-width:768px) {
+    .HantijaeYouTube {
+        max-width: 95%;
+    }
+}
+
 .EventDescription {
     width: 80%;
     margin-left: auto;
     margin-right: auto;
     text-align: left;
     font-size: 1em;
-    text-indent: -1.5em;
     line-height: 2em;
 }
 @media all and (max-width:768px) {

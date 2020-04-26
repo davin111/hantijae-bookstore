@@ -31,7 +31,7 @@ class Main extends Component<Props> {
         <LoginModal history={this.props.history} />
         <FullBasketModal history={this.props.history} />
         <BasketInfoModal history={this.props.history} />
-        {/* <EventModal history={this.props.history} /> */}
+        <EventModal history={this.props.history} />
       </div>
     );
   }

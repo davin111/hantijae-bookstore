@@ -45,30 +45,28 @@ class Book extends Component<BookProps> {
     let bookCart = null;
     if (this.props.visible) {
       bookCart = null;
-      // if (this.props.published_date.split('-')[0] === '2020') {
-      //   if (this.props.id === 108) {
-      //     bookCart = (
-      //       // eslint-disable-next-line
-      //       <h3 className="NotAcceptable"
-      //         onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=225033583')}
-      //       >
-      //         특판 이벤트에서 올해 나온 신간은 제외됩니다
-      //       </h3>
-      //     );
-      //   } else {
-      //     bookCart = (
-      //       <h3 className="NotAcceptable">
-      //         특판 이벤트에서 올해 나온 신간은 제외됩니다
-      //       </h3>
-      //     );
-      //   }
-      // } else {
-      //   bookCart = (
-      //     <div className="BookListCart">
-      //       <BookCountWithCart bookId={this.props.id} history={this.props.history} />
-      //     </div>
-      //   );
-      // }
+      if (this.props.published_date.split('-')[0] === '2020') {
+        if (this.props.id === 108) {
+          bookCart = (
+            // eslint-disable-next-line
+            <h3 className="NotAcceptable"
+              onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=225033583')}
+            >
+              한티재 신간
+            </h3>
+          );
+        } else {
+          bookCart = (
+            // eslint-disable-next-line
+            <h3
+              className="NotAcceptable"
+              onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=237230373')}
+            >
+              한티재 신간
+            </h3>
+          );
+        }
+      }
     } else {
       bookCart = <h3 className="NotVisible">절판</h3>;
     }
