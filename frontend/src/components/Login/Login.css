@@ -20,6 +20,9 @@
     right: 0;
     bottom: 0;
     left: 0;
+    width: 95%;
+    margin-left: 2%;
+    margin-right: auto;
     z-index: 1050;
     display: none;
     overflow: hidden;
