@@ -50,7 +50,7 @@ class User extends Component<Props> {
           type="button"
           onClick={() => this.props.history.push('/login')}
           variant="contained"
-          color="primary"
+          color="secondary"
           size="small"
         >
           로그인
@@ -83,10 +83,53 @@ class User extends Component<Props> {
         >
           {username}
         </Button>
-        <div className="UserPictire">
-          {/* eslint-disable-next-line */}
+        <Button
+          type="button"
+          onClick={() => window.open(
+            'https://search.kyobobook.co.kr/web/search?vPstrKeyWord=%ED%95%9C%ED%8B%B0%EC%9E%AC&orderClick=LAW&searchPubCd=26867&searchPcondition=1',
+          )}
+          variant="contained"
+          color="primary"
+          size="small"
+        >
+          교보문고
+        </Button>
+        <Button
+          type="button"
+          onClick={() => window.open(
+            'https://www.aladin.co.kr/search/wsearchresult.aspx?PublisherSearch=%c7%d1%c6%bc%c0%e7@48149&BranchType=1',
+          )}
+          variant="contained"
+          color="primary"
+          size="small"
+        >
+          알라딘
+        </Button>
+        <Button
+          type="button"
+          onClick={() => window.open(
+            'http://www.yes24.com/SearchCorner/Search/List?detail_yn=Y&query=%uD55C%uD2F0%uC7AC&domain=BOOK&disp_no=&title=&theme=&author=&company=%uD55C%uD2F0%uC7AC&isbn=&sPrice=&ePrice=&sYear=&sMonth=1&eYear=&eMonth=1&scode=004',
+          )}
+          variant="contained"
+          color="primary"
+          size="small"
+        >
+          yes24
+        </Button>
+        <Button
+          type="button"
+          onClick={() => window.open(
+            'http://bsearch.interpark.com/dsearch/book.jsp?sch=all&query=%C7%D1%C6%BC%C0%E7',
+          )}
+          variant="contained"
+          color="primary"
+          size="small"
+        >
+          인터파크
+        </Button>
+        {/* <div className="UserPictire">
           <img src={BookBasketImg} />
-        </div>
+        </div> */}
         {/* eslint-disable-next-line */}
       {/* <div className="BasketCount" >{bookCount}</div> */}
         {logButton}
