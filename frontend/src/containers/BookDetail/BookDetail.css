@@ -15,7 +15,6 @@
     }
 }
 .BookCoverStand {
-    background-color: #FAFAFA;
     height: 100%;
     width: 100%;
     max-width: 40%;
@@ -33,11 +32,12 @@
     }
 }
 .BookCoverStand img {
-    min-height: 100%;
-    max-width: 100%;
+    min-height: 90%;
+    max-width: 90%;
     vertical-align: middle;
     align-self: center;
-    /* box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); */;
+    border-radius: 1em;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.1);
     float: left;
 }
 .BookDetailInfo {

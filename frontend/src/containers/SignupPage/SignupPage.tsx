@@ -16,6 +16,7 @@ import Container from '@material-ui/core/Container';
 
 import { userStatus } from '../../constants/constants';
 import { userActions } from '../../store/actions';
+import './SignupPage.css';
 
 function Copyright() {
   return (
@@ -174,6 +175,12 @@ class SignupPage extends Component<Props, State> {
           <Typography component="h1" variant="h5">
             회원 가입
           </Typography>
+          <div className="SignupDescription">
+            한티재 10주년을 맞아 문을 연 온라인 책창고.
+            특판 이벤트는 끝났습니다만, 회원 가입은 계속 하실 수 있습니다.
+            온라인 책창고 회원이 되시면, 새 책이 나올 때마다 소식을 알려 드리고, 한티재에서 개최하는 행사에 먼저 초대하겠습니다.
+            또 일년에 한 번씩 책창고 회원들을 위한 특별한 이벤트를 열겠습니다.
+          </div>
           <form className={classes.form} noValidate>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={12}>
