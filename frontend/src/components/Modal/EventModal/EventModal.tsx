@@ -4,6 +4,7 @@ import { connect } from 'react-redux';
 import Button from '@material-ui/core/Button';
 import Typography from '@material-ui/core/Typography';
 import { withStyles, createStyles } from '@material-ui/core/styles';
+import ReactPlayer from 'react-player';
 
 import { userStatus } from '../../../constants/constants';
 import { stateActions } from '../../../store/actions';
@@ -53,10 +54,10 @@ class EventModal extends Component<Props, State> {
 
   componentDidUpdate(prevProps: Props) {
     if (prevProps.getMeStatus !== this.props.getMeStatus || prevProps.me !== this.props.me) {
-      if (this.props.getMeStatus === userStatus.FAILURE) {
+      // if (this.props.getMeStatus === userStatus.FAILURE) {
       // eslint-disable-next-line react/no-did-update-set-state
-        this.setState({ open: true });
-      }
+      this.setState({ open: true });
+      // }
     }
   }
 
@@ -86,6 +87,11 @@ class EventModal extends Component<Props, State> {
             {/* eslint-disable-next-line */}
           <img src={require('../../../containers/HantijaePage/new_book.png')} />
           </div>
+          <ReactPlayer
+            className="ModalYouTube"
+            url="https://www.youtube.com/watch?v=bW3SAa9jL9Q"
+            controls
+          />
           <Typography className="EventNoti" variant="body1">
             <Button
               type="button"

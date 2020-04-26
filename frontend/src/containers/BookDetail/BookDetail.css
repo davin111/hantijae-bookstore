@@ -5,13 +5,14 @@
     position: relative;
     transition: 0.3s;
     float: left;
-    margin-bottom: 5%;
+    margin-bottom: 8%;
 }
 @media all and (max-width:768px) {
     .BookDetailUpper {
         display: flex;
         flex-direction: column-reverse;
-        padding-bottom: 15%;
+        padding-bottom: 5%;
+        margin-bottom: 0%;
     }
 }
 .BookCoverStand {
@@ -25,6 +26,7 @@
 }
 @media all and (max-width:768px) {
     .BookCoverStand {
+        margin-top: 5%;
         height: 50%;
         width: 95%;
         max-width: 100%;
@@ -40,6 +42,13 @@
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.1);
     float: left;
 }
+@media all and (max-width:768px) {
+    .BookCoverStand img {
+        min-height: 100%;
+        max-width: 100%;
+    }
+}
+
 .BookDetailInfo {
     background-color: #FAFAFA;
     height: 80%;
@@ -135,6 +144,29 @@
         bottom: 0%;
      }
 }
+
+.BookDetailYouTubeTitle {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-bottom: 1%;
+}
+@media all and (max-width:768px) {
+    .BookDetailYouTubeTitle {
+        font-size: 1.2em;
+    }
+}
+.BookDetailYouTube {
+    margin-left: auto;
+    margin-right: auto;
+    display: inline-block;
+    margin-bottom: -5%;
+}
+@media all and (max-width:768px) {
+    .BookDetailYouTube {
+        max-width: 95%;
+    }
+}
+
 .BookDescriptions {
     margin-top: 5%;
     color: rgb(0, 0, 0);
