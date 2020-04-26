@@ -73,16 +73,20 @@ class User extends Component<Props> {
 
     return (
       <div className="User">
-        <Button
-          type="button"
-          variant="contained"
-          color="default"
-          size="small"
-          onClick={() => this.props.history.push('/mypage')}
-          endIcon={<PermIdentityIcon />}
-        >
-          {username}
-        </Button>
+        <div className="UserButtons">
+          <Button
+            type="button"
+            variant="contained"
+            color="default"
+            size="small"
+            onClick={() => this.props.history.push('/mypage')}
+            endIcon={<PermIdentityIcon />}
+          >
+            {username}
+          </Button>
+          {logButton}
+      </div>
+      <div className="BookStoreLinkButtons">
         <Button
           type="button"
           onClick={() => window.open(
@@ -132,7 +136,7 @@ class User extends Component<Props> {
         </div> */}
         {/* eslint-disable-next-line */}
       {/* <div className="BasketCount" >{bookCount}</div> */}
-        {logButton}
+      </div>
       </div>
     );
   }

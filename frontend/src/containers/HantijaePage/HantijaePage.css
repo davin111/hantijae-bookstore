@@ -140,6 +140,12 @@
     margin-right: auto;
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.1);
 }
+@media all and (max-width:768px) {
+    .NewBookStand img {
+        min-height: 300px;
+        max-width: 300px;
+    }
+}
 
 .HantijaeYouTube {
     margin-left: auto;
