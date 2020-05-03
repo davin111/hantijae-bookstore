@@ -9,7 +9,7 @@ class BookAdmin(admin.ModelAdmin):
     fields = ['title', 'subtitle', 'author_list', 'short_description', 'description', 'full_price', 'price', 'isbn', 'page_count',
               'size', 'series_list', 'category', 'published_date', 'visible', 'kyobo_url', 'aladin_url', 'yes24_url', 'interpark_url']
     readonly_fields = ['author_list', 'series_list']
-    search_fields = ['title', 'subtitle', 'authors__name']
+    search_fields = ['title', 'subtitle', 'authors__author__name']
 
     def author_list(self, book):
         book_authors = book.authors.all()
