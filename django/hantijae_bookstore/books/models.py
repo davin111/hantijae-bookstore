@@ -52,6 +52,11 @@ class Book(BaseModel):
     category = models.ForeignKey(Category, related_name='books', on_delete=models.CASCADE)
     published_date = models.DateField(db_index=True)
     visible = models.BooleanField(default=True, help_text="판매 중")
+    kyobo_url = models.URLField(max_length=500, null=False, blank=True)
+    aladin_url = models.URLField(max_length=500, null=False, blank=True)
+    yes24_url = models.URLField(max_length=500, null=False, blank=True)
+    interpark_url = models.URLField(max_length=500, null=False, blank=True)
+
 
     class Meta:
         db_table = 'books_book'
