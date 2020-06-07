@@ -197,7 +197,11 @@ class Login extends Component<Props, State> {
               <Grid item xs>
                 {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
                 <Link variant="body2">
-                  비밀번호를 잊으셨나요? (현재 지원하지 않습니다)
+                  비밀번호를 잊으셨나요?
+                  <br />
+                  가입하신 이름, 아이디, 이메일을 010-9902-0178로
+                  <br />
+                  문자 또는 카카오톡으로 보내주시면 도와드립니다.
                 </Link>
               </Grid>
             </Grid>

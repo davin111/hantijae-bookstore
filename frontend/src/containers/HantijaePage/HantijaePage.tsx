@@ -3,20 +3,45 @@ import { connect } from 'react-redux';
 import Button from '@material-ui/core/Button';
 // import ReactPlayer from 'react-player';
 
-import { bookActions } from '../../store/actions';
+import { bookActions, stateActions, userActions } from '../../store/actions';
+import { basketStatus, userStatus } from '../../constants/constants';
+import { LoginModal, FullBasketModal, BasketInfoModal } from '../../components';
 import './HantijaePage.css';
 
 interface Props {
   location: any;
-  getBookStatus: string;
-  onGetBook: (id: number) => any;
   history: any;
+  me: any;
+  getBookStatus: string;
+  getMeStatus: string;
+  basketStatus: string;
+  onGetBook: (id: number) => any;
+  onPostBookInBasket202006NewBook: (id: number, count: number) => any;
+  onOpenLoginModal: () => any;
+  onOpenFullBasketModal: () => any;
+  onOpenBasketInfoModal: () => any;
 }
 
 class HantijaePage extends Component<Props> {
   componentDidMount() {
     window.scrollTo(0, 0);
   }
+
+  clickPostBookHandler = () => {
+    if (this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true) {
+      this.props.onOpenLoginModal();
+    } else {
+      this.props.onPostBookInBasket202006NewBook(110, 1)
+        .then(() => {
+          if (this.props.basketStatus === basketStatus.SUCCESS) {
+            this.props.onOpenBasketInfoModal();
+          }
+          if (this.props.basketStatus === basketStatus.FAILURE_MAX_BOOK) {
+            this.props.onOpenFullBasketModal();
+          }
+        });
+    }
+  };
 
   render() {
     return (
@@ -79,7 +104,16 @@ class HantijaePage extends Component<Props> {
           color="primary"
           size="medium"
         >
-          바로가기
+          책 보러가기
+        </Button>
+        <Button
+          type="button"
+          onClick={() => this.clickPostBookHandler()}
+          variant="contained"
+          color="secondary"
+          size="medium"
+        >
+          책바구니에 담기
         </Button>
         <p className="EventDescription">
           ♥ 이벤트 기간 : 2020년 6월 8일(월) ~ 6월 20일(토)
@@ -98,6 +132,9 @@ class HantijaePage extends Component<Props> {
           <br />
           ♥ 문의 : 053-743-8368 | hantibooks@gmail.com
         </p>
+        <LoginModal history={this.props.history} />
+        <FullBasketModal history={this.props.history} />
+        <BasketInfoModal history={this.props.history} />
       </div>
     );
   }
@@ -105,11 +142,20 @@ class HantijaePage extends Component<Props> {
 
 const mapStateToProps = (state: any) => ({
   getBookStatus: state.book.getBookStatus,
+  getMeStatus: state.user.getMeStatus,
+  basketStatus: state.user.basketStatus,
   book: state.book.getBook,
+  me: state.user.me,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetBook: (id: number) => dispatch(bookActions.getBook(id)),
+  onPostBookInBasket202006NewBook: (id: number, count: number) => dispatch(
+    userActions.postBookInBasket202006NewBook(id, count),
+  ),
+  onOpenLoginModal: () => dispatch(stateActions.openLoginModal()),
+  onOpenFullBasketModal: () => dispatch(stateActions.openFullBasketModal()),
+  onOpenBasketInfoModal: () => dispatch(stateActions.openBasketInfoModal()),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(HantijaePage);
