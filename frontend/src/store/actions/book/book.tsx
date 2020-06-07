@@ -98,7 +98,7 @@ const getSeriesFailure = (error: any) => ({
   target: error,
 });
 
-export const getSeries = (id: number) => (dispatch: Dispatch) => axios.get(`/api/book/series/${id}`)
+export const getSeries = (id: number) => (dispatch: Dispatch) => axios.get(`/api/book/series/${id}/`)
   .then((res) => dispatch(getSeriesSuccess(res.data)))
   .catch((err) => dispatch(getSeriesFailure(err)));
 

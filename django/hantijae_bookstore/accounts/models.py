@@ -29,6 +29,7 @@ class Basket(BaseModel):
     max_price = models.PositiveIntegerField(default=100000)
     status = models.IntegerField(choices=BASKET_STATUS, default=NONE)
     manual = models.BooleanField(default=False, help_text="직접 입력한 주문")
+    info = models.CharField(max_length=200, blank=True, help_text="이벤트 등 관련 정보")
 
     last_name = models.CharField(max_length=300, blank=True)
     first_name = models.CharField(max_length=300, blank=True)
@@ -44,7 +45,7 @@ class Basket(BaseModel):
         db_table = 'accounts_basket'
 
     def __str__(self):
-        return f'{self.user.username}({self.user.first_name}) - Basket {self.id}'
+        return f'{self.user.username}({self.user.first_name}) - Basket {self.id}({self.info})'
 
     @property
     def book_count(self):
@@ -66,6 +67,8 @@ class BookBasket(BaseModel):
     basket = models.ForeignKey(Basket, related_name='books', on_delete=models.CASCADE)
     book = models.ForeignKey(Book, related_name='baskets', on_delete=models.CASCADE)
     count = models.PositiveSmallIntegerField(default=1)
+    address = models.CharField(max_length=3000, blank=True)
+    sign = models.CharField(max_length=500, blank=True)
 
     class Meta:
         db_table = 'accounts_bookbasket'

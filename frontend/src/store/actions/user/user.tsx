@@ -85,7 +85,7 @@ const getMeFailure = (error: any) => ({
   target: error,
 });
 
-export const getMe = () => (dispatch: Dispatch) => axios.get('/api/user/me')
+export const getMe = () => (dispatch: Dispatch) => axios.get('/api/user/me/')
   .then((res) => dispatch(getMeSuccess(res.data)))
   .catch((err) => dispatch(getMeFailure(err)));
 
@@ -115,6 +115,11 @@ export const postBookInBasket = (id: number, count: number) => (dispatch: Dispat
   .then((res) => dispatch(postBookInBasketSuccess(res.data)))
   .catch((err) => dispatch(postBookInBasketFailure(err)));
 
+export const postBookInBasket202006NewBook = (id: number, count: number) => (dispatch: Dispatch) => axios.post('/api/user/basket/book/',
+  { book: id, count }, { params: { info: '2020.06.NEWBOOK' } })
+  .then((res) => dispatch(postBookInBasketSuccess(res.data)))
+  .catch((err) => dispatch(postBookInBasketFailure(err)));
+
 
 const putBookInBasketSuccess = (basket: any) => ({
   type: basketActions.PUT_BOOK_SUCCESS,
@@ -141,6 +146,11 @@ export const putBookInBasket = (bookId: number, count: number, basketId: number)
   .then((res) => dispatch(putBookInBasketSuccess(res.data)))
   .catch((err) => dispatch(putBookInBasketFailure(err)));
 
+export const putBookInBasket202006NewBook = (bookId: number, count: number, basketId: number) => (dispatch: Dispatch) => axios.put('/api/user/basket/book/',
+  { book: bookId, count, basket: basketId }, { params: { info: '2020.06.NEWBOOK' } })
+  .then((res) => dispatch(putBookInBasketSuccess(res.data)))
+  .catch((err) => dispatch(putBookInBasketFailure(err)));
+
 
 const getBasketSuccess = (basket: any) => ({
   type: basketActions.GET_BASKET_SUCCESS,
@@ -152,7 +162,12 @@ const getBasketFailure = (error: any) => ({
   target: error,
 });
 
-export const getBasket = () => (dispatch: Dispatch) => axios.get('/api/user/basket')
+export const getBasket = () => (dispatch: Dispatch) => axios.get('/api/user/basket/')
+  .then((res) => dispatch(getBasketSuccess(res.data)))
+  .catch((err) => dispatch(getBasketFailure(err)));
+
+export const getBasket202006NewBook = () => (dispatch: Dispatch) => axios.get('/api/user/basket/',
+  { params: { info: '2020.06.NEWBOOK' } })
   .then((res) => dispatch(getBasketSuccess(res.data)))
   .catch((err) => dispatch(getBasketFailure(err)));
 
@@ -186,6 +201,23 @@ export const orderBasket = (basketId: number, familyName: string, givenName: str
   .then((res) => dispatch(orderBasketSuccess(res.data)))
   .catch((err) => dispatch(orderBasketFailure(err)));
 
+export const orderBasket202006NewBook = (basketId: number, name: string, email: string,
+  phoneNumber: string, addresses: any,
+  signs: any, payer: string) => (dispatch: Dispatch) => axios.put(
+  '/api/user/basket/order/', {
+    basket: basketId,
+    name,
+    email,
+    phone_number: phoneNumber,
+    addresses,
+    signs,
+    payer,
+  },
+  { params: { info: '2020.06.NEWBOOK' } },
+)
+  .then((res) => dispatch(orderBasketSuccess(res.data)))
+  .catch((err) => dispatch(orderBasketFailure(err)));
+
 
 const getOrdersSuccess = (basket: any) => ({
   type: basketActions.GET_ORDERS_SUCCESS,
@@ -197,6 +229,6 @@ const getOrdersFailure = (error: any) => ({
   target: error,
 });
 
-export const getOrders = () => (dispatch: Dispatch) => axios.get('/api/user/basket/order')
+export const getOrders = () => (dispatch: Dispatch) => axios.get('/api/user/basket/order/')
   .then((res) => dispatch(getOrdersSuccess(res.data)))
   .catch((err) => dispatch(getOrdersFailure(err)));

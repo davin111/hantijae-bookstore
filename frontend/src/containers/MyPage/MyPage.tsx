@@ -208,19 +208,19 @@ class MyPage extends Component<Props> {
   render() {
     const { classes } = this.props;
 
-    const orders = null;
-    // if (this.props.orders.length > 0) {
-    //   orders = this.makeOrderList(this.props.orders);
-    // } else {
-    //   orders = (
-    //     <div>
-    //       <hr />
-    //       <Typography variant="h5" gutterBottom>
-    //         주문 내역이 없습니다. 책을 담으러 가볼까요?
-    //       </Typography>
-    //     </div>
-    //   );
-    // }
+    let orders = null;
+    if (this.props.orders.length > 0) {
+      orders = this.makeOrderList(this.props.orders);
+    } else {
+      orders = (
+        <div>
+          <hr />
+          <Typography variant="h5" gutterBottom>
+            주문 내역이 없습니다. 책을 담으러 가볼까요?
+          </Typography>
+        </div>
+      );
+    }
 
     let username = '';
     let email = '';
@@ -262,10 +262,10 @@ class MyPage extends Component<Props> {
               </Typography>
             </ListItem>
           </div>
-          {/* <Typography variant="h6" gutterBottom>
+          <Typography variant="h6" gutterBottom>
             주문 내역
           </Typography>
-          {orders} */}
+          {orders}
         </main>
       </Container>
     );

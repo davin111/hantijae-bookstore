@@ -14,7 +14,7 @@ interface Props {
   location: any;
   basket: any;
   basketStatus: string;
-  onGetBasket: () => any;
+  onGetBasket202006NewBook: () => any;
   history: any;
   classes: any;
   onGetMe: () => any;
@@ -31,7 +31,7 @@ class BookBasket extends Component<Props> {
   componentDidMount() {
     this.props.onGetMe()
       .then(() => {
-        this.props.onGetBasket();
+        this.props.onGetBasket202006NewBook();
       });
   }
 
@@ -101,6 +101,7 @@ const mapStateToProps = (state: any) => ({
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetBasket: () => dispatch(userActions.getBasket()),
+  onGetBasket202006NewBook: () => dispatch(userActions.getBasket202006NewBook()),
   onGetMe: () => dispatch(userActions.getMe()),
 });
 
