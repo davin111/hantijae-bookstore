@@ -33,6 +33,8 @@ interface Props {
   receiverGivenName: string;
   address1: string;
   address2: string;
+  addresses: any;
+  signs: any;
   postalCode: string;
   payer: string;
   sameReceiver: boolean;
@@ -59,26 +61,58 @@ class Review extends Component<Props> {
     ));
   }
 
+  makeBookInfoReviewList(count: number) {
+    const bookInfoList = [];
+    for (let i = 0; i < count; i += 1) {
+      let sign = '없음';
+      if (this.props.signs[i]) {
+        sign = this.props.signs[i];
+      }
+      bookInfoList.push(
+        <Grid item xs={12} id={`bookinforeview${i}`} key={`bookinforeview${i}`}>
+          <Typography variant="body1" color="primary" gutterBottom>
+            {this.props.basket.books[0].title}
+            &nbsp;
+            [
+            {i + 1}
+            ]
+          </Typography>
+          <Typography gutterBottom>
+            주소:&nbsp;
+            {this.props.addresses[i]}
+          </Typography>
+          {/* {postalCode} */}
+          <Typography gutterBottom>
+            사인받을 분:&nbsp;
+            {sign}
+          </Typography>
+          <Typography gutterBottom />
+        </Grid>,
+      );
+    }
+    return bookInfoList;
+  }
+
   render() {
     const { classes } = this.props;
 
-    let receiverFamilyName = this.props.familyName;
-    let receiverGivenName = this.props.givenName;
-    if (!this.props.sameReceiver) {
-      receiverFamilyName = this.props.receiverFamilyName;
-      receiverGivenName = this.props.receiverGivenName;
-    }
+    // let receiverFamilyName = this.props.familyName;
+    // let receiverGivenName = this.props.givenName;
+    // if (!this.props.sameReceiver) {
+    //   receiverFamilyName = this.props.receiverFamilyName;
+    //   receiverGivenName = this.props.receiverGivenName;
+    // }
 
-    let postalCode = null;
-    if (this.props.postalCode !== '') {
-      postalCode = (
-        <Typography gutterBottom>
-          우편번호:
-          {' '}
-          {this.props.postalCode}
-        </Typography>
-      );
-    }
+    // let postalCode = null;
+    // if (this.props.postalCode !== '') {
+    //   postalCode = (
+    //     <Typography gutterBottom>
+    //       우편번호:
+    //       {' '}
+    //       {this.props.postalCode}
+    //     </Typography>
+    //   );
+    // }
 
     return (
       <>
@@ -88,7 +122,7 @@ class Review extends Component<Props> {
         <List disablePadding>
           {this.makeBookList(this.props.basket.books)}
           <hr />
-          <ListItem className={classes.listItem}>
+          {/* <ListItem className={classes.listItem}>
             <ListItemText primary="정가" />
             <Typography variant="subtitle1" className={classes.total}>
               <del>
@@ -96,18 +130,18 @@ class Review extends Component<Props> {
                 원
               </del>
             </Typography>
-          </ListItem>
+          </ListItem> */}
           <ListItem className={classes.listItem}>
             <ListItemText primary="금액" />
             <Typography variant="subtitle1" className={classes.total}>
-              {this.props.basket.maxPrice}
+              {this.props.basket.totalPrice}
               원
             </Typography>
           </ListItem>
         </List>
         <hr />
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12}>
             <Typography variant="h6" gutterBottom className={classes.title}>
               주문 정보
             </Typography>
@@ -121,8 +155,18 @@ class Review extends Component<Props> {
                   {this.props.givenName}
                 </Typography>
               </Grid>
+              <Grid item xs={6}>
+                <Typography gutterBottom>
+                  {this.props.email}
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography gutterBottom>
+                  {this.props.phoneNumber}
+                </Typography>
+              </Grid>
             </Grid>
-            <Grid container>
+            {/* <Grid container>
               <Grid item xs={6}>
                 <Typography gutterBottom>받는 분</Typography>
               </Grid>
@@ -132,17 +176,10 @@ class Review extends Component<Props> {
                   {receiverGivenName}
                 </Typography>
               </Grid>
-            </Grid>
-            <Grid item xs={12}>
-              <Typography gutterBottom>주소</Typography>
-            </Grid>
-            <Grid item xs={12}>
-              <Typography gutterBottom>{this.props.address1}</Typography>
-              <Typography gutterBottom>{this.props.address2}</Typography>
-              {postalCode}
-            </Grid>
+            </Grid> */}
+            {this.makeBookInfoReviewList(this.props.basket.books[0].count)}
           </Grid>
-          <Grid item container direction="column" xs={12} sm={6}>
+          <Grid item container direction="column" xs={12}>
             <Typography variant="h6" gutterBottom className={classes.title}>
               계좌 입금 정보
             </Typography>
@@ -152,20 +189,6 @@ class Review extends Component<Props> {
               </Grid>
               <Grid item xs={6}>
                 <Typography gutterBottom>{this.props.payer}</Typography>
-              </Grid>
-            </Grid>
-            <Grid container justify="center">
-              <Grid item xs={6}>
-                <Typography gutterBottom>
-                  {this.props.email}
-                </Typography>
-              </Grid>
-            </Grid>
-            <Grid container justify="center">
-              <Grid item xs={6}>
-                <Typography gutterBottom>
-                  {this.props.phoneNumber}
-                </Typography>
               </Grid>
             </Grid>
           </Grid>

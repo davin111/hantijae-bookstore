@@ -36,6 +36,12 @@
     cursor: pointer;
     z-index: 1;
 }
+@media all and (max-width:768px) {
+    .BookCover {
+        margin-top: 8%;
+    }
+}
+
 .BookCover img {
     min-height: 180px;
     max-width: 100%;
