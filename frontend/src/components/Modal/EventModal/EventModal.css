@@ -43,6 +43,35 @@
      }
 }
 
+.NewBookTitles {
+    width: 90%;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: -5%;
+    text-align: left;
+    font-size: 1.2em;
+    line-height: 2em;
+}
+@media all and (max-width:768px) {
+    .NewBookTitles {
+        font-size: 1em;
+     }
+}
+
+.NewBookInfos {
+    width: 90%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
+    font-size: 1em;
+    line-height: 2em;
+}
+@media all and (max-width:768px) {
+    .NewBookInfos {
+        font-size: 0.8em;
+     }
+}
+
 .ModalYouTube {
     margin-left: auto;
     margin-right: auto;
