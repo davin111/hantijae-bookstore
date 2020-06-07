@@ -28,9 +28,9 @@ class User extends Component<Props> {
 
   render() {
     let username = '';
-    let bookCount = 0;
+    // let bookCount = 0;
     let logButton = null;
-    bookCount = Number.isInteger(this.props.basket.bookCount) ? this.props.basket.bookCount : 0;
+    // bookCount = Number.isInteger(this.props.basket.bookCount) ? this.props.basket.bookCount : 0;
     if (this.props.getMeStatus === userStatus.FAILURE) {
       username = '비회원';
       logButton = (

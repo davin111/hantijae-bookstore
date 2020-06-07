@@ -164,7 +164,7 @@ class BasketViewSet(viewsets.GenericViewSet):
             user = get_user_from_request(request)
             if not user:
                 return Response(status=status.HTTP_403_FORBIDDEN)
-            baskets = Basket.objects.filter(Q(user=user) & ~Q(status=Basket.NONE))
+            baskets = Basket.objects.filter(Q(user=user) & ~Q(status=Basket.NONE)).order_by('-id')
             return Response(self.get_serializer(baskets, many=True).data)
 
 

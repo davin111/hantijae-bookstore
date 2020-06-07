@@ -1,7 +1,7 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 import Button from '@material-ui/core/Button';
-import ReactPlayer from 'react-player';
+// import ReactPlayer from 'react-player';
 
 import { bookActions } from '../../store/actions';
 import './HantijaePage.css';

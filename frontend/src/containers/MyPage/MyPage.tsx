@@ -62,6 +62,42 @@ class MyPage extends Component<Props> {
     ));
   }
 
+  // eslint-disable-next-line class-methods-use-this
+  makeBookInfoReviewList(books: any) {
+    const bookInfoList = [];
+    for (let i = 0; i < books.length; i += 1) {
+      const book = books[i];
+      let sign = '없음';
+      if (book.sign) {
+        sign = book.sign;
+      }
+      bookInfoList.push(
+        <Grid item xs={12} id={`bookinforeview${i}`} key={`bookinforeview${i}`}>
+          <Typography variant="body1" gutterBottom>
+            - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          </Typography>
+          <Typography variant="body1" color="primary" gutterBottom>
+            {book.title}
+            &nbsp;
+            [
+            {i + 1}
+            ]
+          </Typography>
+          <Typography gutterBottom>
+            주소:&nbsp;
+            {book.address}
+          </Typography>
+          <Typography gutterBottom>
+            사인받을 분:&nbsp;
+            {sign}
+          </Typography>
+          <Typography gutterBottom />
+        </Grid>,
+      );
+    }
+    return bookInfoList;
+  }
+
   makeOrderList(orders: any) {
     const { classes } = this.props;
     return orders.map((order: any) => {
@@ -90,35 +126,13 @@ class MyPage extends Component<Props> {
         bookBasketStatus = '수령 확인';
       }
 
-      let postalCode = null;
-      if (order.postal_code !== '') {
-        postalCode = (
-          <Typography gutterBottom>
-            우편번호:
-            {' '}
-            {order.postal_code}
-          </Typography>
-        );
-      }
-
-      return (
-        <div className="OrderElement" key={order.id}>
-          <List disablePadding>
-            <ListItemText primary="책바구니 번호" />
-            <Typography variant="subtitle1" className={classes.total}>
-              {order.id}
-            </Typography>
-            <hr />
-            <ListItem className={classes.listItem}>
-              <ListItemText primary="책바구니 상태" />
-              <Typography variant="subtitle1" className={classes.total}>
-                {bookBasketStatus}
-              </Typography>
-            </ListItem>
-            {accountInfo}
-            <hr />
-            {this.makeBookList(order.books)}
-            <hr />
+      let bookBasketInfo = '';
+      let priceInfo = null;
+      let orderInfo = null;
+      if (order.info === '2020.04.10YEARS') {
+        bookBasketInfo = '한티재 10주년 기념 특판 이벤트';
+        priceInfo = (
+          <>
             <ListItem className={classes.listItem}>
               <ListItemText primary="정가" />
               <Typography variant="subtitle1" className={classes.total}>
@@ -135,9 +149,21 @@ class MyPage extends Component<Props> {
                 원
               </Typography>
             </ListItem>
-          </List>
-          <hr />
-          <Grid container spacing={2}>
+          </>
+        );
+
+        let postalCode = null;
+        if (order.postal_code !== '') {
+          postalCode = (
+            <Typography gutterBottom>
+              우편번호:
+              {' '}
+              {order.postal_code}
+            </Typography>
+          );
+        }
+        orderInfo = (
+          <>
             <Grid item xs={12} sm={6}>
               <Typography variant="h6" gutterBottom className={classes.title}>
                 주문 정보
@@ -199,6 +225,94 @@ class MyPage extends Component<Props> {
                 </Grid>
               </Grid>
             </Grid>
+          </>
+        );
+      } else if (order.info === '2020.06.NEWBOOK') {
+        bookBasketInfo = '『당신이 나의 백신입니다』 저자 자필 사인본 이벤트';
+        priceInfo = (
+          <ListItem className={classes.listItem}>
+            <ListItemText primary="금액" />
+            <Typography variant="subtitle1" className={classes.total}>
+              {order.total_price}
+              원
+            </Typography>
+          </ListItem>
+        );
+        orderInfo = (
+          <>
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom className={classes.title}>
+                주문 정보
+              </Typography>
+              <Grid container>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>주문하는 분</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>
+                    {order.family_name}
+                    {order.given_name}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>
+                    {order.email}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>
+                    {order.phone_number}
+                  </Typography>
+                </Grid>
+              </Grid>
+              {this.makeBookInfoReviewList(order.books)}
+            </Grid>
+            <Grid item container direction="column" xs={12}>
+              <Typography variant="h6" gutterBottom className={classes.title}>
+                계좌 입금 정보
+              </Typography>
+              <Grid container>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>입금자 이름</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography gutterBottom>{order.payer}</Typography>
+                </Grid>
+              </Grid>
+            </Grid>
+          </>
+        );
+      }
+
+      return (
+        <div className="OrderElement" key={order.id}>
+          <List disablePadding>
+            <ListItemText primary="책바구니 번호" />
+            <Typography variant="subtitle1" className={classes.total}>
+              {order.id}
+            </Typography>
+            <hr />
+            <ListItem className={classes.listItem}>
+              <ListItemText primary="정보" />
+              <Typography variant="subtitle1" className={classes.total}>
+                {bookBasketInfo}
+              </Typography>
+            </ListItem>
+            <ListItem className={classes.listItem}>
+              <ListItemText primary="상태" />
+              <Typography variant="subtitle1" className={classes.total}>
+                {bookBasketStatus}
+              </Typography>
+            </ListItem>
+            {accountInfo}
+            <hr />
+            {this.makeBookList(order.books)}
+            <hr />
+            {priceInfo}
+          </List>
+          <hr />
+          <Grid container spacing={2}>
+            {orderInfo}
           </Grid>
         </div>
       );
