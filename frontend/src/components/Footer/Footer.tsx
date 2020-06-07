@@ -21,19 +21,8 @@ class Footer extends Component<Props> {
         <hr className="FooterLine" />
         <footer>
           <div className="FooterInfo">
-            {/* <div className="LeftFooter">
-              도서출판 한티재
-            </div>
-            <div className="RightFooter">
-              그렇다
-            </div> */}
             <>
               <Grid container spacing={5}>
-                {/* <Grid item xs={12} sm={12}>
-                  <Typography variant="h6" gutterBottom>
-                    주문 정보 입력
-                  </Typography>
-                </Grid> */}
                 <Grid item xs={12} sm={6}>
                   <div className="FooterButtons">
                     <Button

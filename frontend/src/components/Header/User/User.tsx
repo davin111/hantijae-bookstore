@@ -2,11 +2,12 @@ import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 import Button from '@material-ui/core/Button';
 import PermIdentityIcon from '@material-ui/icons/PermIdentity';
+import ShoppingBasketIcon from '@material-ui/icons/ShoppingBasket';
 
 import { userActions } from '../../../store/actions';
 import { userStatus } from '../../../constants/constants';
 import './User.css';
-import BookBasketImg from './bookbasket.png';
+// import BookBasketImg from './bookbasket.png';
 
 interface Props {
   onGetMe: () => any;
@@ -79,6 +80,16 @@ class User extends Component<Props> {
             variant="contained"
             color="default"
             size="small"
+            onClick={() => this.props.history.push('/bookbasket')}
+            endIcon={<ShoppingBasketIcon />}
+          >
+            책바구니
+          </Button>
+          <Button
+            type="button"
+            variant="contained"
+            color="default"
+            size="small"
             onClick={() => this.props.history.push('/mypage')}
             endIcon={<PermIdentityIcon />}
           >
@@ -131,11 +142,8 @@ class User extends Component<Props> {
           >
             인터파크
           </Button>
-          {/* <div className="UserPictire">
-          <img src={BookBasketImg} />
-        </div> */}
           {/* eslint-disable-next-line */}
-      {/* <div className="BasketCount" >{bookCount}</div> */}
+          {/* <div className="BasketCount" >{bookCount}</div> */}
         </div>
       </div>
     );
