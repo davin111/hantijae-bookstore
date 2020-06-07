@@ -47,7 +47,6 @@
     width: 90%;
     margin-left: auto;
     margin-right: auto;
-    margin-bottom: -5%;
     text-align: left;
     font-size: 1.2em;
     line-height: 2em;
@@ -62,6 +61,7 @@
     width: 90%;
     margin-left: auto;
     margin-right: auto;
+    margin-bottom: -5%;
     text-align: left;
     font-size: 1em;
     line-height: 2em;
@@ -77,4 +77,13 @@
     margin-right: auto;
     max-width: 95%;
     margin-bottom: 5%;
+}
+
+.CenterLineModal {
+    width: 90%;
+}
+@media all and (max-width:768px) {
+    .CenterLineModal {
+        width: 80%;
+     }
 }

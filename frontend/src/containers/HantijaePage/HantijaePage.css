@@ -95,6 +95,15 @@
      }
 }
 
+.HantijaeCenterLineSmall {
+    width: 80%;
+}
+@media all and (max-width:768px) {
+    .HantijaeCenterLineSmall {
+        width: 70%;
+     }
+}
+
 .NewBookTitle {
     padding-top: 2%;
     padding-bottom: 1%;
@@ -192,6 +201,7 @@
     width: 80%;
     margin-left: auto;
     margin-right: auto;
+    margin-bottom: -5%;
     text-align: left;
     font-size: 1em;
     line-height: 2em;
