@@ -67,12 +67,9 @@ class Book extends Component<BookProps> {
           );
         } else {
           bookCart = (
-            // eslint-disable-next-line
-            <h3
-              className="NotAcceptable"
-            >
-              한티재 신간
-            </h3>
+            <div className="BookListCart">
+              <BookCountWithCart bookId={this.props.id} history={this.props.history} />
+            </div>
           );
         }
       }

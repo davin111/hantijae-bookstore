@@ -58,7 +58,7 @@ class Preview extends Component<Props> {
         <List disablePadding>
           {this.makeBookList(this.props.basket.books)}
           <hr />
-          <ListItem className={classes.listItem}>
+          {/* <ListItem className={classes.listItem}>
             <ListItemText primary="정가" />
             <Typography variant="subtitle1" className={classes.total}>
               <del>
@@ -66,22 +66,22 @@ class Preview extends Component<Props> {
                 원
               </del>
             </Typography>
-          </ListItem>
+          </ListItem> */}
           <ListItem className={classes.listItem}>
             <ListItemText primary="금액" />
             <Typography variant="subtitle1" className={classes.total}>
-              {this.props.basket.maxPrice}
+              {this.props.basket.totalPrice}
               원
             </Typography>
           </ListItem>
           <hr />
           <Typography variant="body1" gutterBottom>
-            한티재 10주년 기념 ‘10권 10만 원 책바구니’ 특판 이벤트를 진행하고 있습니다!
+            『당신이 나의 백신입니다』 저자 자필 사인본 이벤트를 진행하고 있습니다!
           </Typography>
           <Typography variant="body2" gutterBottom>
-            책의 정가와 상관 없이 한티재 책 최대 10권을 10만 원에 구입하실 수 있습니다.
+            한티재 온라인 책창고에서 책을 주문하시면, 힘들고 아픈 사람 곁에 늘 함께 있는 선생님의
             <br />
-            단, 10권보다 적게 담거나, 정가 총액이 10만 원보다 적어도 결제 금액은 10만 원입니다^^
+            따뜻한 글씨를 책에 담아 보내드립니다. 많은 신청 부탁드립니다!
           </Typography>
         </List>
       </>

@@ -331,7 +331,7 @@ class Order extends Component<Props, State> {
         }
         return true;
       case 2:
-        return false;
+        return true;
       default:
         return true;
     }
@@ -397,7 +397,7 @@ class Order extends Component<Props, State> {
                       className={classes.button}
                       disabled={this.nextButtonDisabled(this.state.activeStep)}
                     >
-                      {this.state.activeStep === steps.length - 1 ? '주문하기' : '다음'}
+                      {this.state.activeStep === steps.length - 1 ? '준비 중' : '다음'}
                     </Button>
                   </div>
                 </>

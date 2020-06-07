@@ -52,14 +52,7 @@ class BookBasket extends Component<Props> {
         books = <BooksInBasket books={this.props.basket.books} history={this.props.history} />;
         summary = (
           <div className="BookBasketSummary">
-            <del className="OriginalPrice">
-              {this.props.basket.totalPrice}
-              원
-            </del>
-            {' '}
-            →
-            {' '}
-            {this.props.basket.maxPrice}
+            {this.props.basket.totalPrice}
             원
           </div>
         );
