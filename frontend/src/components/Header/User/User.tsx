@@ -3,8 +3,9 @@ import { connect } from 'react-redux';
 import Button from '@material-ui/core/Button';
 import PermIdentityIcon from '@material-ui/icons/PermIdentity';
 import ShoppingBasketIcon from '@material-ui/icons/ShoppingBasket';
+import StarIcon from '@material-ui/icons/Star';
 
-import { userActions } from '../../../store/actions';
+import { userActions, stateActions } from '../../../store/actions';
 import { userStatus } from '../../../constants/constants';
 import './User.css';
 // import BookBasketImg from './bookbasket.png';
@@ -16,6 +17,7 @@ interface Props {
   getMeStatus: string;
   basket: any;
   onLogout: () => any;
+  onOpenEventModal: () => any;
 }
 
 class User extends Component<Props> {
@@ -75,6 +77,19 @@ class User extends Component<Props> {
     return (
       <div className="User">
         <div className="UserButtons">
+          <Button
+            type="button"
+            variant="contained"
+            color="secondary"
+            size="small"
+            onClick={() => {
+              this.props.onOpenEventModal();
+              this.props.history.push('/');
+            }}
+            endIcon={<StarIcon />}
+          >
+            이벤트
+          </Button>
           <Button
             type="button"
             variant="contained"
@@ -159,6 +174,7 @@ const mapStateToProps = (state: any) => ({
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetMe: () => dispatch(userActions.getMe()),
   onLogout: () => dispatch(userActions.logout()),
+  onOpenEventModal: () => dispatch(stateActions.openEventModal()),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(User);

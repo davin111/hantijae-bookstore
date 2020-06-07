@@ -6,7 +6,8 @@ import Typography from '@material-ui/core/Typography';
 import { withStyles, createStyles } from '@material-ui/core/styles';
 // import ReactPlayer from 'react-player';
 
-import { stateActions } from '../../../store/actions';
+import { stateActions, userActions } from '../../../store/actions';
+import { basketStatus, userStatus } from '../../../constants/constants';
 import './EventModal.css';
 
 
@@ -33,10 +34,15 @@ const styles = (theme: any) => createStyles({
 interface Props {
   eventModal: boolean;
   onCloseEventModal: () => any;
+  onOpenLoginModal: () => any;
+  onOpenFullBasketModal: () => any;
+  onOpenBasketInfoModal: () => any;
   history: any;
   classes: any;
   me: any;
   getMeStatus: string;
+  basketStatus: string;
+  onPostBookInBasket202006NewBook: (id: number, count: number) => any;
 }
 
 interface State{
@@ -60,8 +66,25 @@ class EventModal extends Component<Props, State> {
     }
   }
 
+  clickPostBookHandler = () => {
+    if (this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true) {
+      this.props.onOpenLoginModal();
+    } else {
+      this.props.onPostBookInBasket202006NewBook(110, 1)
+        .then(() => {
+          if (this.props.basketStatus === basketStatus.SUCCESS) {
+            this.props.onOpenBasketInfoModal();
+          }
+          if (this.props.basketStatus === basketStatus.FAILURE_MAX_BOOK) {
+            this.props.onOpenFullBasketModal();
+          }
+        });
+    }
+  };
+
   clickCancelHandler() {
     this.setState({ open: false });
+    this.props.onCloseEventModal();
   }
 
   render() {
@@ -70,7 +93,7 @@ class EventModal extends Component<Props, State> {
 
     return (
       <Modal
-        show={this.state.open}
+        show={this.state.open || this.props.eventModal}
         onHide={() => this.clickCancelHandler()}
       >
         <Modal.Header>
@@ -120,7 +143,16 @@ class EventModal extends Component<Props, State> {
               color="primary"
               size="medium"
             >
-              바로가기
+              책 보러가기
+            </Button>
+            <Button
+              type="button"
+              onClick={() => this.clickPostBookHandler()}
+              variant="contained"
+              color="secondary"
+              size="medium"
+            >
+              책바구니에 담기
             </Button>
             <p className="EventDescriptionModal">
               ♥ 이벤트 기간 : 2020년 6월 8일(월) ~ 6월 20일(토)
@@ -175,10 +207,17 @@ const mapStateToProps = (state: any) => ({
   eventModal: state.state.modal.eventModal,
   me: state.user.me,
   getMeStatus: state.user.getMeStatus,
+  basketStatus: state.user.basketStatus,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onCloseEventModal: () => dispatch(stateActions.closeEventModal()),
+  onPostBookInBasket202006NewBook: (id: number, count: number) => dispatch(
+    userActions.postBookInBasket202006NewBook(id, count),
+  ),
+  onOpenLoginModal: () => dispatch(stateActions.openLoginModal()),
+  onOpenFullBasketModal: () => dispatch(stateActions.openFullBasketModal()),
+  onOpenBasketInfoModal: () => dispatch(stateActions.openBasketInfoModal()),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(withStyles(styles)(EventModal));

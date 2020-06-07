@@ -185,9 +185,11 @@ class SignupPage extends Component<Props, State> {
           </Typography>
           <div className="SignupDescription">
             한티재 10주년을 맞아 문을 연 온라인 책창고.
-            10주년 특판 이벤트는 끝났습니다만, 회원 가입은 계속 하실 수 있습니다.
+            <br />
             온라인 책창고 회원이 되시면, 새 책이 나올 때마다 소식을 알려 드리고, 한티재에서 개최하는 행사에 먼저 초대하겠습니다.
-            또 일년에 한 번씩 책창고 회원들을 위한 특별한 이벤트를 열겠습니다.
+            <br />
+            <br />
+            현재 『당신이 나의 백신입니다』 저자 자필 사인본 이벤트를 진행하고 있습니다! 회원가입 후 책을 주문하시면 참여 가능합니다.
           </div>
           <form className={classes.form} noValidate>
             <Grid container spacing={2}>
