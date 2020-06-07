@@ -55,12 +55,21 @@ class Book extends Component<BookProps> {
               한티재 신간
             </h3>
           );
-        } else {
+        } else if (this.props.id === 109) {
           bookCart = (
             // eslint-disable-next-line
             <h3
               className="NotAcceptable"
               onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=237230373')}
+            >
+              한티재 신간
+            </h3>
+          );
+        } else {
+          bookCart = (
+            // eslint-disable-next-line
+            <h3
+              className="NotAcceptable"
             >
               한티재 신간
             </h3>
