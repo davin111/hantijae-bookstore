@@ -188,10 +188,10 @@ class Order extends Component<Props, State> {
       //   receiverGivenName = this.state.receiverGivenName;
       // }
 
-      let address = this.state.address1;
-      if (this.state.address2 !== '') {
-        address = [this.state.address1, this.state.address2].join(', ');
-      }
+      // let address = this.state.address1;
+      // if (this.state.address2 !== '') {
+      //   address = [this.state.address1, this.state.address2].join(', ');
+      // }
 
       this.props.onOrderBasket202006NewBook(
         this.props.basket.id,

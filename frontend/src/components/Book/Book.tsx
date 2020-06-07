@@ -1,7 +1,7 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 
-import { userActions, stateActions } from '../../store/actions';
+import { stateActions } from '../../store/actions';
 import './Book.css';
 import BookCountWithCart from '../BookCountWithCart/BookCountWithCart';
 

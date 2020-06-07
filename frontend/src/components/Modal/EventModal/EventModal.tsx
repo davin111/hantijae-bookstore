@@ -4,9 +4,8 @@ import { connect } from 'react-redux';
 import Button from '@material-ui/core/Button';
 import Typography from '@material-ui/core/Typography';
 import { withStyles, createStyles } from '@material-ui/core/styles';
-import ReactPlayer from 'react-player';
+// import ReactPlayer from 'react-player';
 
-import { userStatus } from '../../../constants/constants';
 import { stateActions } from '../../../store/actions';
 import './EventModal.css';
 
