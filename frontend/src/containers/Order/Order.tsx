@@ -10,7 +10,7 @@ import Typography from '@material-ui/core/Typography';
 import { createStyles, withStyles } from '@material-ui/core/styles';
 import Container from '@material-ui/core/Container';
 
-import { userStatus } from '../../constants/constants';
+import { userStatus, basketStatus } from '../../constants/constants';
 import { userActions } from '../../store/actions';
 import AddressForm from './AddressForm/AddressForm';
 import PaymentForm from './PaymentForm/PaymentForm';
@@ -75,10 +75,10 @@ interface Props {
   onGetMe: () => any;
   getMeStatus: string;
   me: any;
-  onGetBasket: () => any;
-  onOrderBasket: (basketId: number, familyName: string, givenName: string, email: string,
-    phoneNumber: string, receiverFamilyName: string, receiverGivenName: string,
-    address: string, postalCode: string, payer: string) => any;
+  onGetBasket202006NewBook: () => any;
+  onOrderBasket202006NewBook: (basketId: number, name: string,
+    email: string, phoneNumber: string,
+    addresses: any, signs: any, payer: string) => any;
 }
 
 interface State {
@@ -143,7 +143,7 @@ class Order extends Component<Props, State> {
           });
         }
       });
-    this.props.onGetBasket()
+    this.props.onGetBasket202006NewBook()
       .then(() => {
         if (this.props.basket.books.length === 0) {
           this.props.history.push('/');
@@ -193,23 +193,20 @@ class Order extends Component<Props, State> {
         address = [this.state.address1, this.state.address2].join(', ');
       }
 
-      // this.props.onOrderBasket(
-      //   this.props.basket.id,
-      //   this.state.familyName,
-      //   this.state.givenName,
-      //   this.state.email,
-      //   this.state.phoneNumber,
-      //   receiverFamilyName,
-      //   receiverGivenName,
-      //   address,
-      //   this.state.postalCode,
-      //   this.state.payer,
-      // ).then(() => {
-      //   if (this.props.basketStatus === basketStatus.SUCCESS) {
-      //     this.setState({ activeStep: step + 1 });
-      //     this.props.onGetBasket();
-      //   }
-      // });
+      this.props.onOrderBasket202006NewBook(
+        this.props.basket.id,
+        this.state.givenName,
+        this.state.email,
+        this.state.phoneNumber,
+        this.state.addresses,
+        this.state.signs,
+        this.state.payer,
+      ).then(() => {
+        if (this.props.basketStatus === basketStatus.SUCCESS) {
+          this.setState({ activeStep: step + 1 });
+          this.props.onGetBasket202006NewBook();
+        }
+      });
     } else {
       this.setState({ activeStep: step + 1 });
     }
@@ -423,7 +420,7 @@ class Order extends Component<Props, State> {
         }
         return true;
       case 2:
-        return true;
+        return false;
       default:
         return true;
     }
@@ -489,7 +486,7 @@ class Order extends Component<Props, State> {
                       className={classes.button}
                       disabled={this.nextButtonDisabled(this.state.activeStep)}
                     >
-                      {this.state.activeStep === steps.length - 1 ? '준비 중' : '다음'}
+                      {this.state.activeStep === steps.length - 1 ? '주문하기' : '다음'}
                     </Button>
                   </div>
                 </>
@@ -513,6 +510,7 @@ const mapStateToProps = (state: any) => ({
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetMe: () => dispatch(userActions.getMe()),
   onGetBasket: () => dispatch(userActions.getBasket()),
+  onGetBasket202006NewBook: () => dispatch(userActions.getBasket202006NewBook()),
   onOrderBasket: (basketId: number, familyName: string, givenName: string, email: string,
     phoneNumber: string, receiverFamilyName: string, receiverGivenName: string,
     address: string, postalCode: string, payer: string) => dispatch(userActions.orderBasket(
@@ -525,6 +523,17 @@ const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
     receiverGivenName,
     address,
     postalCode,
+    payer,
+  )),
+  onOrderBasket202006NewBook: (basketId: number, name: string, email: string,
+    phoneNumber: string, addresses: any,
+    signs: any, payer: string) => dispatch(userActions.orderBasket202006NewBook(
+    basketId,
+    name,
+    email,
+    phoneNumber,
+    addresses,
+    signs,
     payer,
   )),
 });

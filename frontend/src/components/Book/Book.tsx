@@ -21,7 +21,6 @@ export interface BookProps {
   basketStatus: string;
   getMeStatus: string;
   published_date: string;
-  onPostBookInBasket: (id: number, count: number) => any;
   onOpenLoginModal: () => any;
   onOpenFullBasketModal: () => any;
   onOpenBasketInfoModal: () => any;
@@ -112,9 +111,6 @@ const mapStateToProps = (state: any) => ({
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
-  onPostBookInBasket: (id: number, count: number) => dispatch(
-    userActions.postBookInBasket(id, count),
-  ),
   onOpenLoginModal: () => dispatch(stateActions.openLoginModal()),
   onOpenFullBasketModal: () => dispatch(stateActions.openFullBasketModal()),
   onOpenBasketInfoModal: () => dispatch(stateActions.openBasketInfoModal()),

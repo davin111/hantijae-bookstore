@@ -68,6 +68,7 @@ class BasketSerializer(serializers.ModelSerializer):
             'total_price',
             'max_price',
             'status',
+            'info'
         )
 
     def get_books(self, basket):
@@ -76,6 +77,8 @@ class BasketSerializer(serializers.ModelSerializer):
         for book_basket in book_baskets:
             book_data = SimpleBookSerializer(book_basket.book, context=self.context).data
             book_data['count'] = book_basket.count
+            book_data['address'] = book_basket.address
+            book_data['sign'] = book_basket.sign
             books.append(book_data)
         return books
 
@@ -114,6 +117,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'address',
             'postal_code',
             'payer',
+            'info'
         )
 
     def get_books(self, basket):
@@ -122,6 +126,8 @@ class OrderSerializer(serializers.ModelSerializer):
         for book_basket in book_baskets:
             book_data = SimpleBookSerializer(book_basket.book, context=self.context).data
             book_data['count'] = book_basket.count
+            book_data['address'] = book_basket.address
+            book_data['sign'] = book_basket.sign
             books.append(book_data)
         return books
 

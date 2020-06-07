@@ -19,22 +19,26 @@ export interface BookProps {
   basket: any;
   basketStatus: string;
   getMeStatus: string;
-  onPutBookInBasket: (bookId: number, count: number, basketId: number) => any;
+  onPutBookInBasket202006NewBook: (bookId: number, count: number, basketId: number) => any;
   onOpenFullBasketModal: () => any;
   onOpenBasketInfoModal: () => any;
 }
 
 class BookInBasket extends Component<BookProps> {
   increase = () => {
-    this.props.onPutBookInBasket(this.props.id, this.props.count + 1, this.props.basket.id);
+    this.props.onPutBookInBasket202006NewBook(
+      this.props.id, this.props.count + 1, this.props.basket.id,
+    );
   };
 
   decrease = () => {
-    this.props.onPutBookInBasket(this.props.id, this.props.count - 1, this.props.basket.id);
+    this.props.onPutBookInBasket202006NewBook(
+      this.props.id, this.props.count - 1, this.props.basket.id,
+    );
   };
 
   makeZero = () => {
-    this.props.onPutBookInBasket(this.props.id, 0, this.props.basket.id);
+    this.props.onPutBookInBasket202006NewBook(this.props.id, 0, this.props.basket.id);
   };
 
   render() {
@@ -108,6 +112,9 @@ const mapStateToProps = (state: any) => ({
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onPutBookInBasket: (bookId: number, count: number, basketId: number) => dispatch(
     userActions.putBookInBasket(bookId, count, basketId),
+  ),
+  onPutBookInBasket202006NewBook: (bookId: number, count: number, basketId: number) => dispatch(
+    userActions.putBookInBasket202006NewBook(bookId, count, basketId),
   ),
   onOpenFullBasketModal: () => dispatch(stateActions.openFullBasketModal()),
   onOpenBasketInfoModal: () => dispatch(stateActions.openBasketInfoModal()),

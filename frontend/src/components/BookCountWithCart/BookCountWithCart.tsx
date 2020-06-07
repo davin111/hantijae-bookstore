@@ -14,7 +14,7 @@ export interface BookProps {
   basket: any;
   basketStatus: string;
   getMeStatus: string;
-  onPostBookInBasket: (id: number, count: number) => any;
+  onPostBookInBasket202006NewBook: (id: number, count: number) => any;
   onOpenLoginModal: () => any;
   onOpenFullBasketModal: () => any;
   onOpenBasketInfoModal: () => any;
@@ -41,7 +41,7 @@ class BookCountWithCart extends Component<BookProps, State> {
       && this.props.suggestLogin) {
       this.props.onOpenLoginModal();
     } else {
-      this.props.onPostBookInBasket(this.props.bookId, this.state.count)
+      this.props.onPostBookInBasket202006NewBook(this.props.bookId, this.state.count)
         .then(() => {
           if (this.props.basketStatus === basketStatus.SUCCESS) {
             this.props.onOpenBasketInfoModal();
@@ -96,6 +96,9 @@ const mapStateToProps = (state: any) => ({
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onPostBookInBasket: (id: number, count: number) => dispatch(
     userActions.postBookInBasket(id, count),
+  ),
+  onPostBookInBasket202006NewBook: (id: number, count: number) => dispatch(
+    userActions.postBookInBasket202006NewBook(id, count),
   ),
   onOpenLoginModal: () => dispatch(stateActions.openLoginModal()),
   onOpenFullBasketModal: () => dispatch(stateActions.openFullBasketModal()),

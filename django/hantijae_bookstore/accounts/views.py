@@ -96,11 +96,13 @@ class BasketViewSet(viewsets.GenericViewSet):
         if not user:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
-        baskets = Basket.objects.filter(user=user, status=Basket.NONE)
+        info = request.query_params.get('info', '2020.04.10YEARS')
+
+        baskets = Basket.objects.filter(user=user, status=Basket.NONE, info=info)
         if baskets.exists():
             basket = baskets.last()
         else:
-            basket = Basket.objects.create(user=user)
+            basket = Basket.objects.create(user=user, info=info)
 
         return Response(self.get_serializer(basket).data)
 
@@ -117,12 +119,14 @@ class BasketViewSet(viewsets.GenericViewSet):
         if not user:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
+        info = request.query_params.get('info', '2020.04.10YEARS')
+
         if self.request.method == 'POST':
-            baskets = Basket.objects.filter(user=user, status=Basket.NONE)
+            baskets = Basket.objects.filter(user=user, status=Basket.NONE, info=info)
             if baskets.exists():
                 basket = baskets.last()
             else:
-                basket = Basket.objects.create(user=user)
+                basket = Basket.objects.create(user=user, info=info)
 
             if basket.book_count + book_count > basket.max_book_count:
                 return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
@@ -132,7 +136,7 @@ class BasketViewSet(viewsets.GenericViewSet):
                 bookbasket.count += book_count
                 bookbasket.save()
 
-        else: # PUT
+        else:  # PUT
             basket_id = request.data.get('basket')
             if not basket_id:
                 return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -154,6 +158,8 @@ class BasketViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['GET', 'PUT'])
     def order(self, request):
+        info = request.query_params.get('info', '2020.04.10YEARS')
+
         if self.request.method == 'GET':
             user = get_user_from_request(request)
             if not user:
@@ -161,24 +167,52 @@ class BasketViewSet(viewsets.GenericViewSet):
             baskets = Basket.objects.filter(Q(user=user) & ~Q(status=Basket.NONE))
             return Response(self.get_serializer(baskets, many=True).data)
 
-        else:
+
+        else:  # PUT
             basket_id = request.data.get('basket')
-            last_name = request.data.get('family_name')
-            first_name = request.data.get('given_name')
+            basket = get_object_or_404(Basket, id=basket_id)
+            if basket.status != Basket.NONE:
+                return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
+
             email = request.data.get('email')
             phone_number = request.data.get('phone_number')
+            payer = request.data.get('payer')
+
+            if info == '2020.06.NEWBOOK':
+                name = request.data.get('name')
+                addresses = request.data.get('addresses')
+                signs = request.data.get('signs')
+
+                if basket.books.count() > 1 or basket.books.exclude(book_id=110).exists():
+                    return Response(status=status.HTTP_400_BAD_REQUEST)
+
+                book_count = basket.books.last().count
+                if (not (basket_id and name and email and phone_number and addresses and signs and payer)
+                    or book_count != len(addresses) or book_count != len(signs)):
+                    return Response(status=status.HTTP_400_BAD_REQUEST)
+
+                basket.books.all().delete()
+                basket.first_name = name
+                basket.email = email
+                basket.phone_number = phone_number
+                basket.payer = payer
+                basket.status = Basket.ORDERED
+                basket.save()
+
+                book_basket_list = [BookBasket(basket=basket, book_id=110, address=addresses[str(i)], sign=signs[str(i)]) for i in range(book_count)]
+                BookBasket.objects.bulk_create(book_basket_list)
+                return Response(self.get_serializer(basket).data)
+
+
+            last_name = request.data.get('family_name')
+            first_name = request.data.get('given_name')
             receiver_last_name = request.data.get('receiver_family_name')
             receiver_first_name = request.data.get('receiver_given_name')
             address = request.data.get('address')
             postal_code = request.data.get('postal_code')
-            payer = request.data.get('payer')
-            if not (basket_id and last_name is not None and first_name and email and phone_number
-                    and receiver_last_name is not None and receiver_first_name and address and payer):
+            if not (basket_id and last_name and first_name and email and phone_number
+                    and receiver_last_name and receiver_first_name and address and payer):
                 return Response(status=status.HTTP_400_BAD_REQUEST)
-
-            basket = get_object_or_404(Basket, id=basket_id)
-            if basket.status != Basket.NONE:
-                return Response(status=status.HTTP_406_NOT_ACCEPTABLE)
 
             basket.last_name = last_name
             basket.first_name = first_name

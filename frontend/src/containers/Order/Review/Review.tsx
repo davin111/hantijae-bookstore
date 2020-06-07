@@ -70,6 +70,9 @@ class Review extends Component<Props> {
       }
       bookInfoList.push(
         <Grid item xs={12} id={`bookinforeview${i}`} key={`bookinforeview${i}`}>
+          <Typography variant="body1" gutterBottom>
+            - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          </Typography>
           <Typography variant="body1" color="primary" gutterBottom>
             {this.props.basket.books[0].title}
             &nbsp;

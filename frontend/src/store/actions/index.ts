@@ -14,9 +14,13 @@ import {
   signup,
   getMe,
   postBookInBasket,
+  postBookInBasket202006NewBook,
   putBookInBasket,
+  putBookInBasket202006NewBook,
   getBasket,
+  getBasket202006NewBook,
   orderBasket,
+  orderBasket202006NewBook,
   getOrders,
 } from './user/user';
 
@@ -49,9 +53,13 @@ export const userActions = {
   signup,
   getMe,
   postBookInBasket,
+  postBookInBasket202006NewBook,
   putBookInBasket,
+  putBookInBasket202006NewBook,
   getBasket,
+  getBasket202006NewBook,
   orderBasket,
+  orderBasket202006NewBook,
   getOrders,
 };
 
