@@ -10,7 +10,7 @@ import Typography from '@material-ui/core/Typography';
 import { createStyles, withStyles } from '@material-ui/core/styles';
 import Container from '@material-ui/core/Container';
 
-import { userStatus, basketStatus } from '../../constants/constants';
+import { userStatus } from '../../constants/constants';
 import { userActions } from '../../store/actions';
 import AddressForm from './AddressForm/AddressForm';
 import PaymentForm from './PaymentForm/PaymentForm';
@@ -88,11 +88,16 @@ interface State {
   email: string;
   phoneNumber: string;
   sameReceiver: boolean;
+  sameInfoForBook: any;
   receiverFamilyName: string;
   receiverGivenName: string;
   address1: string;
+  address1s: any;
   address2: string;
+  address2s: any;
+  addresses: any;
   postalCode: string;
+  signs: any;
   confirmed: boolean;
   confirmed2: boolean;
   payer: string;
@@ -110,11 +115,16 @@ class Order extends Component<Props, State> {
       email: '',
       phoneNumber: '',
       sameReceiver: true,
+      sameInfoForBook: {},
       receiverFamilyName: '',
       receiverGivenName: '',
       address1: '',
+      address1s: {},
       address2: '',
+      address2s: {},
+      addresses: {},
       postalCode: '',
+      signs: {},
       confirmed: false,
       payer: '',
       confirmed2: false,
@@ -138,42 +148,68 @@ class Order extends Component<Props, State> {
         if (this.props.basket.books.length === 0) {
           this.props.history.push('/');
         }
+        this.setSameInfoForBook(this.props.basket.books[0].count);
       });
   }
 
   handleNext = () => {
     // eslint-disable-next-line react/no-access-state-in-setstate
     const step = this.state.activeStep;
-    if (step === 2) {
-      let receiverFamilyName = this.state.familyName;
-      let receiverGivenName = this.state.givenName;
-      if (!this.state.sameReceiver) {
-        receiverFamilyName = this.state.receiverFamilyName;
-        receiverGivenName = this.state.receiverGivenName;
+    const newAddress1s = this.state.address1s;
+    const newAddress2s = this.state.address2s;
+    const newSigns = this.state.signs;
+    const { addresses } = this.state;
+    if (step === 1) {
+      for (let i = 0; i < Object.keys(this.state.sameInfoForBook).length; i += 1) {
+        if (this.state.sameInfoForBook[i]) {
+          newAddress1s[i] = newAddress1s[i - 1];
+          newAddress2s[i] = newAddress2s[i - 1];
+          newSigns[i] = newSigns[i - 1];
+        }
+        if (newAddress2s[i] !== '') {
+          addresses[i] = [newAddress1s[i], newAddress2s[i]].join(', ');
+        } else {
+          addresses[i] = newAddress1s[i];
+        }
       }
+      this.setState({
+        address1s: newAddress1s,
+        address2s: newAddress2s,
+        signs: newSigns,
+        addresses,
+      });
+    }
+
+    if (step === 2) {
+      // let receiverFamilyName = this.state.familyName;
+      // let receiverGivenName = this.state.givenName;
+      // if (!this.state.sameReceiver) {
+      //   receiverFamilyName = this.state.receiverFamilyName;
+      //   receiverGivenName = this.state.receiverGivenName;
+      // }
 
       let address = this.state.address1;
       if (this.state.address2 !== '') {
         address = [this.state.address1, this.state.address2].join(', ');
       }
 
-      this.props.onOrderBasket(
-        this.props.basket.id,
-        this.state.familyName,
-        this.state.givenName,
-        this.state.email,
-        this.state.phoneNumber,
-        receiverFamilyName,
-        receiverGivenName,
-        address,
-        this.state.postalCode,
-        this.state.payer,
-      ).then(() => {
-        if (this.props.basketStatus === basketStatus.SUCCESS) {
-          this.setState({ activeStep: step + 1 });
-          this.props.onGetBasket();
-        }
-      });
+      // this.props.onOrderBasket(
+      //   this.props.basket.id,
+      //   this.state.familyName,
+      //   this.state.givenName,
+      //   this.state.email,
+      //   this.state.phoneNumber,
+      //   receiverFamilyName,
+      //   receiverGivenName,
+      //   address,
+      //   this.state.postalCode,
+      //   this.state.payer,
+      // ).then(() => {
+      //   if (this.props.basketStatus === basketStatus.SUCCESS) {
+      //     this.setState({ activeStep: step + 1 });
+      //     this.props.onGetBasket();
+      //   }
+      // });
     } else {
       this.setState({ activeStep: step + 1 });
     }
@@ -201,21 +237,30 @@ class Order extends Component<Props, State> {
             receiverFamilyName={this.state.receiverFamilyName}
             receiverGivenName={this.state.receiverGivenName}
             address1={this.state.address1}
+            address1s={this.state.address1s}
             address2={this.state.address2}
+            address2s={this.state.address2s}
             postalCode={this.state.postalCode}
+            signs={this.state.signs}
             changeFamilyName={this.changeFamilyName}
             changeGivenName={this.changeGivenName}
             changeEmail={this.changeEmail}
             changePhoneNumber={this.changePhoneNumber}
             sameReceiver={this.state.sameReceiver}
+            sameInfoForBook={this.state.sameInfoForBook}
             changeSameReceiver={this.changeSameReceiver}
+            changeSameInfoForBook={this.changeSameInfoForBook}
             changeReceiverFamilyName={this.changeReceiverFamilyName}
             changeReceiverGivenName={this.changeReceiverGivenName}
             changeAddress1={this.changeAddress1}
+            changeAddress1s={this.changeAddress1s}
             changeAddress2={this.changeAddress2}
+            changeAddress2s={this.changeAddress2s}
             changePostalCode={this.changePostalCode}
+            changeSigns={this.changeSigns}
             confirmed={this.state.confirmed}
             changeConfirmed={this.changeConfirmed}
+            basket={this.props.basket}
           />
         );
       case 1:
@@ -239,6 +284,8 @@ class Order extends Component<Props, State> {
             receiverGivenName={this.state.receiverGivenName}
             address1={this.state.address1}
             address2={this.state.address2}
+            addresses={this.state.addresses}
+            signs={this.state.signs}
             postalCode={this.state.postalCode}
             payer={this.state.payer}
             sameReceiver={this.state.sameReceiver}
@@ -270,6 +317,26 @@ class Order extends Component<Props, State> {
     this.setState({ sameReceiver: !checked });
   };
 
+  setSameInfoForBook = (count: number) => {
+    // eslint-disable-next-line react/no-access-state-in-setstate
+    const { sameInfoForBook } = this.state;
+    sameInfoForBook[0] = false;
+    for (let i = 1; i < count; i += 1) {
+      sameInfoForBook[i] = true;
+    }
+    this.setState({
+      sameInfoForBook,
+    });
+  };
+
+  changeSameInfoForBook = (i: number) => {
+    // eslint-disable-next-line react/no-access-state-in-setstate
+    const newSameInfoForBook = this.state.sameInfoForBook;
+    this.setState({
+      sameInfoForBook: newSameInfoForBook,
+    });
+  };
+
   changeReceiverFamilyName = (e: any) => {
     this.setState({ receiverFamilyName: e.target.value });
   };
@@ -282,12 +349,36 @@ class Order extends Component<Props, State> {
     this.setState({ address1: e.target.value });
   };
 
+  changeAddress1s = () => {
+    // eslint-disable-next-line react/no-access-state-in-setstate
+    const newAddress1s = this.state.address1s;
+    this.setState({
+      address1s: newAddress1s,
+    });
+  };
+
+  changeAddress2s = () => {
+    // eslint-disable-next-line react/no-access-state-in-setstate
+    const newAddress2s = this.state.address2s;
+    this.setState({
+      address2s: newAddress2s,
+    });
+  };
+
   changeAddress2 = (e: any) => {
     this.setState({ address2: e.target.value });
   };
 
   changePostalCode = (e: any) => {
     this.setState({ postalCode: e.target.value });
+  };
+
+  changeSigns = () => {
+    // eslint-disable-next-line react/no-access-state-in-setstate
+    const newSigns = this.state.signs;
+    this.setState({
+      signs: newSigns,
+    });
   };
 
   changeConfirmed = () => {
@@ -312,15 +403,16 @@ class Order extends Component<Props, State> {
       case -1:
         return false;
       case 0:
-        if (this.state.givenName && this.state.confirmed
-            && this.state.email && this.state.phoneNumber
-            && this.state.address1) {
-          if (!this.state.sameReceiver
-              && !(this.state.receiverGivenName)) {
-            return true;
-          }
+        if (this.state.givenName
+            && this.state.email && this.state.phoneNumber) {
           if (!phoneRegExp.test(this.state.phoneNumber)) {
             return true;
+          }
+          for (let i = 0; i < Object.keys(this.state.sameInfoForBook).length; i += 1) {
+            if (!this.state.sameInfoForBook[i]
+              && !(this.state.address1s[i])) {
+              return true;
+            }
           }
           return false;
         }
@@ -358,7 +450,7 @@ class Order extends Component<Props, State> {
               {this.state.activeStep === steps.length ? (
                 <>
                   <Typography variant="h6" gutterBottom>
-                    한티재 10주년 기념 특판 이벤트에 참여해 주셔서 고맙습니다!
+                    주문해 주셔서 고맙습니다!
                   </Typography>
                   <Typography variant="subtitle1" color="secondary" gutterBottom>
                     다음 계좌로 입금 부탁드립니다. MyPage에서도 계좌 확인이 가능합니다.
