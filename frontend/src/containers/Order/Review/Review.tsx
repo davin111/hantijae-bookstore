@@ -34,6 +34,8 @@ interface Props {
   address1: string;
   address2: string;
   addresses: any;
+  receiverNames: any;
+  receiverPhoneNumbers: any;
   signs: any;
   postalCode: string;
   payer: string;
@@ -85,6 +87,14 @@ class Review extends Component<Props> {
             {this.props.addresses[i]}
           </Typography>
           {/* {postalCode} */}
+          <Typography gutterBottom>
+            휴대전화 번호 (받는 분):&nbsp;
+            {this.props.receiverPhoneNumbers[i]}
+          </Typography>
+          <Typography gutterBottom>
+            이름 (받는 분):&nbsp;
+            {this.props.receiverNames[i]}
+          </Typography>
           <Typography gutterBottom>
             사인받을 분:&nbsp;
             {sign}
