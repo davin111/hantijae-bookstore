@@ -78,7 +78,8 @@ interface Props {
   onGetBasket202006NewBook: () => any;
   onOrderBasket202006NewBook: (basketId: number, name: string,
     email: string, phoneNumber: string,
-    addresses: any, signs: any, payer: string) => any;
+    addresses: any, receiverPhoneNumbers: any, receiverNames: any,
+    signs: any, payer: string) => any;
 }
 
 interface State {
@@ -97,6 +98,8 @@ interface State {
   address2s: any;
   addresses: any;
   postalCode: string;
+  receiverNames: any;
+  receiverPhoneNumbers: any;
   signs: any;
   confirmed: boolean;
   confirmed2: boolean;
@@ -124,6 +127,8 @@ class Order extends Component<Props, State> {
       address2s: {},
       addresses: {},
       postalCode: '',
+      receiverNames: {},
+      receiverPhoneNumbers: {},
       signs: {},
       confirmed: false,
       payer: '',
@@ -147,8 +152,9 @@ class Order extends Component<Props, State> {
       .then(() => {
         if (this.props.basket.books.length === 0) {
           this.props.history.push('/');
+        } else {
+          this.setSameInfoForBook(this.props.basket.books[0].count);
         }
-        this.setSameInfoForBook(this.props.basket.books[0].count);
       });
   }
 
@@ -157,6 +163,8 @@ class Order extends Component<Props, State> {
     const step = this.state.activeStep;
     const newAddress1s = this.state.address1s;
     const newAddress2s = this.state.address2s;
+    const newReceiverNames = this.state.receiverNames;
+    const newReceiverPhoneNumbers = this.state.receiverPhoneNumbers;
     const newSigns = this.state.signs;
     const { addresses } = this.state;
     if (step === 1) {
@@ -164,17 +172,24 @@ class Order extends Component<Props, State> {
         if (this.state.sameInfoForBook[i]) {
           newAddress1s[i] = newAddress1s[i - 1];
           newAddress2s[i] = newAddress2s[i - 1];
+          newReceiverNames[i] = newReceiverNames[i - 1];
+          newReceiverPhoneNumbers[i] = newReceiverPhoneNumbers[i - 1];
           newSigns[i] = newSigns[i - 1];
+        } else if (!(i in newSigns) || newSigns[i] === '') {
+          newSigns[i] = newReceiverNames[i];
         }
-        if (newAddress2s[i] !== '') {
-          addresses[i] = [newAddress1s[i], newAddress2s[i]].join(', ');
-        } else {
+        if (!(i in newAddress2s) || newAddress2s[i] === '') {
           addresses[i] = newAddress1s[i];
+          newAddress2s[i] = '';
+        } else {
+          addresses[i] = [newAddress1s[i], newAddress2s[i]].join(', ');
         }
       }
       this.setState({
         address1s: newAddress1s,
         address2s: newAddress2s,
+        receiverNames: newReceiverNames,
+        receiverPhoneNumbers: newReceiverPhoneNumbers,
         signs: newSigns,
         addresses,
       });
@@ -199,6 +214,8 @@ class Order extends Component<Props, State> {
         this.state.email,
         this.state.phoneNumber,
         this.state.addresses,
+        this.state.receiverPhoneNumbers,
+        this.state.receiverNames,
         this.state.signs,
         this.state.payer,
       ).then(() => {
@@ -238,6 +255,8 @@ class Order extends Component<Props, State> {
             address2={this.state.address2}
             address2s={this.state.address2s}
             postalCode={this.state.postalCode}
+            receiverNames={this.state.receiverNames}
+            receiverPhoneNumbers={this.state.receiverPhoneNumbers}
             signs={this.state.signs}
             changeFamilyName={this.changeFamilyName}
             changeGivenName={this.changeGivenName}
@@ -254,6 +273,8 @@ class Order extends Component<Props, State> {
             changeAddress2={this.changeAddress2}
             changeAddress2s={this.changeAddress2s}
             changePostalCode={this.changePostalCode}
+            changeReceiverNames={this.changeReceiverNames}
+            changeReceiverPhoneNumbers={this.changeReceiverPhoneNumbers}
             changeSigns={this.changeSigns}
             confirmed={this.state.confirmed}
             changeConfirmed={this.changeConfirmed}
@@ -282,6 +303,8 @@ class Order extends Component<Props, State> {
             address1={this.state.address1}
             address2={this.state.address2}
             addresses={this.state.addresses}
+            receiverNames={this.state.receiverNames}
+            receiverPhoneNumbers={this.state.receiverPhoneNumbers}
             signs={this.state.signs}
             postalCode={this.state.postalCode}
             payer={this.state.payer}
@@ -370,6 +393,22 @@ class Order extends Component<Props, State> {
     this.setState({ postalCode: e.target.value });
   };
 
+  changeReceiverNames = () => {
+    // eslint-disable-next-line react/no-access-state-in-setstate
+    const newReceiverNames = this.state.receiverNames;
+    this.setState({
+      receiverNames: newReceiverNames,
+    });
+  };
+
+  changeReceiverPhoneNumbers = () => {
+    // eslint-disable-next-line react/no-access-state-in-setstate
+    const newReceiverPhoneNumbers = this.state.receiverPhoneNumbers;
+    this.setState({
+      receiverPhoneNumbers: newReceiverPhoneNumbers,
+    });
+  };
+
   changeSigns = () => {
     // eslint-disable-next-line react/no-access-state-in-setstate
     const newSigns = this.state.signs;
@@ -407,7 +446,9 @@ class Order extends Component<Props, State> {
           }
           for (let i = 0; i < Object.keys(this.state.sameInfoForBook).length; i += 1) {
             if (!this.state.sameInfoForBook[i]
-              && !(this.state.address1s[i])) {
+              && (!(this.state.address1s[i])
+                || !(this.state.receiverPhoneNumbers[i]) || !(this.state.receiverNames[i]))
+            ) {
               return true;
             }
           }
@@ -526,13 +567,15 @@ const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
     payer,
   )),
   onOrderBasket202006NewBook: (basketId: number, name: string, email: string,
-    phoneNumber: string, addresses: any,
+    phoneNumber: string, addresses: any, receiverPhoneNumbers: any, receiverNames: any,
     signs: any, payer: string) => dispatch(userActions.orderBasket202006NewBook(
     basketId,
     name,
     email,
     phoneNumber,
     addresses,
+    receiverPhoneNumbers,
+    receiverNames,
     signs,
     payer,
   )),

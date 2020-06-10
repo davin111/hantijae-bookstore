@@ -202,7 +202,7 @@ export const orderBasket = (basketId: number, familyName: string, givenName: str
   .catch((err) => dispatch(orderBasketFailure(err)));
 
 export const orderBasket202006NewBook = (basketId: number, name: string, email: string,
-  phoneNumber: string, addresses: any,
+  phoneNumber: string, addresses: any, receiverPhoneNumbers: any, receiverNames: any,
   signs: any, payer: string) => (dispatch: Dispatch) => axios.put(
   '/api/user/basket/order/', {
     basket: basketId,
@@ -210,6 +210,8 @@ export const orderBasket202006NewBook = (basketId: number, name: string, email: 
     email,
     phone_number: phoneNumber,
     addresses,
+    receiver_phone_numbers: receiverPhoneNumbers,
+    receiver_names: receiverNames,
     signs,
     payer,
   },

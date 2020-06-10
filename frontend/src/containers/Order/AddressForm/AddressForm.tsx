@@ -19,6 +19,8 @@ interface Props {
   address2: string;
   address2s: any;
   postalCode: string;
+  receiverNames: any;
+  receiverPhoneNumbers: any;
   signs: any;
   changeFamilyName: (e: any) => any;
   changeGivenName: (e: any) => any;
@@ -35,6 +37,8 @@ interface Props {
   changeAddress2: (e: any) => any;
   changeAddress2s: () => any;
   changePostalCode: (e: any) => any;
+  changeReceiverNames: () => any;
+  changeReceiverPhoneNumbers: () => any;
   changeSigns: () => any;
   confirmed: boolean;
   changeConfirmed: () => any;
@@ -45,6 +49,8 @@ interface State {
   sameInfoForBook: any;
   address1s: any;
   address2s: any;
+  receiverNames: any;
+  receiverPhoneNumbers: any;
   signs: any;
 }
 
@@ -56,6 +62,8 @@ class AddressForm extends Component<Props, State> {
       sameInfoForBook: this.props.sameInfoForBook,
       address1s: this.props.address1s,
       address2s: this.props.address2s,
+      receiverNames: this.props.receiverNames,
+      receiverPhoneNumbers: this.props.receiverPhoneNumbers,
       signs: this.props.signs,
     };
   }
@@ -78,6 +86,26 @@ class AddressForm extends Component<Props, State> {
       signs: newSigns,
     });
     this.props.changeSigns();
+  };
+
+  changeReceiverNames = (e: any, i: number) => {
+    // eslint-disable-next-line react/no-access-state-in-setstate
+    const newReceiverNames = this.state.receiverNames;
+    newReceiverNames[i] = e.target.value;
+    this.setState({
+      receiverNames: newReceiverNames,
+    });
+    this.props.changeReceiverNames();
+  };
+
+  changeReceiverPhoneNumbers = (e: any, i: number) => {
+    // eslint-disable-next-line react/no-access-state-in-setstate
+    const newReceiverPhoneNumbers = this.state.receiverPhoneNumbers;
+    newReceiverPhoneNumbers[i] = e.target.value;
+    this.setState({
+      receiverPhoneNumbers: newReceiverPhoneNumbers,
+    });
+    this.props.changeReceiverPhoneNumbers();
   };
 
   changeAddress1s = (e: any, i: number) => {
@@ -105,6 +133,8 @@ class AddressForm extends Component<Props, State> {
     for (let i = 1; i < count; i += 1) {
       let address1Info = null;
       let address2Info = null;
+      let receiverPhoneInfo = null;
+      let receiverNameInfo = null;
       let signInfo = null;
       if (!this.props.sameInfoForBook[i]) {
         address1Info = (
@@ -135,13 +165,42 @@ class AddressForm extends Component<Props, State> {
             />
           </Grid>
         );
+        receiverPhoneInfo = (
+          <Grid item xs={12} sm={6}>
+            <TextField
+              required
+              id={`receiverPhonenumber${i}`}
+              name="receiverPhonenumber"
+              label="휴대전화 번호 (받는 분)"
+              helperText=""
+              fullWidth
+              autoComplete="tel"
+              onChange={(e) => this.changeReceiverPhoneNumbers(e, i)}
+              value={this.state.receiverPhoneNumbers[i]}
+            />
+          </Grid>
+        );
+        receiverNameInfo = (
+          <Grid item xs={12} sm={6}>
+            <TextField
+              required
+              id={`receiverFirstName${i}`}
+              name="receiverFirstName"
+              label="이름 (받는 분)"
+              fullWidth
+              autoComplete="fname"
+              onChange={(e) => this.changeReceiverNames(e, i)}
+              value={this.state.receiverNames[i]}
+            />
+          </Grid>
+        );
         signInfo = (
           <Grid item xs={12} sm={6}>
             <TextField
               id={`sign${i}`}
               name="sign"
-              label="사인받으실 이름"
-              helperText=""
+              label="사인받을 분"
+              helperText="받는 분과 다른 경우에만 입력하시면 됩니다."
               fullWidth
               onChange={(e) => this.changeSigns(e, i)}
               value={this.state.signs[i]}
@@ -180,6 +239,8 @@ class AddressForm extends Component<Props, State> {
           </Grid>
           {address1Info}
           {address2Info}
+          {receiverPhoneInfo}
+          {receiverNameInfo}
           {signInfo}
         </Grid>,
       );
@@ -312,15 +373,18 @@ class AddressForm extends Component<Props, State> {
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
-              id="sign"
-              name="sign"
-              label="사인받을 분"
+              required
+              id="receiverPhonenumber"
+              name="receiverPhonenumber"
+              label="휴대전화 번호 (받는 분)"
               helperText=""
               fullWidth
-              onChange={(e) => this.changeSigns(e, 0)}
-              value={this.state.signs[0]}
+              autoComplete="tel"
+              onChange={(e) => this.changeReceiverPhoneNumbers(e, 0)}
+              value={this.state.receiverPhoneNumbers[0]}
             />
-            {/* <TextField
+          </Grid>
+          {/* <TextField
               id="zip"
               name="zip"
               label="우편번호"
@@ -330,6 +394,28 @@ class AddressForm extends Component<Props, State> {
               onChange={(e) => this.props.changePostalCode(e)}
               value={this.props.postalCode}
             /> */}
+          <Grid item xs={12} sm={6}>
+            <TextField
+              required
+              id="receiverFirstName"
+              name="receiverFirstName"
+              label="이름 (받는 분)"
+              fullWidth
+              autoComplete="fname"
+              onChange={(e) => this.changeReceiverNames(e, 0)}
+              value={this.state.receiverNames[0]}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              id="sign"
+              name="sign"
+              label="사인받을 분"
+              helperText="받는 분과 다른 경우에만 입력하시면 됩니다."
+              fullWidth
+              onChange={(e) => this.changeSigns(e, 0)}
+              value={this.state.signs[0]}
+            />
           </Grid>
           {/* <Grid item xs={12}>
             <FormControlLabel

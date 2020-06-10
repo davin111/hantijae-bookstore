@@ -88,6 +88,14 @@ class MyPage extends Component<Props> {
             {book.address}
           </Typography>
           <Typography gutterBottom>
+            휴대전화 번호 (받는 분):&nbsp;
+            {book.receiver_phone_number}
+          </Typography>
+          <Typography gutterBottom>
+            이름 (받는 분):&nbsp;
+            {book.receiver_name}
+          </Typography>
+          <Typography gutterBottom>
             사인받을 분:&nbsp;
             {sign}
           </Typography>
