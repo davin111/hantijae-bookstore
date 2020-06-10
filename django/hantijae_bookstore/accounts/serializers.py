@@ -72,12 +72,14 @@ class BasketSerializer(serializers.ModelSerializer):
         )
 
     def get_books(self, basket):
-        book_baskets = basket.books.all().order_by('-created_at')
+        book_baskets = basket.books.all().order_by('created_at')
         books = []
         for book_basket in book_baskets:
             book_data = SimpleBookSerializer(book_basket.book, context=self.context).data
             book_data['count'] = book_basket.count
             book_data['address'] = book_basket.address
+            book_data['receiver_phone_number'] = book_basket.receiver_phone_number
+            book_data['receiver_name'] = book_basket.receiver_name
             book_data['sign'] = book_basket.sign
             books.append(book_data)
         return books
@@ -121,12 +123,14 @@ class OrderSerializer(serializers.ModelSerializer):
         )
 
     def get_books(self, basket):
-        book_baskets = basket.books.all().order_by('-created_at')
+        book_baskets = basket.books.all().order_by('created_at')
         books = []
         for book_basket in book_baskets:
             book_data = SimpleBookSerializer(book_basket.book, context=self.context).data
             book_data['count'] = book_basket.count
             book_data['address'] = book_basket.address
+            book_data['receiver_phone_number'] = book_basket.receiver_phone_number
+            book_data['receiver_name'] = book_basket.receiver_name
             book_data['sign'] = book_basket.sign
             books.append(book_data)
         return books

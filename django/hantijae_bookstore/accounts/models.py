@@ -68,6 +68,8 @@ class BookBasket(BaseModel):
     book = models.ForeignKey(Book, related_name='baskets', on_delete=models.CASCADE)
     count = models.PositiveSmallIntegerField(default=1)
     address = models.CharField(max_length=3000, blank=True)
+    receiver_phone_number = models.CharField(max_length=150, blank=True)
+    receiver_name = models.CharField(max_length=500, blank=True)
     sign = models.CharField(max_length=500, blank=True)
 
     class Meta:
