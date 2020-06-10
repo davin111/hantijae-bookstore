@@ -181,14 +181,16 @@ class BasketViewSet(viewsets.GenericViewSet):
             if info == '2020.06.NEWBOOK':
                 name = request.data.get('name')
                 addresses = request.data.get('addresses')
+                receiver_phone_numbers = request.data.get('receiver_phone_numbers')
+                receiver_names = request.data.get('receiver_names')
                 signs = request.data.get('signs')
 
                 if basket.books.count() > 1 or basket.books.exclude(book_id=110).exists():
                     return Response(status=status.HTTP_400_BAD_REQUEST)
 
                 book_count = basket.books.last().count
-                if (not (basket_id and name and email and phone_number and addresses and signs and payer)
-                    or book_count != len(addresses) or book_count != len(signs)):
+                if (not (basket_id and name and email and phone_number and addresses and receiver_phone_numbers and receiver_names and signs and payer)
+                    or book_count != len(addresses) or book_count != len(receiver_phone_numbers) or book_count != len(receiver_names) or book_count != len(signs)):
                     return Response(status=status.HTTP_400_BAD_REQUEST)
 
                 basket.books.all().delete()
@@ -199,7 +201,12 @@ class BasketViewSet(viewsets.GenericViewSet):
                 basket.status = Basket.ORDERED
                 basket.save()
 
-                book_basket_list = [BookBasket(basket=basket, book_id=110, address=addresses[str(i)], sign=signs[str(i)]) for i in range(book_count)]
+                book_basket_list = [
+                    BookBasket(basket=basket, book_id=110, address=addresses[str(i)], sign=signs[str(i)],
+                        receiver_phone_number=receiver_phone_numbers[str(i)], receiver_name=receiver_names[str(i)]
+                    )
+                    for i in range(book_count)
+                    ]
                 BookBasket.objects.bulk_create(book_basket_list)
                 return Response(self.get_serializer(basket).data)
 
