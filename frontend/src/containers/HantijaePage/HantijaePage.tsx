@@ -62,36 +62,25 @@ class HantijaePage extends Component<Props> {
         </div>
         <hr className="HantijaeCenterLine" />
         <h3 className="NewBookTitle">
-          한티재 신간
+          출간 기념 친필 사인본 이벤트
         </h3>
         <h3 className="EventTitle">
-          “사랑과 위로를 나에게 선물하세요”
+          코로나19 최일선에서 띄우는
           <br />
-          ― 『당신이 나의 백신입니다』 저자 자필 사인본 이벤트
+          사랑과 위로의 메시지
+          <br />
+          “당신이 나의 백신입니다”
         </h3>
         <p className="EventDescription">
-          따뜻한 의사 김동은 선생님의 첫 책 출간을 기념하여
-          <br />
-          저자 자필 사인본 이벤트를 준비했습니다.
-          <br />
           한티재 온라인 책창고에서 책을 주문하시면,
           <br />
-          힘들고 아픈 사람 곁에 늘 함께 있는 선생님의
-          <br />
-          따뜻한 글씨를 책에 담아 보내드립니다.
-          <br />
-          많은 신청 부탁드립니다!
+          저자의 친필 사인이 담긴 책을 보내드립니다.
         </p>
         <hr className="HantijaeCenterLineSmall" />
         <h3 className="NewBookTitlesInPage">
           『당신이 나의 백신입니다』
           <br />
           ― 감염병과 혐오의 시대, 의사 김동은이 만난 아름다운 사람들
-        </h3>
-        <h3 className="NewBookInfosInPage">
-          김동은 지음
-          <br />
-          (2020년 6월 22일 출간 | 15,000원)
         </h3>
         <div className="NewBookStand">
           {/* eslint-disable-next-line */}
@@ -116,7 +105,7 @@ class HantijaePage extends Component<Props> {
           책바구니에 담기
         </Button>
         <p className="EventDescription">
-          ♥ 이벤트 기간 : 2020년 6월 8일(월) ~ 6월 20일(토)
+          ♥ 이벤트 기간 : 2020년 6월 10일(수) ~ 6월 20일(토)
           <br />
           ♥ 책 발송일 : 6월 22일(월)
           <br />
