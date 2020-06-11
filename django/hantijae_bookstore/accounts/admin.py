@@ -58,12 +58,13 @@ class ManualFilter(admin.SimpleListFilter):
 
 class BasketAdmin(admin.ModelAdmin):
     actions = ['set_ordered', 'set_paid', 'set_sent', 'set_received', 'set_invalid', 'mark_manual', 'unmark_manual']
-    list_filter = ['status', ManualFilter]
-    list_display = ['id', 'status', '_user', 'name', 'email', 'phone_number', 'payer', 'receiver_name', 'address',
+    list_filter = ['status', ManualFilter, 'info']
+    list_display = ['id', 'info', 'status', '_user', 'name', 'email', 'phone_number', 'payer',
                     'book_count', 'total_price', '_updated_at', '_manual']
-    fields = ['status', 'manual', '_user', 'first_name', 'email', 'phone_number', 'payer', 'receiver_first_name', 'address', 'postal_code',
-              'book_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
-    readonly_fields = ['_user', 'book_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
+    fields = ['info', 'status', 'manual', '_user', 'first_name', 'email', 'phone_number', 'payer',
+              'receiver_first_name', 'address', 'postal_code',
+              'book_order_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
+    readonly_fields = ['info', '_user', 'book_order_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
     search_fields = ['first_name', 'email', 'receiver_first_name', 'user__username', 'user__first_name', 'user__email']
 
     def _user(self, basket):
@@ -78,13 +79,18 @@ class BasketAdmin(admin.ModelAdmin):
     def receiver_name(self, basket):
         return basket.receiver_first_name
 
-    def book_list(self, basket):
+    def book_order_list(self, basket):
         book_baskets = basket.books.all()
         result = '<div>'
         for book_basket in book_baskets:
             book = book_basket.book
             result += f'<a href="/admin/books/book/{book.id}/">{book.id}: {book} - {book_basket.count} 권</a><br />'
-        result += u'</div>'
+            result += f'&nbsp;&nbsp;&nbsp;&nbsp;\
+                    주소: {book_basket.address}<br />&nbsp;&nbsp;&nbsp;&nbsp;\
+                    휴대전화 번호 (받는 분): {book_basket.receiver_phone_number}<br />&nbsp;&nbsp;&nbsp;&nbsp;\
+                    이름 (받는 분): {book_basket.receiver_name}<br />&nbsp;&nbsp;&nbsp;&nbsp;\
+                    사인받을 분: {book_basket.sign}<br /><br />'
+        result += '</div>'
         return mark_safe(result)
 
     def _updated_at(self, basket):
