@@ -62,7 +62,7 @@ class HantijaePage extends Component<Props> {
         </div>
         <hr className="HantijaeCenterLine" />
         <h3 className="NewBookTitle">
-          출간 기념 친필 사인본 이벤트
+          출간 기념 친필 사인본 이벤트 (종료)
         </h3>
         <h3 className="EventTitle">
           코로나19 최일선에서 띄우는
@@ -95,7 +95,7 @@ class HantijaePage extends Component<Props> {
         >
           책 보러가기
         </Button>
-        <Button
+        {/* <Button
           type="button"
           onClick={() => this.clickPostBookHandler()}
           variant="contained"
@@ -103,7 +103,7 @@ class HantijaePage extends Component<Props> {
           size="medium"
         >
           책바구니에 담기
-        </Button>
+        </Button> */}
         <p className="EventDescription">
           ♥ 이벤트 기간 : 2020년 6월 10일(수) ~ 6월 20일(토)
           <br />

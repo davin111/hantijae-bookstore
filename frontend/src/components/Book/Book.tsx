@@ -65,10 +65,19 @@ class Book extends Component<BookProps> {
             </h3>
           );
         } else {
+          // bookCart = (
+          //   <div className="BookListCart">
+          //     <BookCountWithCart bookId={this.props.id} history={this.props.history} />
+          //   </div>
+          // );
           bookCart = (
-            <div className="BookListCart">
-              <BookCountWithCart bookId={this.props.id} history={this.props.history} />
-            </div>
+            // eslint-disable-next-line
+            <h3
+              className="NotAcceptable"
+              onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=242512574')}
+            >
+              한티재 신간
+            </h3>
           );
         }
       }

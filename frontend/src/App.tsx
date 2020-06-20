@@ -27,7 +27,7 @@ function App(props: Props): JSX.Element {
           <Route path="/series=:series_id" exact component={Main} history={props.history} />
           <Route path="/book=:book_id" exact component={BookDetail} history={props.history} />
           <Route path="/bookbasket" exact component={BookBasket} history={props.history} />
-          <Route path="/order" exact component={Order} history={props.history} />
+          {/* <Route path="/order" exact component={Order} history={props.history} /> */}
           <Route path="/search=:search" exact component={SearchResult} history={props.history} />
           <Route path="/mypage" exact component={MyPage} history={props.history} />
           <Route path="/hantijae" exact component={HantijaePage} history={props.history} />
