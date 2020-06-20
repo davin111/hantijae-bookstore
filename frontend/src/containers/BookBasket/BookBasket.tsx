@@ -37,11 +37,12 @@ class BookBasket extends Component<Props> {
 
   render() {
     const { classes } = this.props;
-    let books = (
-      <h3 className="NoResultBasket">
-        책바구니 내역이 없습니다. 책을 담으러 가볼까요?
-      </h3>
-    );
+    // let books = (
+    //   <h3 className="NoResultBasket">
+    //     책바구니 내역이 없습니다. 책을 담으러 가볼까요?
+    //   </h3>
+    // );
+    let books = null;
     let summary = null;
     let bookCount = 0;
     let maxBookCount = 10;
@@ -76,6 +77,9 @@ class BookBasket extends Component<Props> {
           {maxBookCount}
           권
         </h2>
+        <h3 className="NoResultBasket">
+          다음 이벤트를 기대해주세요!
+        </h3>
         {books}
         {summary}
         <Button
@@ -85,7 +89,9 @@ class BookBasket extends Component<Props> {
           className={classes.button}
           onClick={() => this.props.history.push('/order')}
           endIcon={<ReceiptIcon className="ReceiptIcon" />}
-          disabled={!Array.isArray(this.props.basket.books) || this.props.basket.books.length === 0}
+          // disabled={!Array.isArray(this.props.basket.books)
+          // || this.props.basket.books.length === 0}
+          disabled
         >
           주문하기
         </Button>

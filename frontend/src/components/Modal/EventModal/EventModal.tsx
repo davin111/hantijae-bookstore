@@ -98,7 +98,7 @@ class EventModal extends Component<Props, State> {
       >
         <Modal.Header>
           <h3 className="NewBookTitleModal">
-            출간 기념 친필 사인본 이벤트
+            출간 기념 친필 사인본 이벤트 (종료)
           </h3>
           <Typography className="EventNoti" component="h1" variant="h5" color="primary">
             코로나19 최일선에서 띄우는
@@ -134,7 +134,7 @@ class EventModal extends Component<Props, State> {
             >
               책 보러가기
             </Button>
-            <Button
+            {/* <Button
               type="button"
               onClick={() => this.clickPostBookHandler()}
               variant="contained"
@@ -142,7 +142,7 @@ class EventModal extends Component<Props, State> {
               size="medium"
             >
               책바구니에 담기
-            </Button>
+            </Button> */}
             <p className="EventDescriptionModal">
               ♥ 이벤트 기간 : 2020년 6월 10일(수) ~ 6월 20일(토)
               <br />
