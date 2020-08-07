@@ -42,6 +42,9 @@ class User extends Component<Props> {
           variant="contained"
           color="primary"
           size="small"
+          style={{
+            backgroundColor: '#7EC7C5',
+          }}
         >
           로그인
         </Button>
@@ -55,6 +58,9 @@ class User extends Component<Props> {
           variant="contained"
           color="secondary"
           size="small"
+          style={{
+            backgroundColor: '#F07161',
+          }}
         >
           로그인
         </Button>
@@ -82,6 +88,9 @@ class User extends Component<Props> {
             variant="contained"
             color="secondary"
             size="small"
+            style={{
+              backgroundColor: '#F07161',
+            }}
             onClick={() => {
               this.props.onOpenEventModal();
               this.props.history.push('/');
@@ -121,6 +130,9 @@ class User extends Component<Props> {
             variant="contained"
             color="primary"
             size="small"
+            style={{
+              backgroundColor: '#7EC7C5',
+            }}
           >
             교보문고
           </Button>
@@ -132,6 +144,9 @@ class User extends Component<Props> {
             variant="contained"
             color="primary"
             size="small"
+            style={{
+              backgroundColor: '#7EC7C5',
+            }}
           >
             알라딘
           </Button>
@@ -143,6 +158,9 @@ class User extends Component<Props> {
             variant="contained"
             color="primary"
             size="small"
+            style={{
+              backgroundColor: '#7EC7C5',
+            }}
           >
             yes24
           </Button>
@@ -154,6 +172,9 @@ class User extends Component<Props> {
             variant="contained"
             color="primary"
             size="small"
+            style={{
+              backgroundColor: '#7EC7C5',
+            }}
           >
             인터파크
           </Button>

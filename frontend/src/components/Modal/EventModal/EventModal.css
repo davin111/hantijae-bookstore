@@ -15,16 +15,17 @@
 }
 .NewBookStandModal img {
     min-height: 400px;
-    max-width: 400px;
+    max-width: 530px;
     vertical-align: middle;
     align-self: center;
     border-radius: 1.5em;
     margin-left: auto;
     margin-right: auto;
+    margin-bottom: 10%;
 }
 @media all and (max-width:768px) {
     .NewBookStandModal img {
-        min-height: 300px;
+        min-height: 225px;
         max-width: 300px;
     }
 }

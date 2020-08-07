@@ -62,38 +62,34 @@ class HantijaePage extends Component<Props> {
         </div>
         <hr className="HantijaeCenterLine" />
         <h3 className="NewBookTitle">
-          출간 기념 친필 사인본 이벤트 (종료)
+          『성서, 퀴어를 옹호하다』 텀블벅 펀딩 진행중!
         </h3>
         <h3 className="EventTitle">
-          코로나19 최일선에서 띄우는
+          왜 개신교는 그렇게 성소수자를 부정할까?
           <br />
-          사랑과 위로의 메시지
-          <br />
-          “당신이 나의 백신입니다”
+          정말로 성서는 동성애를 금지하고 있을까?
         </h3>
         <p className="EventDescription">
-          한티재 온라인 책창고에서 책을 주문하시면,
-          <br />
-          저자의 친필 사인이 담긴 책을 보내드립니다.
+          일정 금액 이상 후원 시 금속 뱃지와 스티커를 증정합니다.
         </p>
         <hr className="HantijaeCenterLineSmall" />
         <h3 className="NewBookTitlesInPage">
-          『당신이 나의 백신입니다』
+          『성서, 퀴어를 옹호하다』
           <br />
-          ― 감염병과 혐오의 시대, 의사 김동은이 만난 아름다운 사람들
+          ― 성서학자가 들려주는 기독교와 성소수자 이야기
         </h3>
         <div className="NewBookStand">
           {/* eslint-disable-next-line */}
-          <img src={require('../BookDetail/book_covers_3d/당신이 나의 백신입니다.png')} />
+          <img src={require('../BookDetail/book_covers_3d/성서, 퀴어를 옹호하다.jpeg')} />
         </div>
         <Button
           type="button"
-          onClick={() => this.props.history.push('/book=110')}
+          onClick={() => window.open('https://tumblbug.com/queerinbible')}
           variant="contained"
           color="primary"
           size="medium"
         >
-          책 보러가기
+          프로젝트 밀어주기
         </Button>
         {/* <Button
           type="button"
@@ -105,19 +101,15 @@ class HantijaePage extends Component<Props> {
           책바구니에 담기
         </Button> */}
         <p className="EventDescription">
-          ♥ 이벤트 기간 : 2020년 6월 10일(수) ~ 6월 20일(토)
+          ♥ 펀딩 기간 : 2020년 7월 17일(금) ~ 8월 20일(목)
           <br />
-          ♥ 책 발송일 : 6월 22일(월)
+          ♥ 예상 선물 수령일 : 9월 15일(화)
           <br />
-          ♥ 이벤트 참가 방법
+          &nbsp;&nbsp;8월 20일 - 펀딩 마감
           <br />
-          &nbsp;&nbsp;1. 한티재 온라인 책창고에서 회원 가입을 합니다.
+          &nbsp;&nbsp;9월 7일 - 모금액 정산 완료, 제작비 결제
           <br />
-          &nbsp;&nbsp;2. 『당신이 나의 백신입니다』를 주문합니다.
-          <br />
-          &nbsp;&nbsp;3. 주문 단계에서, 사인 받을 분의 이름을 확인하여 정확히 입력해주세요.
-          <br />
-          &nbsp;&nbsp;4. ‘주문 완료’ 버튼을 누르고 결제해주세요. 결제가 확인되어야 발송됩니다.
+          &nbsp;&nbsp;9월 15일 - 예상 선물 수령일
           <br />
           ♥ 문의 : 053-743-8368 | hantibooks@gmail.com
         </p>
