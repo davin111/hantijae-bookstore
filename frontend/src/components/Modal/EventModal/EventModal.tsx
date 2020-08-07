@@ -127,6 +127,9 @@ class EventModal extends Component<Props, State> {
               variant="contained"
               color="primary"
               size="medium"
+              style={{
+                backgroundColor: '#7EC7C5',
+              }}
             >
               프로젝트 밀어주기
             </Button>
