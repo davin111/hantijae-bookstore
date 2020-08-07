@@ -132,7 +132,12 @@ class Login extends Component<Props, State> {
       <Container component="main" maxWidth="xs">
         <CssBaseline />
         <div className={classes.paper}>
-          <Avatar className={classes.avatar}>
+          <Avatar
+            className={classes.avatar}
+            style={{
+              backgroundColor: '#F07161',
+            }}
+          >
             <LockOutlinedIcon />
           </Avatar>
           <Typography component="h1" variant="h5">
@@ -188,6 +193,9 @@ class Login extends Component<Props, State> {
               color="primary"
               className="GoToSignupButton"
               onClick={() => this.props.history.push('/signup')}
+              style={{
+                backgroundColor: '#7EC7C5',
+              }}
             >
               회원 가입하러 가기
             </Button>

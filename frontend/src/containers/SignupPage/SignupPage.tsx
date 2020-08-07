@@ -177,7 +177,12 @@ class SignupPage extends Component<Props, State> {
       <Container component="main" maxWidth="xs">
         <CssBaseline />
         <div className={classes.paper}>
-          <Avatar className={classes.avatar}>
+          <Avatar
+            className={classes.avatar}
+            style={{
+              backgroundColor: '#F07161',
+            }}
+          >
             <LockOutlinedIcon />
           </Avatar>
           <Typography component="h1" variant="h5">
@@ -189,7 +194,7 @@ class SignupPage extends Component<Props, State> {
             온라인 책창고 회원이 되시면, 새 책이 나올 때마다 소식을 알려 드리고, 한티재에서 개최하는 행사에 먼저 초대하겠습니다.
             <br />
             <br />
-            현재 『당신이 나의 백신입니다』 저자 자필 사인본 이벤트를 진행하고 있습니다! 회원가입 후 책을 주문하시면 참여 가능합니다.
+            『성서, 퀴어를 옹호하다』 텀블벅 펀딩 진행중! 일정 금액 이상 후원 시 금속 뱃지와 스티커를 증정합니다.
           </div>
           <form className={classes.form} noValidate>
             <Grid container spacing={2}>
