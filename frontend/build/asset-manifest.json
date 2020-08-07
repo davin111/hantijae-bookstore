@@ -1,17 +1,17 @@
 {
   "files": {
-    "main.css": "/static/css/main.6c2f3d0a.chunk.css",
-    "main.js": "/static/js/main.d4af8a36.chunk.js",
-    "main.js.map": "/static/js/main.d4af8a36.chunk.js.map",
+    "main.css": "/static/css/main.92701404.chunk.css",
+    "main.js": "/static/js/main.9b1a9ef3.chunk.js",
+    "main.js.map": "/static/js/main.9b1a9ef3.chunk.js.map",
     "runtime-main.js": "/static/js/runtime-main.460ed7ea.js",
     "runtime-main.js.map": "/static/js/runtime-main.460ed7ea.js.map",
-    "static/js/2.ccd10da1.chunk.js": "/static/js/2.ccd10da1.chunk.js",
-    "static/js/2.ccd10da1.chunk.js.map": "/static/js/2.ccd10da1.chunk.js.map",
+    "static/js/2.59f61602.chunk.js": "/static/js/2.59f61602.chunk.js",
+    "static/js/2.59f61602.chunk.js.map": "/static/js/2.59f61602.chunk.js.map",
     "index.html": "/index.html",
-    "precache-manifest.18d5c18847f3165d29f849caa86b595e.js": "/precache-manifest.18d5c18847f3165d29f849caa86b595e.js",
+    "precache-manifest.254662fe5f696f795779058770aace21.js": "/precache-manifest.254662fe5f696f795779058770aace21.js",
     "service-worker.js": "/service-worker.js",
-    "static/css/main.6c2f3d0a.chunk.css.map": "/static/css/main.6c2f3d0a.chunk.css.map",
-    "static/js/2.ccd10da1.chunk.js.LICENSE.txt": "/static/js/2.ccd10da1.chunk.js.LICENSE.txt",
+    "static/css/main.92701404.chunk.css.map": "/static/css/main.92701404.chunk.css.map",
+    "static/js/2.59f61602.chunk.js.LICENSE.txt": "/static/js/2.59f61602.chunk.js.LICENSE.txt",
     "static/media/1.5   그레타 툰베리와 함께.png": "/static/media/1.5   그레타 툰베리와 함께.e32fb971.png",
     "static/media/57 세상에 말을 걸다.png": "/static/media/57 세상에 말을 걸다.e08d79db.png",
     "static/media/PM 100 꿈을 적는 시간.png": "/static/media/PM 100 꿈을 적는 시간.86a18103.png",
@@ -72,6 +72,7 @@
     "static/media/생태주의 역사강의.png": "/static/media/생태주의 역사강의.640d61bc.png",
     "static/media/선거, 버려야 이긴다.png": "/static/media/선거, 버려야 이긴다.6a006a9b.png",
     "static/media/선생님과 함께하는 대구읍성 답사.png": "/static/media/선생님과 함께하는 대구읍성 답사.206a1620.png",
+    "static/media/성서, 퀴어를 옹호하다.jpeg": "/static/media/성서, 퀴어를 옹호하다.4dba0bc4.jpeg",
     "static/media/성주가 평화다.png": "/static/media/성주가 평화다.edc105d9.png",
     "static/media/소농, 문명의 뿌리.png": "/static/media/소농, 문명의 뿌리.9096ae8d.png",
     "static/media/송기호의 밥과 법.png": "/static/media/송기호의 밥과 법.f020dbb5.png",
@@ -128,8 +129,8 @@
   },
   "entrypoints": [
     "static/js/runtime-main.460ed7ea.js",
-    "static/js/2.ccd10da1.chunk.js",
-    "static/css/main.6c2f3d0a.chunk.css",
-    "static/js/main.d4af8a36.chunk.js"
+    "static/js/2.59f61602.chunk.js",
+    "static/css/main.92701404.chunk.css",
+    "static/js/main.9b1a9ef3.chunk.js"
   ]
 }
