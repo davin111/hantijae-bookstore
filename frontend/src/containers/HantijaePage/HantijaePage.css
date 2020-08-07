@@ -140,7 +140,7 @@
     }
 }
 .NewBookStand img {
-    min-height: 600px;
+    min-height: 452px;
     max-width: 600px;
     vertical-align: middle;
     align-self: center;
@@ -150,7 +150,7 @@
 }
 @media all and (max-width:768px) {
     .NewBookStand img {
-        min-height: 300px;
+        min-height: 225px;
         max-width: 300px;
     }
 }

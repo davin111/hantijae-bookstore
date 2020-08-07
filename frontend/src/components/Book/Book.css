@@ -129,12 +129,12 @@
     position: absolute;
     bottom: 0%;
     right: 2%;
-    border-style: solid;
+    border-style: none;
     border-radius: 0.7em;
     border-width: 0.1em;
     padding: 8px;
-    background-color: #8AB1DB;
-    color: white;
+    background-color: #FFD27C;
+    color: black;
     text-align: center;
     font-size: 1em;
     cursor: pointer;
@@ -148,7 +148,7 @@
     }
 }
 .NotAcceptable:hover {
-    background-color: rgb(93, 140, 190);
+    background-color: rgb(255, 187, 61);
 }
 .NotVisible {
     position: absolute;
