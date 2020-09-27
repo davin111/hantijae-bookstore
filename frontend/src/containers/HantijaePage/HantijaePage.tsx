@@ -60,7 +60,7 @@ class HantijaePage extends Component<Props> {
             사람과 사람, 사람과 자연, 오늘 세대와 내일 세대가 공존하는 사회에 보탬이 되는 책을 만들기 위해 노력하고 있습니다.
           </p>
         </div>
-        <hr className="HantijaeCenterLine" />
+        {/* <hr className="HantijaeCenterLine" />
         <h3 className="NewBookTitle">
           『성서, 퀴어를 옹호하다』 텀블벅 펀딩 진행중!
         </h3>
@@ -78,9 +78,9 @@ class HantijaePage extends Component<Props> {
           <br />
           ― 성서학자가 들려주는 기독교와 성소수자 이야기
         </h3>
-        <div className="NewBookStand">
-          {/* eslint-disable-next-line */}
-          <img src={require('../BookDetail/book_covers_3d/성서, 퀴어를 옹호하다.jpeg')} />
+        <div className="NewBookStand"> */}
+        {/* eslint-disable-next-line */}
+          {/* <img src={require('../BookDetail/book_covers_3d/성서, 퀴어를 옹호하다.jpeg')} />
         </div>
         <Button
           type="button"
@@ -93,7 +93,7 @@ class HantijaePage extends Component<Props> {
           }}
         >
           프로젝트 밀어주기
-        </Button>
+        </Button> */}
         {/* <Button
           type="button"
           onClick={() => this.clickPostBookHandler()}
@@ -103,7 +103,7 @@ class HantijaePage extends Component<Props> {
         >
           책바구니에 담기
         </Button> */}
-        <p className="EventDescription">
+        {/* <p className="EventDescription">
           ♥ 펀딩 기간 : 2020년 7월 17일(금) ~ 8월 20일(목)
           <br />
           ♥ 예상 선물 수령일 : 9월 15일(화)
@@ -118,7 +118,7 @@ class HantijaePage extends Component<Props> {
         </p>
         <LoginModal history={this.props.history} />
         <FullBasketModal history={this.props.history} />
-        <BasketInfoModal history={this.props.history} />
+        <BasketInfoModal history={this.props.history} /> */}
       </div>
     );
   }

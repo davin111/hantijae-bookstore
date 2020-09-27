@@ -192,9 +192,6 @@ class SignupPage extends Component<Props, State> {
             한티재 10주년을 맞아 문을 연 온라인 책창고.
             <br />
             온라인 책창고 회원이 되시면, 새 책이 나올 때마다 소식을 알려 드리고, 한티재에서 개최하는 행사에 먼저 초대하겠습니다.
-            <br />
-            <br />
-            『성서, 퀴어를 옹호하다』 텀블벅 펀딩 진행중! 일정 금액 이상 후원 시 금속 뱃지와 스티커를 증정합니다.
           </div>
           <form className={classes.form} noValidate>
             <Grid container spacing={2}>
