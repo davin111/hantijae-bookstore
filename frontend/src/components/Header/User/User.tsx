@@ -89,13 +89,14 @@ class User extends Component<Props> {
             color="secondary"
             size="small"
             style={{
-              backgroundColor: '#F07161',
+              backgroundColor: 'gray',
             }}
             onClick={() => {
               this.props.onOpenEventModal();
               this.props.history.push('/');
             }}
             endIcon={<StarIcon />}
+            disabled
           >
             이벤트
           </Button>
