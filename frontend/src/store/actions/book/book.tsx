@@ -116,3 +116,12 @@ const getAllSeriesFailure = (error: any) => ({
 export const getAllSeries = () => (dispatch: Dispatch) => axios.get('/api/book/series/')
   .then((res) => dispatch(getAllSeriesSuccess(res.data)))
   .catch((err) => dispatch(getAllSeriesFailure(err)));
+
+const changeActiveSeriesSuccess = (seriesId: number) => ({
+  type: seriesConstants.CHANGE_ACTIVE_SERIES,
+  target: seriesId,
+});
+
+export const changeActiveSeries = (seriesId: number) => (dispatch: Dispatch) => {
+  dispatch(changeActiveSeriesSuccess(seriesId));
+};

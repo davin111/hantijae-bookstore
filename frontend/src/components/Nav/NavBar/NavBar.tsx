@@ -9,6 +9,8 @@ interface Props{
   history: any;
   getSeriesStatus: string;
   onGetAllSeries: () => any;
+  onChangeActiveSeries: (seriesId: number) => any;
+  activeSeriesId: number;
 }
 
 interface State{
@@ -16,42 +18,19 @@ interface State{
 }
 
 class NavBar extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      activeSeriesId: 0,
-    };
-  }
-
   componentDidMount() {
     this.props.onGetAllSeries();
   }
 
-  /* eslint-disable react/no-did-update-set-state */
-  componentDidUpdate(prevProps: Props) {
-    if (this.props.history !== prevProps.history) {
-      this.setState({ activeSeriesId: 0 });
-    }
-  }
-  /* eslint-enable react/no-did-update-set-state */
-
   clickSeriesHandler(id: number) {
     this.props.history.push(`/series=${id}`);
-    this.setState({ activeSeriesId: id });
+    this.props.onChangeActiveSeries(id);
   }
 
   render() {
     let series = null;
     if (this.props.series.length > 0) {
-      let activeSeriesId = 0;
-      const { pathname } = this.props.history.location;
-      if (pathname.startsWith('/series=')) {
-        activeSeriesId = pathname.split('=')[1];
-      } else if (pathname === '/') {
-        activeSeriesId = this.props.series[0].id;
-      } else {
-        activeSeriesId = this.state.activeSeriesId;
-      }
+      const activeSeriesId = this.props.activeSeriesId;
 
       series = this.props.series.map((oneSeries: any) => (
         <button
@@ -71,7 +50,7 @@ class NavBar extends Component<Props, State> {
           key={-2}
           onClick={() => {
             this.props.history.push('/hantijae');
-            this.setState({ activeSeriesId: -2 });
+            this.props.onChangeActiveSeries(-2);
           }}
           className={`CategoryButton ${(this.props.history.location.pathname === '/hantijae') ? 'CategoryButtonActive' : ''}`}
         >
@@ -86,10 +65,12 @@ class NavBar extends Component<Props, State> {
 const mapStateToProps = (state: any) => ({
   getSeriesStatus: state.book.getSeriesStatus,
   series: state.book.getAllSeries,
+  activeSeriesId: state.book.activeSeriesId,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetAllSeries: () => dispatch(bookActions.getAllSeries()),
+  onChangeActiveSeries: (seriesId: number) => dispatch(bookActions.changeActiveSeries(seriesId)),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(NavBar);

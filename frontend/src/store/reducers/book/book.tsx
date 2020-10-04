@@ -12,6 +12,7 @@ const initialState = {
   getCategories: {},
   getSeries: {},
   getAllSeries: {},
+  activeSeriesId: 0,
 };
 
 const reducer = (state = initialState, action: any) => {
@@ -40,6 +41,8 @@ const reducer = (state = initialState, action: any) => {
       return { ...state, getSeriesStatus: seriesStatus.FAILURE };
     case seriesConstants.GET_ALL_SERIES_SUCCESS:
       return { ...state, getSeriesStatus: seriesStatus.SUCCESS, getAllSeries: action.target };
+    case seriesConstants.CHANGE_ACTIVE_SERIES:
+      return { ...state, activeSeriesId: action.target };
     default:
       return { ...state };
   }
