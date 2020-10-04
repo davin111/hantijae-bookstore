@@ -6,6 +6,7 @@ import {
   getCategories,
   getSeries,
   getAllSeries,
+  changeActiveSeries,
 } from './book/book';
 
 import {
@@ -45,6 +46,7 @@ export const bookActions = {
   getCategories,
   getSeries,
   getAllSeries,
+  changeActiveSeries,
 };
 
 export const userActions = {

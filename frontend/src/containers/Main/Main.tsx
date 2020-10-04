@@ -9,6 +9,8 @@ import './Main.css';
 
 interface Props {
   history: any;
+  onChangeActiveSeries: (seriesId: number) => any;
+  activeSeriesId: number;
 }
 
 class Main extends Component<Props> {
@@ -18,9 +20,12 @@ class Main extends Component<Props> {
   }
 
   render() {
-    let activeSeriesId = 0;
-    if (this.props.history.location.pathname.startsWith('/series=')) {
-      activeSeriesId = this.props.history.location.pathname.split('=')[1];
+    let { activeSeriesId } = this.props;
+    if (activeSeriesId <= 0) {
+      const max = 6;
+      const min = 1;
+      activeSeriesId = Math.floor(Math.random() * (max - min)) + min;
+      this.props.onChangeActiveSeries(activeSeriesId);
     }
     return (
       <div>
@@ -40,10 +45,12 @@ class Main extends Component<Props> {
 const mapStateToProps = (state: any) => ({
   getBookStatus: state.book.getBookStatus,
   books: state.book.books,
+  activeSeriesId: state.book.activeSeriesId,
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetBooks: () => dispatch(bookActions.getBooks()),
+  onChangeActiveSeries: (seriesId: number) => dispatch(bookActions.changeActiveSeries(seriesId)),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(Main);
