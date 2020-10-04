@@ -30,7 +30,7 @@ class NavBar extends Component<Props, State> {
   render() {
     let series = null;
     if (this.props.series.length > 0) {
-      const activeSeriesId = this.props.activeSeriesId;
+      const { activeSeriesId } = this.props;
 
       series = this.props.series.map((oneSeries: any) => (
         <button

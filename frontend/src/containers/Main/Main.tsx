@@ -20,7 +20,7 @@ class Main extends Component<Props> {
   }
 
   render() {
-    let activeSeriesId = this.props.activeSeriesId;
+    let { activeSeriesId } = this.props;
     if (activeSeriesId <= 0) {
       const max = 6;
       const min = 1;
