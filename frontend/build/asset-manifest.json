@@ -1,17 +1,17 @@
 {
   "files": {
     "main.css": "/static/css/main.92701404.chunk.css",
-    "main.js": "/static/js/main.9e165eff.chunk.js",
-    "main.js.map": "/static/js/main.9e165eff.chunk.js.map",
+    "main.js": "/static/js/main.6e291f39.chunk.js",
+    "main.js.map": "/static/js/main.6e291f39.chunk.js.map",
     "runtime-main.js": "/static/js/runtime-main.460ed7ea.js",
     "runtime-main.js.map": "/static/js/runtime-main.460ed7ea.js.map",
-    "static/js/2.f7e6b45a.chunk.js": "/static/js/2.f7e6b45a.chunk.js",
-    "static/js/2.f7e6b45a.chunk.js.map": "/static/js/2.f7e6b45a.chunk.js.map",
+    "static/js/2.7cb3f83a.chunk.js": "/static/js/2.7cb3f83a.chunk.js",
+    "static/js/2.7cb3f83a.chunk.js.map": "/static/js/2.7cb3f83a.chunk.js.map",
     "index.html": "/index.html",
-    "precache-manifest.4a368431a46c3ce760e15662b8fdd400.js": "/precache-manifest.4a368431a46c3ce760e15662b8fdd400.js",
+    "precache-manifest.7db75839f885f41ee43240a64c022625.js": "/precache-manifest.7db75839f885f41ee43240a64c022625.js",
     "service-worker.js": "/service-worker.js",
     "static/css/main.92701404.chunk.css.map": "/static/css/main.92701404.chunk.css.map",
-    "static/js/2.f7e6b45a.chunk.js.LICENSE.txt": "/static/js/2.f7e6b45a.chunk.js.LICENSE.txt",
+    "static/js/2.7cb3f83a.chunk.js.LICENSE.txt": "/static/js/2.7cb3f83a.chunk.js.LICENSE.txt",
     "static/media/1.5   그레타 툰베리와 함께.png": "/static/media/1.5   그레타 툰베리와 함께.e32fb971.png",
     "static/media/57 세상에 말을 걸다.png": "/static/media/57 세상에 말을 걸다.e08d79db.png",
     "static/media/PM 100 꿈을 적는 시간.png": "/static/media/PM 100 꿈을 적는 시간.86a18103.png",
@@ -22,6 +22,7 @@
     "static/media/강냉이, 공부하다 빵 터지다.png": "/static/media/강냉이, 공부하다 빵 터지다.c642db4f.png",
     "static/media/강냉이, 담장을 넘다.png": "/static/media/강냉이, 담장을 넘다.7c58bc27.png",
     "static/media/강을 버린 세계에서 살아가기.png": "/static/media/강을 버린 세계에서 살아가기.a20b1a4b.png",
+    "static/media/개방명부 비례대표제를 제안한다.png": "/static/media/개방명부 비례대표제를 제안한다.976bcaff.png",
     "static/media/고르게 가난한 사회.png": "/static/media/고르게 가난한 사회.fccf335c.png",
     "static/media/굿바이 미세먼지.png": "/static/media/굿바이 미세먼지.84a9c7e2.png",
     "static/media/굿바이 카.png": "/static/media/굿바이 카.db489b26.png",
@@ -72,6 +73,7 @@
     "static/media/생태주의 역사강의.png": "/static/media/생태주의 역사강의.640d61bc.png",
     "static/media/선거, 버려야 이긴다.png": "/static/media/선거, 버려야 이긴다.6a006a9b.png",
     "static/media/선생님과 함께하는 대구읍성 답사.png": "/static/media/선생님과 함께하는 대구읍성 답사.206a1620.png",
+    "static/media/성서, 퀴어를 옹호하다.png": "/static/media/성서, 퀴어를 옹호하다.6336bdb8.png",
     "static/media/성서, 퀴어를 옹호하다.jpeg": "/static/media/성서, 퀴어를 옹호하다.4dba0bc4.jpeg",
     "static/media/성주가 평화다.png": "/static/media/성주가 평화다.edc105d9.png",
     "static/media/소농, 문명의 뿌리.png": "/static/media/소농, 문명의 뿌리.9096ae8d.png",
@@ -129,8 +131,8 @@
   },
   "entrypoints": [
     "static/js/runtime-main.460ed7ea.js",
-    "static/js/2.f7e6b45a.chunk.js",
+    "static/js/2.7cb3f83a.chunk.js",
     "static/css/main.92701404.chunk.css",
-    "static/js/main.9e165eff.chunk.js"
+    "static/js/main.6e291f39.chunk.js"
   ]
 }
