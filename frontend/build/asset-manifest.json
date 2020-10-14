@@ -1,17 +1,17 @@
 {
   "files": {
     "main.css": "/static/css/main.92701404.chunk.css",
-    "main.js": "/static/js/main.ab24bc91.chunk.js",
-    "main.js.map": "/static/js/main.ab24bc91.chunk.js.map",
+    "main.js": "/static/js/main.8d7739c0.chunk.js",
+    "main.js.map": "/static/js/main.8d7739c0.chunk.js.map",
     "runtime-main.js": "/static/js/runtime-main.460ed7ea.js",
     "runtime-main.js.map": "/static/js/runtime-main.460ed7ea.js.map",
-    "static/js/2.d1242609.chunk.js": "/static/js/2.d1242609.chunk.js",
-    "static/js/2.d1242609.chunk.js.map": "/static/js/2.d1242609.chunk.js.map",
+    "static/js/2.e0aa57cc.chunk.js": "/static/js/2.e0aa57cc.chunk.js",
+    "static/js/2.e0aa57cc.chunk.js.map": "/static/js/2.e0aa57cc.chunk.js.map",
     "index.html": "/index.html",
-    "precache-manifest.c961bed7c547719db2d5c60175c517a8.js": "/precache-manifest.c961bed7c547719db2d5c60175c517a8.js",
+    "precache-manifest.2052507a7ebab639870e792b192453a3.js": "/precache-manifest.2052507a7ebab639870e792b192453a3.js",
     "service-worker.js": "/service-worker.js",
     "static/css/main.92701404.chunk.css.map": "/static/css/main.92701404.chunk.css.map",
-    "static/js/2.d1242609.chunk.js.LICENSE.txt": "/static/js/2.d1242609.chunk.js.LICENSE.txt",
+    "static/js/2.e0aa57cc.chunk.js.LICENSE.txt": "/static/js/2.e0aa57cc.chunk.js.LICENSE.txt",
     "static/media/1.5   그레타 툰베리와 함께.png": "/static/media/1.5   그레타 툰베리와 함께.e32fb971.png",
     "static/media/57 세상에 말을 걸다.png": "/static/media/57 세상에 말을 걸다.e08d79db.png",
     "static/media/PM 100 꿈을 적는 시간.png": "/static/media/PM 100 꿈을 적는 시간.86a18103.png",
@@ -56,6 +56,7 @@
     "static/media/마음이 따뜻한 사람, 이성경.png": "/static/media/마음이 따뜻한 사람, 이성경.bd9e79ae.png",
     "static/media/무향민의 노래.png": "/static/media/무향민의 노래.b29c842c.png",
     "static/media/문학과의 동행.png": "/static/media/문학과의 동행.d5bb7096.png",
+    "static/media/문학의 위안.png": "/static/media/문학의 위안.5f8f2bb9.png",
     "static/media/민들레처럼 불나비처럼.png": "/static/media/민들레처럼 불나비처럼.c992a370.png",
     "static/media/바람이 시의 목을 베고.png": "/static/media/바람이 시의 목을 베고.5ecb77fa.png",
     "static/media/밥상의 전환.png": "/static/media/밥상의 전환.da5a2916.png",
@@ -131,8 +132,8 @@
   },
   "entrypoints": [
     "static/js/runtime-main.460ed7ea.js",
-    "static/js/2.d1242609.chunk.js",
+    "static/js/2.e0aa57cc.chunk.js",
     "static/css/main.92701404.chunk.css",
-    "static/js/main.ab24bc91.chunk.js"
+    "static/js/main.8d7739c0.chunk.js"
   ]
 }
