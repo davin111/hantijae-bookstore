@@ -84,6 +84,16 @@ class Book extends Component<BookProps> {
               한티재 신간
             </h3>
           );
+        } else if (this.props.id === 112) {
+          bookCart = (
+            // eslint-disable-next-line
+            <h3
+              className="NotAcceptable"
+              onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=247906004')}
+            >
+              한티재 신간
+            </h3>
+          );
         } else {
           // bookCart = (
           //   <div className="BookListCart">
@@ -94,7 +104,7 @@ class Book extends Component<BookProps> {
             // eslint-disable-next-line
             <h3
               className="NotAcceptable"
-              onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=247906004')}
+              onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=247906079')}
             >
               한티재 신간
             </h3>
