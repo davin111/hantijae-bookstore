@@ -1,17 +1,17 @@
 {
   "files": {
     "main.css": "/static/css/main.92701404.chunk.css",
-    "main.js": "/static/js/main.8d7739c0.chunk.js",
-    "main.js.map": "/static/js/main.8d7739c0.chunk.js.map",
+    "main.js": "/static/js/main.ebd5355f.chunk.js",
+    "main.js.map": "/static/js/main.ebd5355f.chunk.js.map",
     "runtime-main.js": "/static/js/runtime-main.460ed7ea.js",
     "runtime-main.js.map": "/static/js/runtime-main.460ed7ea.js.map",
-    "static/js/2.e0aa57cc.chunk.js": "/static/js/2.e0aa57cc.chunk.js",
-    "static/js/2.e0aa57cc.chunk.js.map": "/static/js/2.e0aa57cc.chunk.js.map",
+    "static/js/2.8c852bd0.chunk.js": "/static/js/2.8c852bd0.chunk.js",
+    "static/js/2.8c852bd0.chunk.js.map": "/static/js/2.8c852bd0.chunk.js.map",
     "index.html": "/index.html",
-    "precache-manifest.2052507a7ebab639870e792b192453a3.js": "/precache-manifest.2052507a7ebab639870e792b192453a3.js",
+    "precache-manifest.4c45de8db7daa875b3c6a407a62d06c8.js": "/precache-manifest.4c45de8db7daa875b3c6a407a62d06c8.js",
     "service-worker.js": "/service-worker.js",
     "static/css/main.92701404.chunk.css.map": "/static/css/main.92701404.chunk.css.map",
-    "static/js/2.e0aa57cc.chunk.js.LICENSE.txt": "/static/js/2.e0aa57cc.chunk.js.LICENSE.txt",
+    "static/js/2.8c852bd0.chunk.js.LICENSE.txt": "/static/js/2.8c852bd0.chunk.js.LICENSE.txt",
     "static/media/1.5   그레타 툰베리와 함께.png": "/static/media/1.5   그레타 툰베리와 함께.e32fb971.png",
     "static/media/57 세상에 말을 걸다.png": "/static/media/57 세상에 말을 걸다.e08d79db.png",
     "static/media/PM 100 꿈을 적는 시간.png": "/static/media/PM 100 꿈을 적는 시간.86a18103.png",
@@ -40,6 +40,7 @@
     "static/media/내캉 살자.png": "/static/media/내캉 살자.5fe601fa.png",
     "static/media/너도바람꽃.png": "/static/media/너도바람꽃.e9cc8af7.png",
     "static/media/농부의 나라.png": "/static/media/농부의 나라.9813fc45.png",
+    "static/media/다른 오늘.png": "/static/media/다른 오늘.8f6bd5d8.png",
     "static/media/당부.png": "/static/media/당부.d323c197.png",
     "static/media/당신이 나의 백신입니다.png": "/static/media/당신이 나의 백신입니다.859f5719.png",
     "static/media/대구, 찬란한 예술의 기억.png": "/static/media/대구, 찬란한 예술의 기억.f9a3f77b.png",
@@ -132,8 +133,8 @@
   },
   "entrypoints": [
     "static/js/runtime-main.460ed7ea.js",
-    "static/js/2.e0aa57cc.chunk.js",
+    "static/js/2.8c852bd0.chunk.js",
     "static/css/main.92701404.chunk.css",
-    "static/js/main.8d7739c0.chunk.js"
+    "static/js/main.ebd5355f.chunk.js"
   ]
 }
