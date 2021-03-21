@@ -1,5 +1,5 @@
 Django==3.0.7
-djangorestframework==3.11.0
+djangorestframework==3.11.2
 Markdown==3.2.1
 django-filter==2.2.0
 mysqlclient==1.4.6
