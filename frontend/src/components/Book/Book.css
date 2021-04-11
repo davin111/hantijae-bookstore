@@ -88,7 +88,7 @@
         width: 90%;
     }
 }
-.BookInfo h4 {
+.BookInfo .BookCompilerLine {
     margin-top: 4%;
     margin-right: 5%;
     margin-bottom: 0%;
@@ -96,9 +96,22 @@
     text-align: right;
 }
 @media all and (max-width:768px) {
-    .BookInfo h4 {
+    .BookInfo .BookCompilerLine {
         font-size: 0.8em;
-        margin-top: 10%;
+        margin-top: 8%;
+    }
+}
+.BookInfo .BookAuthorLine {
+    margin-top: 2%;
+    margin-right: 5%;
+    margin-bottom: 0%;
+    font-size: 1.25em;
+    text-align: right;
+}
+@media all and (max-width:768px) {
+    .BookInfo .BookAuthorLine {
+        font-size: 0.8em;
+        margin-top: 5%;
     }
 }
 .BookInfo p {

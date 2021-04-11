@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from books.models import Book, Author, Category, Series
 
+
 class BookSerializer(serializers.ModelSerializer):
     authors = serializers.SerializerMethodField()
 
@@ -23,6 +24,7 @@ class BookSerializer(serializers.ModelSerializer):
             'published_date',
             'authors',
             'visible',
+            'aladin_url',
         )
 
     def get_authors(self, book):
@@ -52,6 +54,7 @@ class SimpleBookSerializer(serializers.ModelSerializer):
             'published_date',
             'authors',
             'visible',
+            'aladin_url',
         )
 
     def get_authors(self, book):

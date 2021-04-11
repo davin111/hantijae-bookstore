@@ -1,15 +1,26 @@
 from django.contrib import admin
 from django.utils.safestring import mark_safe
-from books.models import Book, Author, BookAuthor, Category, Series
+from books.models import Author, Book, BookAuthor, BookSeries, Category, Series
+
+
+class BookAuthorInline(admin.TabularInline):
+    model = BookAuthor
+    extra = 1
+
+
+class BookSeriesInline(admin.TabularInline):
+    model = BookSeries
+    extra = 1
+
 
 class BookAdmin(admin.ModelAdmin):
     list_filter = ['series__series', 'category']
     actions = ['set_visible', 'set_invisible']
     list_display = ['id', 'title', 'subtitle', 'full_price', 'author_list', 'series_list', 'category', 'published_date', '_visible']
-    fields = ['title', 'subtitle', 'author_list', 'short_description', 'description', 'full_price', 'price', 'isbn', 'page_count',
-              'size', 'series_list', 'category', 'published_date', 'visible', 'kyobo_url', 'aladin_url', 'yes24_url', 'interpark_url']
-    readonly_fields = ['author_list', 'series_list']
+    fields = ['title', 'subtitle', 'short_description', 'description', 'full_price', 'price', 'isbn', 'page_count',
+              'size', 'category', 'published_date', 'visible', 'kyobo_url', 'aladin_url', 'yes24_url', 'interpark_url']
     search_fields = ['title', 'subtitle', 'authors__author__name']
+    inlines = [BookAuthorInline, BookSeriesInline]
 
     def author_list(self, book):
         book_authors = book.authors.all()
@@ -52,7 +63,13 @@ class BookAdmin(admin.ModelAdmin):
     set_invisible.short_description = "'절판' 표시 취소하기"
 
 
+class AuthorAdmin(admin.ModelAdmin):
+    list_filter = ['entity_type']
+    list_display = ['id', 'name', 'email', 'phone_number', 'address']
+    search_fields = ['name']
+
+
 admin.site.register(Book, BookAdmin)
-admin.site.register(Author)
+admin.site.register(Author, AuthorAdmin)
 admin.site.register(Category)
 admin.site.register(Series)

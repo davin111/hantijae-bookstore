@@ -89,8 +89,18 @@
         margin-right: auto;
     }
 }
-.BookDetailInfo #authors {
+.BookDetailInfo #compilers {
     margin-top: 5%;
+    color:#000000;
+    font-size: 1.5em;
+    text-align: center;
+}
+@media all and (max-width:768px) {
+    .BookDetailInfo #compilers {
+        font-size: 0.9em;
+    }
+}
+.BookDetailInfo #authors {
     color:#000000;
     font-size: 1.5em;
     text-align: center;
