@@ -7,10 +7,20 @@ class BookAuthorInline(admin.TabularInline):
     model = BookAuthor
     extra = 1
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "author":
+            kwargs["queryset"] = Author.objects.all().order_by('name')
+        return super(BookAuthorInline, self).formfield_for_foreignkey(db_field, request, **kwargs)
+
 
 class BookSeriesInline(admin.TabularInline):
     model = BookSeries
     extra = 1
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "series":
+            kwargs["queryset"] = Series.objects.all().order_by('name')
+        return super(BookSeriesInline, self).formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 class BookAdmin(admin.ModelAdmin):
@@ -65,8 +75,20 @@ class BookAdmin(admin.ModelAdmin):
 
 class AuthorAdmin(admin.ModelAdmin):
     list_filter = ['entity_type']
-    list_display = ['id', 'name', 'email', 'phone_number', 'address']
+    list_display = ['id', 'name', 'book_list', 'email', 'phone_number', 'address', 'created_at', 'updated_at']
     search_fields = ['name']
+    readonly_fields = ['book_list']
+
+    def book_list(self, author):
+        book_authors = author.books.all()
+        result = '<div>'
+        for book_author in book_authors:
+            book = book_author.book
+            result += f'<a href="/admin/books/book/{book.id}/">{book.id}: {book} - {BookAuthor.TYPE_TO_KOREAN[book_author.author_type]}</a><br />'
+        result += u'</div>'
+        return mark_safe(result)
+
+    book_list.short_description = '책'
 
 
 admin.site.register(Book, BookAdmin)

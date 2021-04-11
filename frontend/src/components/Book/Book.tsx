@@ -34,9 +34,9 @@ class Book extends Component<BookProps> {
     const authorNames = [];
     const compilerNames = [];
     for (let i = 0; i < this.props.authors.length; i += 1) {
-      if (this.props.authors[i].entity_type === 1) {
+      if (this.props.authors[i].author_type === 1) {
         authorNames.push(this.props.authors[i].name);
-      } else if (this.props.authors[i].entity_type === 2) {
+      } else if (this.props.authors[i].author_type === 4) {
         compilerNames.push(this.props.authors[i].name);
       }
     }

@@ -44,9 +44,9 @@ class BookDetail extends Component<Props, State> {
       const authorNames = [];
       const compilerNames = [];
       for (let i = 0; i < this.state.book.authors.length; i += 1) {
-        if (this.state.book.authors[i].entity_type === 1) {
+        if (this.state.book.authors[i].author_type === 1) {
           authorNames.push(this.state.book.authors[i].name);
-        } else if (this.state.book.authors[i].entity_type === 2) {
+        } else if (this.state.book.authors[i].author_type === 4) {
           compilerNames.push(this.state.book.authors[i].name);
         }
       }
