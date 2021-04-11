@@ -10,6 +10,7 @@ from books.models import Book, Category, Author, Series
 from books.serializers import (BookSerializer, CategorySerializer, SeriesSerializer,
     SimpleBookSerializer, SimpleSeriesSerializer)
 
+
 class BookViewSet(viewsets.GenericViewSet):
     queryset = Book.objects.all()
     serializer_class = BookSerializer

@@ -36,15 +36,24 @@ class BookDetail extends Component<Props, State> {
 
   render() {
     let authorStr = '';
+    let compilerStr = '';
     let desc = '';
     let img = null;
     let bookCart = null;
     if (Object.keys(this.state.book).length > 0) {
       const authorNames = [];
+      const compilerNames = [];
       for (let i = 0; i < this.state.book.authors.length; i += 1) {
-        authorNames.push(this.state.book.authors[i].name);
+        if (this.state.book.authors[i].author_type === 1) {
+          authorNames.push(this.state.book.authors[i].name);
+        } else if (this.state.book.authors[i].author_type === 4) {
+          compilerNames.push(this.state.book.authors[i].name);
+        }
       }
       authorStr = authorNames.join(' · ');
+      if (compilerNames.length > 0) {
+        compilerStr = compilerNames.join(' · ') + " 엮음";
+      }
 
       desc = this.state.book.description.split('\n').map((line: string) => (
         <span>
@@ -52,86 +61,32 @@ class BookDetail extends Component<Props, State> {
           <br />
         </span>
       ));
-      /* eslint-disable-next-line */
-      img = <img src={require(`./book_covers_3d/${this.state.book.title.replace(':', '').replace('!', '')}.png`)} />;
+
+      try {
+        /* eslint-disable-next-line */
+        img = <img src={require(`./book_covers_3d/${this.state.book.title.replace(':', '').replace('!', '')}.png`)} />;
+      } catch {}
 
       if (this.state.book.visible) {
-        bookCart = null;
-        if (this.state.book.published_date.split('-')[0] === '2020') {
-          if (this.state.book.id === 108) {
-            bookCart = (
-              // eslint-disable-next-line
-              <h3 className="DetailNotAcceptable"
-                onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=225033583')}
-              >
-                한티재 신간
-              </h3>
-            );
-          } else if (this.state.book.id === 109) {
-            bookCart = (
-              // eslint-disable-next-line
-              <h3 className="DetailNotAcceptable"
-                onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=237230373')}
-              >
-                한티재 신간
-              </h3>
-            );
-          } else if (this.state.book.id === 110) {
-            bookCart = (
-              // eslint-disable-next-line
-              <h3
-                className="NotAcceptable"
-                onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=242512574')}
-              >
-                한티재 신간
-              </h3>
-            );
-          } else if (this.state.book.id === 111) {
-            bookCart = (
-              // eslint-disable-next-line
-              <h3
-                className="NotAcceptable"
-                onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=250470162')}
-              >
-                한티재 신간
-              </h3>
-            );
-          } else if (this.state.book.id === 112) {
-            bookCart = (
-              // eslint-disable-next-line
-              <h3
-                className="NotAcceptable"
-                onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=247906004')}
-              >
-                한티재 신간
-              </h3>
-            );
-          } else if (this.state.book.id === 113) {
-            bookCart = (
-              // eslint-disable-next-line
-              <h3
-                className="NotAcceptable"
-                onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=247906079')}
-              >
-                한티재 신간
-              </h3>
-            );
-          } else {
-            // bookCart = (
-            //   <div className="DetailCart">
-            //     <BookCountWithCart bookId={this.state.book.id} history={this.props.history} />
-            //   </div>
-            // );
-            bookCart = (
-              // eslint-disable-next-line
-              <h3
-                className="NotAcceptable"
-                onClick={() => window.open('https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=254689445')}
-              >
-                한티재 신간
-              </h3>
-            );
-          }
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const date = now.getDate();
+        if (new Date(year-1, month, date).getTime() <= new Date(this.state.book.published_date).getTime()) {
+          // bookCart = (
+          //   <div className="DetailCart">
+          //     <BookCountWithCart bookId={this.state.book.id} history={this.props.history} />
+          //   </div>
+          // );
+          bookCart = (
+            // eslint-disable-next-line
+            <h3
+              className="NotAcceptable"
+              onClick={() => window.open(this.state.book.aladin_url)}
+            >
+              한티재 신간
+            </h3>
+          );
         }
       } else {
         bookCart = <h3 className="DetailNotVisible">절판</h3>;
@@ -156,6 +111,10 @@ class BookDetail extends Component<Props, State> {
     }
 
     const { book } = this.props;
+    let bookPrice = book.full_price;
+    if (book.full_price) {
+      bookPrice = book.full_price.toLocaleString('ko-KR');
+    }
 
     return (
       <div>
@@ -166,12 +125,13 @@ class BookDetail extends Component<Props, State> {
           <div className="BookDetailInfo">
             <h1 id="title">{book.title}</h1>
             <h1 id="subtitle">{book.subtitle}</h1>
+            <h3 id="compilers">{compilerStr}</h3>
             <h3 id="authors">{authorStr}</h3>
             <div className="BookDetailInfoList">
               <div className="InfoItem">
                 <div className="LItem">가격</div>
                 <div className="RItem">
-                  {book.full_price}
+                  {bookPrice}
                   원
                 </div>
               </div>

@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from books.models import Book, Author, Category, Series
 
+
 class BookSerializer(serializers.ModelSerializer):
     authors = serializers.SerializerMethodField()
 
@@ -23,14 +24,17 @@ class BookSerializer(serializers.ModelSerializer):
             'published_date',
             'authors',
             'visible',
+            'aladin_url',
         )
 
     def get_authors(self, book):
         book_authors = book.authors.all()
         authors = []
         for book_author in book_authors:
+            author_data = AuthorSerializer(book_author.author, context=self.context).data
+            author_data['author_type'] = book_author.author_type
             authors.append(
-                AuthorSerializer(book_author.author, context=self.context).data
+                author_data
             )
         return authors
         #return AuthorSerializer(book.authors, many=True, context=self.context).data
@@ -52,14 +56,17 @@ class SimpleBookSerializer(serializers.ModelSerializer):
             'published_date',
             'authors',
             'visible',
+            'aladin_url',
         )
 
     def get_authors(self, book):
         book_authors = book.authors.all()
         authors = []
         for book_author in book_authors:
+            author_data = AuthorSerializer(book_author.author, context=self.context).data
+            author_data['author_type'] = book_author.author_type
             authors.append(
-                AuthorSerializer(book_author.author, context=self.context).data
+                author_data
             )
         return authors
 

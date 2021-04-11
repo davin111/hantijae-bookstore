@@ -22,6 +22,7 @@ class Books extends Component<Props> {
       published_date={book.published_date}
       history={this.props.history}
       visible={book.visible}
+      aladin_url={book.aladin_url}
     />
   );
 

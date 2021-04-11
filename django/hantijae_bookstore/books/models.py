@@ -114,7 +114,7 @@ class BookAuthor(models.Model):
 class BookSeries(models.Model):
     book = models.ForeignKey(Book, related_name='series', on_delete=models.CASCADE)
     series = models.ForeignKey(Series, related_name='books', on_delete=models.CASCADE)
-    index = models.CharField(null=True, max_length=50)
+    index = models.CharField(null=True, blank=True, max_length=50)
 
     class Meta:
         db_table = 'books_bookseries'
