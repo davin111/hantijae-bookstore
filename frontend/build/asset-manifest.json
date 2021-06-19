@@ -1,17 +1,17 @@
 {
   "files": {
     "main.css": "/static/css/main.1cc979e9.chunk.css",
-    "main.js": "/static/js/main.f0006283.chunk.js",
-    "main.js.map": "/static/js/main.f0006283.chunk.js.map",
+    "main.js": "/static/js/main.6e169fa4.chunk.js",
+    "main.js.map": "/static/js/main.6e169fa4.chunk.js.map",
     "runtime-main.js": "/static/js/runtime-main.460ed7ea.js",
     "runtime-main.js.map": "/static/js/runtime-main.460ed7ea.js.map",
-    "static/js/2.ee126ccf.chunk.js": "/static/js/2.ee126ccf.chunk.js",
-    "static/js/2.ee126ccf.chunk.js.map": "/static/js/2.ee126ccf.chunk.js.map",
+    "static/js/2.63617993.chunk.js": "/static/js/2.63617993.chunk.js",
+    "static/js/2.63617993.chunk.js.map": "/static/js/2.63617993.chunk.js.map",
     "index.html": "/index.html",
-    "precache-manifest.58c5c5298edb12e5936f544075b9d93e.js": "/precache-manifest.58c5c5298edb12e5936f544075b9d93e.js",
+    "precache-manifest.83da3424c9bf98d478841fa26ee9744b.js": "/precache-manifest.83da3424c9bf98d478841fa26ee9744b.js",
     "service-worker.js": "/service-worker.js",
     "static/css/main.1cc979e9.chunk.css.map": "/static/css/main.1cc979e9.chunk.css.map",
-    "static/js/2.ee126ccf.chunk.js.LICENSE.txt": "/static/js/2.ee126ccf.chunk.js.LICENSE.txt",
+    "static/js/2.63617993.chunk.js.LICENSE.txt": "/static/js/2.63617993.chunk.js.LICENSE.txt",
     "static/media/1.5   그레타 툰베리와 함께.png": "/static/media/1.5   그레타 툰베리와 함께.e32fb971.png",
     "static/media/57 세상에 말을 걸다.png": "/static/media/57 세상에 말을 걸다.e08d79db.png",
     "static/media/PM 100 꿈을 적는 시간.png": "/static/media/PM 100 꿈을 적는 시간.86a18103.png",
@@ -48,6 +48,7 @@
     "static/media/당신이 나의 백신입니다.png": "/static/media/당신이 나의 백신입니다.859f5719.png",
     "static/media/대구, 찬란한 예술의 기억.png": "/static/media/대구, 찬란한 예술의 기억.f9a3f77b.png",
     "static/media/대통령 기록전쟁.png": "/static/media/대통령 기록전쟁.26801f3c.png",
+    "static/media/도심재생의 미래.png": "/static/media/도심재생의 미래.bcbd712f.png",
     "static/media/둥글이, 싸움의 철학.png": "/static/media/둥글이, 싸움의 철학.ca84765a.png",
     "static/media/둥글이의 유랑투쟁기.png": "/static/media/둥글이의 유랑투쟁기.e385fec6.png",
     "static/media/들꽃, 공단에 피다.png": "/static/media/들꽃, 공단에 피다.5fcc4db3.png",
@@ -140,8 +141,8 @@
   },
   "entrypoints": [
     "static/js/runtime-main.460ed7ea.js",
-    "static/js/2.ee126ccf.chunk.js",
+    "static/js/2.63617993.chunk.js",
     "static/css/main.1cc979e9.chunk.css",
-    "static/js/main.f0006283.chunk.js"
+    "static/js/main.6e169fa4.chunk.js"
   ]
 }
