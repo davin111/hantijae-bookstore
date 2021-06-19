@@ -43,7 +43,7 @@ class Book extends Component<BookProps> {
     const authorStr = authorNames.join(' · ');
     let compilerStr = '';
     if (compilerNames.length > 0) {
-      compilerStr = compilerNames.join(' · ') + " 엮음";
+      compilerStr = `${compilerNames.join(' · ')} 엮음`;
     }
 
     let shortDesc = '';
@@ -58,7 +58,7 @@ class Book extends Component<BookProps> {
       const year = now.getFullYear();
       const month = now.getMonth();
       const date = now.getDate();
-      if (new Date(year-1, month, date).getTime() <= new Date(this.props.published_date).getTime()) {
+      if (new Date(year - 1, month, date).getTime() <= new Date(this.props.published_date).getTime()) {
         // bookCart = (
         //   <div className="BookListCart">
         //     <BookCountWithCart bookId={this.props.id} history={this.props.history} />
@@ -88,7 +88,7 @@ class Book extends Component<BookProps> {
       <div className="Book">
         {/* eslint-disable-next-line */}
         <div className="BookCover" onClick={() => this.props.history.push(`/book=${this.props.id}`)}>
-        {img}
+          {img}
         </div>
         <div className="BookInfo">
           {/* eslint-disable-next-line */}

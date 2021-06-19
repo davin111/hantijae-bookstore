@@ -6,7 +6,9 @@ const initialState = {
   getCategoryStatus: categoryStatus.NONE,
   getSeriesStatus: seriesStatus.NONE,
   searchBooksStatus: bookStatus.NONE,
+  getBookCountStatus: bookStatus.NONE,
   books: {},
+  bookCount: 0,
   getBook: {},
   getBooksByCategories: {},
   getCategories: {},
@@ -28,6 +30,10 @@ const reducer = (state = initialState, action: any) => {
       return { ...state, searchBooksStatus: bookStatus.SUCCESS, books: action.target };
     case bookConstants.SEARCH_BOOKS_FAILURE:
       return { ...state, searchBooksStatus: bookStatus.FAILURE };
+    case bookConstants.GET_BOOK_COUNT_SUCCESS:
+      return { ...state, getBookCountStatus: bookStatus.SUCCESS, bookCount: action.target };
+    case bookConstants.GET_BOOK_COUNT_FAILURE:
+      return { ...state, getBookCountStatus: bookStatus.FAILURE };
     case bookConstants.GET_BOOKS_BY_CATEGORY_SUCCESS:
       return { ...state, getBooksByCategories: action.target };
     case categoryConstants.GET_CATEGORIES_SUCCESS:
