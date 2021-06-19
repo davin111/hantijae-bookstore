@@ -52,7 +52,7 @@ class BookDetail extends Component<Props, State> {
       }
       authorStr = authorNames.join(' · ');
       if (compilerNames.length > 0) {
-        compilerStr = compilerNames.join(' · ') + " 엮음";
+        compilerStr = `${compilerNames.join(' · ')} 엮음`;
       }
 
       desc = this.state.book.description.split('\n').map((line: string) => (
@@ -72,7 +72,7 @@ class BookDetail extends Component<Props, State> {
         const year = now.getFullYear();
         const month = now.getMonth();
         const date = now.getDate();
-        if (new Date(year-1, month, date).getTime() <= new Date(this.state.book.published_date).getTime()) {
+        if (new Date(year - 1, month, date).getTime() <= new Date(this.state.book.published_date).getTime()) {
           // bookCart = (
           //   <div className="DetailCart">
           //     <BookCountWithCart bookId={this.state.book.id} history={this.props.history} />
