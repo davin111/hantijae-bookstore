@@ -81,7 +81,7 @@ class Book extends Component<BookProps> {
     let img = null;
     try {
       /* eslint-disable-next-line */
-      img = <img src={require('./book_covers/' + this.props.title.replace(':', '').replace('!', '') + '.png')} />
+      img = <img src={require('./book_covers/' + this.props.title.replace(':', '').replace('!', '').replace('?', '') + '.png')} />
     } catch {}
 
     return (
