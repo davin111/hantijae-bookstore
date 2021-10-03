@@ -56,7 +56,7 @@ class BookInBasket extends Component<BookProps> {
         {/* eslint-disable-next-line */}
         <div className="BookCover" onClick={() => this.props.history.push(`/book=${this.props.id}`)}>
           {/* eslint-disable-next-line */}
-          <img src={require('../book_covers/' + this.props.title.replace(':', '').replace('!', '') + '.png')} />
+          <img src={require('../book_covers/' + this.props.title.replace(':', '').replace('!', '').replace('?', '') + '.png')} />
         </div>
         <div className="BookInfoInBasket">
           {/* eslint-disable-next-line */}
