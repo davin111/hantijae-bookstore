@@ -1,17 +1,17 @@
 {
   "files": {
     "main.css": "/static/css/main.1cc979e9.chunk.css",
-    "main.js": "/static/js/main.0b138cf6.chunk.js",
-    "main.js.map": "/static/js/main.0b138cf6.chunk.js.map",
+    "main.js": "/static/js/main.acbd4e2b.chunk.js",
+    "main.js.map": "/static/js/main.acbd4e2b.chunk.js.map",
     "runtime-main.js": "/static/js/runtime-main.460ed7ea.js",
     "runtime-main.js.map": "/static/js/runtime-main.460ed7ea.js.map",
-    "static/js/2.5d4f4a3a.chunk.js": "/static/js/2.5d4f4a3a.chunk.js",
-    "static/js/2.5d4f4a3a.chunk.js.map": "/static/js/2.5d4f4a3a.chunk.js.map",
+    "static/js/2.75971350.chunk.js": "/static/js/2.75971350.chunk.js",
+    "static/js/2.75971350.chunk.js.map": "/static/js/2.75971350.chunk.js.map",
     "index.html": "/index.html",
-    "precache-manifest.3825a0844f4fe72b458ca2a447f5fc7a.js": "/precache-manifest.3825a0844f4fe72b458ca2a447f5fc7a.js",
+    "precache-manifest.48677cd8e10ed3f42974551c35a5c61a.js": "/precache-manifest.48677cd8e10ed3f42974551c35a5c61a.js",
     "service-worker.js": "/service-worker.js",
     "static/css/main.1cc979e9.chunk.css.map": "/static/css/main.1cc979e9.chunk.css.map",
-    "static/js/2.5d4f4a3a.chunk.js.LICENSE.txt": "/static/js/2.5d4f4a3a.chunk.js.LICENSE.txt",
+    "static/js/2.75971350.chunk.js.LICENSE.txt": "/static/js/2.75971350.chunk.js.LICENSE.txt",
     "static/media/1.5   그레타 툰베리와 함께.png": "/static/media/1.5   그레타 툰베리와 함께.e32fb971.png",
     "static/media/57 세상에 말을 걸다.png": "/static/media/57 세상에 말을 걸다.e08d79db.png",
     "static/media/PM 100 꿈을 적는 시간.png": "/static/media/PM 100 꿈을 적는 시간.86a18103.png",
@@ -32,6 +32,7 @@
     "static/media/근대의 아틀리에.png": "/static/media/근대의 아틀리에.82064d94.png",
     "static/media/기독교 본질 논쟁.png": "/static/media/기독교 본질 논쟁.fb2c21b5.png",
     "static/media/기억과 상식.png": "/static/media/기억과 상식.811fa2a2.png",
+    "static/media/기후위기 과학특강  “도와줘요, 기후 박사”.png": "/static/media/기후위기 과학특강  “도와줘요, 기후 박사”.79ba3a25.png",
     "static/media/기후위기와 탈핵.png": "/static/media/기후위기와 탈핵.ec1d40de.png",
     "static/media/기후정의.png": "/static/media/기후정의.b61714f5.png",
     "static/media/기후정의선언 2021.png": "/static/media/기후정의선언 2021.b88b3da2.png",
@@ -94,6 +95,7 @@
     "static/media/시민에게 권력을.png": "/static/media/시민에게 권력을.a7d6ba3b.png",
     "static/media/씨밀레.png": "/static/media/씨밀레.7c3675f3.png",
     "static/media/아렌트의 정치.png": "/static/media/아렌트의 정치.e0804d85.png",
+    "static/media/안녕은 무한리필.png": "/static/media/안녕은 무한리필.74327f90.png",
     "static/media/알기 쉬운 청탁금지법 강의.png": "/static/media/알기 쉬운 청탁금지법 강의.ab0adfc6.png",
     "static/media/어린 왕자, 후쿠시마 이후.png": "/static/media/어린 왕자, 후쿠시마 이후.51e21717.png",
     "static/media/어처구니는 나무로 만든다.png": "/static/media/어처구니는 나무로 만든다.ee86434f.png",
@@ -109,6 +111,7 @@
     "static/media/유배지에서 예수 읽기.png": "/static/media/유배지에서 예수 읽기.f14beb45.png",
     "static/media/이천 년의 꽃.png": "/static/media/이천 년의 꽃.8128754e.png",
     "static/media/이팔청춘, 2막 23장.png": "/static/media/이팔청춘, 2막 23장.91f84c6b.png",
+    "static/media/이팝나무 가지마다 흰 새들이.png": "/static/media/이팝나무 가지마다 흰 새들이.bd9caebc.png",
     "static/media/인권 세미나.png": "/static/media/인권 세미나.6cc1fe4b.png",
     "static/media/인권이란 무엇인가.png": "/static/media/인권이란 무엇인가.edaa9810.png",
     "static/media/인문학을 만나다.png": "/static/media/인문학을 만나다.3bb1495c.png",
@@ -145,8 +148,8 @@
   },
   "entrypoints": [
     "static/js/runtime-main.460ed7ea.js",
-    "static/js/2.5d4f4a3a.chunk.js",
+    "static/js/2.75971350.chunk.js",
     "static/css/main.1cc979e9.chunk.css",
-    "static/js/main.0b138cf6.chunk.js"
+    "static/js/main.acbd4e2b.chunk.js"
   ]
 }
