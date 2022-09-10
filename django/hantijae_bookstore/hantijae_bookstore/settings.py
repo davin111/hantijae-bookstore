@@ -156,13 +156,9 @@ USE_L10N = True
 
 USE_TZ = True
 
+STATIC_URL = '/django_static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/3.0/howto/static-files/
-
-STATIC_URL = '/static/'
-
-# CSRF
 CSRF_COOKIE_NAME = 'csrftoken'
 
 AUTH_USER_MODEL = 'accounts.User'
