@@ -169,6 +169,7 @@ _db.json
 .env.development.local
 .env.test.local
 .env.production.local
+*.icloud
 
 # fixtures
 fixtures/
@@ -177,3 +178,5 @@ fixtures/
 dump.rdb
 
 secret_info.json
+
+static/

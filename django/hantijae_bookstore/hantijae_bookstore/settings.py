@@ -81,6 +81,14 @@ WSGI_APPLICATION = 'hantijae_bookstore.wsgi.application'
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
 if ENV_MODE == 'prod':
+    DEBUG = False
+    ALLOWED_HOSTS = [
+        'localhost',
+        '127.0.0.1',
+        '[::1]',
+        '.hantijae-bookstore.com',
+    ]
+
     secret_file = os.path.join(os.path.dirname(__file__), 'secret_info.json')
     if os.path.exists(secret_file):
         with open(secret_file) as f:
