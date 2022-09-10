@@ -101,7 +101,13 @@ if ENV_MODE == 'prod':
                     'PASSWORD': secret_info['DATABASE_PASSWORD'],
                     'HOST': secret_info['DATABASE_HOST'],
                     'PORT': secret_info['DATABASE_PORT'],
-                }
+                    'OPTIONS': {
+                        'init_command': "SET sql_mode='STRICT_ALL_TABLES'",
+                        'charset': 'utf8mb4',
+                        'autocommit': True,
+                        'connect_timeout': 3,
+                    },
+                },
             }
     else:
         raise Exception("Check your 'secret_info.json' file!")
