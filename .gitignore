@@ -179,4 +179,4 @@ dump.rdb
 
 secret_info.json
 
-static/
+django/**/static/
