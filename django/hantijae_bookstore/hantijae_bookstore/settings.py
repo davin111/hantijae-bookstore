@@ -5,15 +5,7 @@ import boto3
 
 ENV_MODE = os.getenv('MODE', 'dev')
 
-# Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'o4y-7=v^b(tgjsy+(x#sa@l@2(%bvw%g&42qql6%@xo#%58x7b'
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -63,13 +55,15 @@ if ENV_MODE == 'prod':
     credential = secrets_manager.get_secret_value(SecretId="prod/hantijae-bookstore")
     secret_info = json.loads(credential["SecretString"])
 
-    DEBUG = True
+    DEBUG = False
     ALLOWED_HOSTS = [
         'localhost',
         '127.0.0.1',
         '[::1]',
         '.hantijae-bookstore.com',
     ]
+
+    SECRET_KEY = secret_info['DJANGO_SECRET_KEY']
 
     AWS_STORAGE_BUCKET_NAME = "hantijae-assets"
 
@@ -93,6 +87,8 @@ else:
     DEBUG = True
     ALLOWED_HOSTS = []
 
+    SECRET_KEY = '%$(uu1zk1f4*8wnljep5ug(5t7*2u3+&exurk*0t+af56vbued'
+
     AWS_STORAGE_BUCKET_NAME = "hantijae-assets-dev"
 
     DATABASES = {
@@ -113,9 +109,6 @@ CACHES = {
     }
 }
 
-# Password validation
-# https://docs.djangoproject.com/en/3.0/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -131,27 +124,21 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/3.0/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_L10N = True
-
 USE_TZ = True
-
-STATIC_URL = '/django_static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
 CSRF_COOKIE_NAME = 'csrftoken'
 
 AUTH_USER_MODEL = 'accounts.User'
 SESSION_SAVE_EVERY_REQUEST = True
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+STATIC_URL = '/django_static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 AWS_DEFAULT_ACL = 'public-read'
