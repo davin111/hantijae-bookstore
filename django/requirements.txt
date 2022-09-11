@@ -1,5 +1,7 @@
+boto3==1.24.70
 Django==3.1.14
-djangorestframework==3.11.2
-Markdown==3.2.1
 django-filter==2.4.0
+djangorestframework==3.11.2
+django-storages==1.13.1
+Markdown==3.2.1
 mysqlclient==1.4.6

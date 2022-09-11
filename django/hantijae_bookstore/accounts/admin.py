@@ -64,7 +64,8 @@ class BasketAdmin(admin.ModelAdmin):
     fields = ['info', 'status', 'manual', '_user', 'first_name', 'email', 'phone_number', 'payer',
               'receiver_first_name', 'address', 'postal_code',
               'book_order_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
-    readonly_fields = ['info', '_user', 'book_order_list', 'book_count', 'max_book_count', 'total_price', 'max_price', '_updated_at']
+    readonly_fields = ['info', '_user', 'book_order_list', 'book_count', 'max_book_count', 'total_price', 'max_price',
+                       '_updated_at']
     search_fields = ['first_name', 'email', 'receiver_first_name', 'user__username', 'user__first_name', 'user__email']
 
     def _user(self, basket):
@@ -145,6 +146,7 @@ class BasketAdmin(admin.ModelAdmin):
         self.message_user(request, f"{rows_updated} 개의 책바구니의 '직접 입력한 주문' 표시를 취소했습니다.")
 
     unmark_manual.short_description = "'직접 입력한 주문' 표시 취소하기"
+
 
 admin.site.register(User, UserAdmin)
 admin.site.register(Basket, BasketAdmin)
