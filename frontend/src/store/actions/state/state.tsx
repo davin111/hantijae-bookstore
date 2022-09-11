@@ -16,7 +16,6 @@ const closeLoginModalSuccess = () => ({
 
 export const closeLoginModal = () => (dispatch: Dispatch) => dispatch(closeLoginModalSuccess());
 
-
 const openFullBasketModalSuccess = () => ({
   type: stateActions.OPEN_FULL_BASKET_MODAL,
   target: true,
@@ -34,7 +33,6 @@ const closeFullBasketModalSuccess = () => ({
 export const closeFullBasketModal = () => (dispatch: Dispatch) => dispatch(
   closeFullBasketModalSuccess(),
 );
-
 
 const openBasketInfoModalSuccess = () => ({
   type: stateActions.OPEN_BASKET_INFO_MODAL,
@@ -54,7 +52,6 @@ export const closeBasketInfoModal = () => (dispatch: Dispatch) => dispatch(
   closeBasketInfoModalSuccess(),
 );
 
-
 const dontSuggestLoginSuccess = () => ({
   type: stateActions.DONT_SUGGEST_LOGIN,
   target: false,
@@ -63,7 +60,6 @@ const dontSuggestLoginSuccess = () => ({
 export const dontSuggestLogin = () => (dispatch: Dispatch) => dispatch(
   dontSuggestLoginSuccess(),
 );
-
 
 const openEventModalSuccess = () => ({
   type: stateActions.OPEN_EVENT_MODAL,

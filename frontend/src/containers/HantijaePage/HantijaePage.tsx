@@ -59,8 +59,7 @@ class HantijaePage extends Component<Props> {
         <div className="HantijaeUpper">
           <h1 className="HantijaeTitle">도서출판 한티재는...</h1>
           <div className="HantijaeImage">
-            {/* eslint-disable-next-line */}
-            <img src={require(`./kiki.jpeg`)} />
+            <img src={"https://hantijae-assets.s3.ap-northeast-2.amazonaws.com/misc/kiki.jpeg"} />
           </div>
         </div>
         <div className="HantijaeDescription">
@@ -73,65 +72,6 @@ class HantijaePage extends Component<Props> {
             사람과 사람, 사람과 자연, 오늘 세대와 내일 세대가 공존하는 사회에 보탬이 되는 책을 만들기 위해 노력하고 있습니다.
           </p>
         </div>
-        {/* <hr className="HantijaeCenterLine" />
-        <h3 className="NewBookTitle">
-          『성서, 퀴어를 옹호하다』 텀블벅 펀딩 진행중!
-        </h3>
-        <h3 className="EventTitle">
-          왜 개신교는 그렇게 성소수자를 부정할까?
-          <br />
-          정말로 성서는 동성애를 금지하고 있을까?
-        </h3>
-        <p className="EventDescription">
-          일정 금액 이상 후원 시 금속 뱃지와 스티커를 증정합니다.
-        </p>
-        <hr className="HantijaeCenterLineSmall" />
-        <h3 className="NewBookTitlesInPage">
-          『성서, 퀴어를 옹호하다』
-          <br />
-          ― 성서학자가 들려주는 기독교와 성소수자 이야기
-        </h3>
-        <div className="NewBookStand"> */}
-        {/* eslint-disable-next-line */}
-          {/* <img src={require('../BookDetail/book_covers_3d/성서, 퀴어를 옹호하다.jpeg')} />
-        </div>
-        <Button
-          type="button"
-          onClick={() => window.open('https://tumblbug.com/queerinbible')}
-          variant="contained"
-          color="primary"
-          size="medium"
-          style={{
-            backgroundColor: '#7EC7C5',
-          }}
-        >
-          프로젝트 밀어주기
-        </Button> */}
-        {/* <Button
-          type="button"
-          onClick={() => this.clickPostBookHandler()}
-          variant="contained"
-          color="secondary"
-          size="medium"
-        >
-          책바구니에 담기
-        </Button> */}
-        {/* <p className="EventDescription">
-          ♥ 펀딩 기간 : 2020년 7월 17일(금) ~ 8월 20일(목)
-          <br />
-          ♥ 예상 선물 수령일 : 9월 15일(화)
-          <br />
-          &nbsp;&nbsp;8월 20일 - 펀딩 마감
-          <br />
-          &nbsp;&nbsp;9월 7일 - 모금액 정산 완료, 제작비 결제
-          <br />
-          &nbsp;&nbsp;9월 15일 - 예상 선물 수령일
-          <br />
-          ♥ 문의 : 053-743-8368 | hantibooks@gmail.com
-        </p>
-        <LoginModal history={this.props.history} />
-        <FullBasketModal history={this.props.history} />
-        <BasketInfoModal history={this.props.history} /> */}
       </div>
     );
   }

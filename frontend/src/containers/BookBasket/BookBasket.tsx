@@ -26,7 +26,6 @@ const styles = (theme: any) => createStyles({
   },
 });
 
-
 class BookBasket extends Component<Props> {
   componentDidMount() {
     this.props.onGetMe()

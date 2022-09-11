@@ -5,7 +5,6 @@ import { bookActions } from '../../store/actions';
 import './SearchResult.css';
 import { Books } from '../../components';
 
-
 interface Props{
   searchBooksStatus: string;
   books: any;

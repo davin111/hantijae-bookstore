@@ -38,7 +38,6 @@ import {
   closeEventModal,
 } from './state/state';
 
-
 export const bookActions = {
   getBook,
   getBooks,

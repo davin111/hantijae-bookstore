@@ -14,8 +14,7 @@ class Title extends Component<Props> {
         <img
           className="BookStoreTitleImage"
           onClick={() => this.props.history.push('/')}
-          /* eslint-disable-next-line */
-          src={require('./한티재 책창고.png')}
+          src={"https://hantijae-assets.s3.ap-northeast-2.amazonaws.com/misc/hantijae-bookstore-title.png"}
         />
       </div>
     );

@@ -2,7 +2,6 @@ import React, { Component } from 'react';
 import './BooksInBasket.css';
 import BookInBasket, { BookProps } from '../../Book/BookInBasket/BookInBasket';
 
-
 interface Props{
   books: BookProps[];
   history: any;
@@ -19,11 +18,10 @@ class BooksInBasket extends Component<Props> {
       fullPrice={book.full_price}
       price={book.price}
       authors={book.authors}
+      coverImage={book.cover_image}
+      coverImage3d={book.cover_image_3d}
       history={this.props.history}
       count={book.count}
-      // rate={book.rate}
-      // voters={book.voters}
-      // people={book.people}
     />
   );
 

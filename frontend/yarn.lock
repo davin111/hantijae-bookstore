@@ -1947,7 +1947,7 @@
   dependencies:
     "@types/react" "*"
 
-"@types/react@*", "@types/react@>=16.14.8", "@types/react@>=16.9.11":
+"@types/react@*", "@types/react@>=16.14.8", "@types/react@>=16.9.11", "@types/react@^18.0.1":
   version "18.0.19"
   resolved "https://registry.yarnpkg.com/@types/react/-/react-18.0.19.tgz#269a5f35b9a73c69dfb0c7189017013ab02acbaa"
   integrity sha512-BDc3Q+4Q3zsn7k9xZrKfjWyJsSlEDMs38gD1qp2eDazLCdcPqAT+vq1ND+Z8AGel/UiwzNUk8ptpywgNQcJ1MQ==
@@ -1956,7 +1956,7 @@
     "@types/scheduler" "*"
     csstype "^3.0.2"
 
-"@types/react@^16", "@types/react@^16.9.23":
+"@types/react@^16":
   version "16.14.31"
   resolved "https://registry.yarnpkg.com/@types/react/-/react-16.14.31.tgz#03757719ac16b460ab9124f718fdd079f6578fe8"
   integrity sha512-CD3LuBW4xIeGy6BxuNZdXBOsuP00OHFuNOq/4e2xKDq6z02XvdH9wIkuPNmz7BRQpo5ncy1zT9fz4tTDqXbjzQ==
@@ -11442,10 +11442,10 @@ typedarray@^0.0.6:
   resolved "https://registry.yarnpkg.com/typedarray/-/typedarray-0.0.6.tgz#867ac74e3864187b1d3d47d996a78ec5c8830777"
   integrity sha512-/aCDEGatGvZ2BIk+HmLf4ifCJFwvKFNb9/JeZPMulfgFracn9QFcAf5GO8B/mweUjSoblS5In0cWhqpfs/5PQA==
 
-typescript@~3.7.2:
-  version "3.7.7"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-3.7.7.tgz#c931733e2ec10dda56b855b379cc488a72a81199"
-  integrity sha512-MmQdgo/XenfZPvVLtKZOq9jQQvzaUAUpcKW8Z43x9B2fOm4S5g//tPtMweZUIP+SoBqrVPEIm+dJeQ9dfO0QdA==
+typescript@~3.8.3:
+  version "3.8.3"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-3.8.3.tgz#409eb8544ea0335711205869ec458ab109ee1061"
+  integrity sha512-MYlEfn5VrLNsgudQTVJeNaQFUAI7DkhnOjdpAp4T+ku1TfQClewlbSuTVHiA+8skNBgaf02TL/kLOvig4y3G8w==
 
 unbox-primitive@^1.0.2:
   version "1.0.2"

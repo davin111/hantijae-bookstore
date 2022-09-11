@@ -2,7 +2,6 @@ import React, { Component } from 'react';
 import './Books.css';
 import Book, { BookProps } from '../Book/Book';
 
-
 interface Props{
   books: BookProps[];
   history: any;
@@ -19,6 +18,8 @@ class Books extends Component<Props> {
       fullPrice={book.full_price}
       price={book.price}
       authors={book.authors}
+      coverImage={book.cover_image}
+      coverImage3d={book.cover_image_3d}
       published_date={book.published_date}
       history={this.props.history}
       visible={book.visible}

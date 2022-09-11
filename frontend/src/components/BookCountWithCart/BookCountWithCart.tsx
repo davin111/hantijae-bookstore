@@ -6,7 +6,6 @@ import { userActions, stateActions } from '../../store/actions';
 import './BookCountWithCart.css';
 import { basketStatus, userStatus } from '../../constants/constants';
 
-
 export interface BookProps {
   bookId: number;
   history: any;

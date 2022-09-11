@@ -27,7 +27,6 @@ export const getBook = (id: number) => (dispatch: Dispatch) => axios.get(`/api/b
   .then((res) => dispatch(getBookSuccess(res.data)))
   .catch((err) => dispatch(getBookFailure(err)));
 
-
 const getBooksSuccess = (books: any) => ({
   type: bookConstants.GET_BOOKS_SUCCESS,
   target: books,
@@ -41,7 +40,6 @@ const getBooksFailure = (error: any) => ({
 export const getBooks = () => (dispatch: Dispatch) => axios.get('/api/book/')
   .then((res) => dispatch(getBooksSuccess(res.data)))
   .catch((err) => dispatch(getBooksFailure(err)));
-
 
 const searchBooksSuccess = (books: any) => ({
   type: bookConstants.GET_BOOKS_SUCCESS,
@@ -57,7 +55,6 @@ export const searchBooks = (search: string) => (dispatch: Dispatch) => axios.get
   .then((res) => dispatch(searchBooksSuccess(res.data)))
   .catch((err) => dispatch(searchBooksFailure(err)));
 
-
 const getBookCountSuccess = (data: any) => ({
   type: bookConstants.GET_BOOK_COUNT_SUCCESS,
   target: data.count,
@@ -71,7 +68,6 @@ const getBookCountFailure = (error: any) => ({
 export const getBookCount = () => (dispatch: Dispatch) => axios.get('/api/book/count/')
   .then((res) => dispatch(getBookCountSuccess(res.data)))
   .catch((err) => dispatch(getBookCountFailure(err)));
-
 
 const getBooksByCategorySuccess = (books: any) => ({
   type: bookConstants.GET_BOOKS_SUCCESS,
@@ -87,7 +83,6 @@ export const getBooksByCategory = (id: number) => (dispatch: Dispatch) => axios.
   .then((res) => dispatch(getBooksByCategorySuccess(res.data)))
   .catch((err) => dispatch(getBooksByCategoryFailure(err)));
 
-
 const getCategoriesSuccess = (categories: any) => ({
   type: categoryConstants.GET_CATEGORIES_SUCCESS,
   target: categories,
@@ -102,7 +97,6 @@ export const getCategories = () => (dispatch: Dispatch) => axios.get('/api/book/
   .then((res) => dispatch(getCategoriesSuccess(res.data)))
   .catch((err) => dispatch(getCategoriesFailure(err)));
 
-
 const getSeriesSuccess = (series: any) => ({
   type: seriesConstants.GET_SERIES_SUCCESS,
   target: series,
@@ -116,7 +110,6 @@ const getSeriesFailure = (error: any) => ({
 export const getSeries = (id: number) => (dispatch: Dispatch) => axios.get(`/api/book/series/${id}/`)
   .then((res) => dispatch(getSeriesSuccess(res.data)))
   .catch((err) => dispatch(getSeriesFailure(err)));
-
 
 const getAllSeriesSuccess = (series: any) => ({
   type: seriesConstants.GET_ALL_SERIES_SUCCESS,

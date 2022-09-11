@@ -25,6 +25,8 @@ class BookSerializer(serializers.ModelSerializer):
             'authors',
             'visible',
             'aladin_url',
+            'cover_image',
+            'cover_image_3d',
         )
 
     def get_authors(self, book):
@@ -37,7 +39,6 @@ class BookSerializer(serializers.ModelSerializer):
                 author_data
             )
         return authors
-        #return AuthorSerializer(book.authors, many=True, context=self.context).data
 
 
 class SimpleBookSerializer(serializers.ModelSerializer):
@@ -57,6 +58,8 @@ class SimpleBookSerializer(serializers.ModelSerializer):
             'authors',
             'visible',
             'aladin_url',
+            'cover_image',
+            'cover_image_3d',
         )
 
     def get_authors(self, book):
