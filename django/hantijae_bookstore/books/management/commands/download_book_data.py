@@ -1,4 +1,3 @@
-# coding: utf-8
 from django.core.management.base import BaseCommand
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -6,6 +5,7 @@ from books.models import Book, Category, Author, Series, BookSeries, BookAuthor
 
 TSV_FILE = '/Users/dan/Documents/hantijae-bookstore/data/한티재_도서목록200325.tsv'
 STARTING_ROW = 2
+
 
 def download_book_data():
     with open(TSV_FILE) as f:
@@ -24,34 +24,28 @@ def download_book_data():
             category, _ = Category.objects.get_or_create(
                 name=category
             )
-            print(category)
 
             book = Book.objects.create(
                 title=title, subtitle=subtitle, published_date=published_date, page_count=int(page_count[:-1]),
                 full_price=full_price.replace(',', ''), size=size, isbn=isbn, visible=not bool(visible), category=category
             )
-            print(book)
 
             if series:
                 series_index = series.split()[-1]
                 series_name = ' '.join(series.split(' ')[:-1])
                 series, _ = Series.objects.get_or_create(name=series_name)
                 bs = BookSeries.objects.create(book=book, series=series, index=series_index)
-                print(bs)
 
             author_list = authors.replace('·', ',').split(',')
             for author_name in author_list:
                 author = Author.objects.create(name=author_name)
-                print(author)
                 ba = BookAuthor.objects.create(book=book, author=author)
-                print(ba)
 
     normal_books = Book.objects.filter(series__isnull=True)
-    print("normal books:", normal_books.count())
     normal_series = Series.objects.create(name="단행본",  series_type=Series.NORMAL)
     for normal_book in normal_books:
         bs = BookSeries.objects.create(book=normal_book, series=normal_series)
-        print(bs)
+
 
 class Command(BaseCommand):
     def handle(self, *args, **options):

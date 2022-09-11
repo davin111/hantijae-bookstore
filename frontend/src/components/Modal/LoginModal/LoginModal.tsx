@@ -7,7 +7,6 @@ import { Login } from '../..';
 import { stateActions } from '../../../store/actions';
 import './LoginModal.css';
 
-
 interface Props {
   loginModal: boolean;
   onCloseLoginModal: () => any;

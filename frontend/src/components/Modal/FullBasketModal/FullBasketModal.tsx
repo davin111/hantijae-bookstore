@@ -8,7 +8,6 @@ import { withStyles, createStyles } from '@material-ui/core/styles';
 import { stateActions } from '../../../store/actions';
 import './FullBasketModal.css';
 
-
 const styles = (theme: any) => createStyles({
   paper: {
     marginTop: theme.spacing(8),

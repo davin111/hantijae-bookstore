@@ -12,7 +12,6 @@ import { userStatus } from '../../constants/constants';
 import { userActions } from '../../store/actions';
 import './MyPage.css';
 
-
 const styles = (theme: any) => createStyles({
   listItem: {
     padding: theme.spacing(1, 1),

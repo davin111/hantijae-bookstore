@@ -10,7 +10,6 @@ import { stateActions, userActions } from '../../../store/actions';
 import { basketStatus, userStatus } from '../../../constants/constants';
 import './EventModal.css';
 
-
 const styles = (theme: any) => createStyles({
   paper: {
     marginTop: theme.spacing(8),
@@ -90,7 +89,6 @@ class EventModal extends Component<Props, State> {
   render() {
     const { classes } = this.props;
 
-
     return (
       <Modal
         show={this.state.open || this.props.eventModal}
@@ -117,8 +115,7 @@ class EventModal extends Component<Props, State> {
             ― 성서학자가 들려주는 기독교와 성소수자 이야기
           </h3>
           <div className="NewBookStandModal">
-            {/* eslint-disable-next-line */}
-          <img src={require('../../../containers/BookDetail/book_covers_3d/성서, 퀴어를 옹호하다.jpeg')} />
+          <img src={"https://hantijae-assets.s3.amazonaws.com/book-cover-image-3d/04e553a8-5c81-47d9-bce1-35f4a8e69d0a.png"} />
           </div>
           <Typography className="EventNoti" variant="body1">
             <Button

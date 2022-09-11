@@ -9,7 +9,6 @@ import Grid from '@material-ui/core/Grid';
 
 import { userActions } from '../../../store/actions';
 
-
 const styles = (theme: any) => createStyles({
   listItem: {
     padding: theme.spacing(1, 0),

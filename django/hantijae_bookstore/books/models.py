@@ -1,3 +1,6 @@
+import uuid
+
+from django.core.validators import FileExtensionValidator
 from django.db import models
 
 from core.models import BaseModel
@@ -40,6 +43,14 @@ class Series(BaseModel):
 
 
 class Book(BaseModel):
+    def cover_image_path(self, filename):
+        extension = filename.split('.')[-1]
+        return "book-cover-image/{}.{}".format(uuid.uuid4(), extension)
+
+    def cover_image_3d_path(self, filename):
+        extension = filename.split('.')[-1]
+        return "book-cover-image-3d/{}.{}".format(uuid.uuid4(), extension)
+
     title = models.CharField(null=False, blank=False, max_length=500)
     subtitle = models.CharField(null=False, blank=True, max_length=1000)
     short_description = models.TextField(null=False, blank=True)
@@ -56,7 +67,10 @@ class Book(BaseModel):
     aladin_url = models.URLField(max_length=500, null=False, blank=True)
     yes24_url = models.URLField(max_length=500, null=False, blank=True)
     interpark_url = models.URLField(max_length=500, null=False, blank=True)
-
+    cover_image = models.FileField(max_length=255, upload_to=cover_image_path, null=True, blank=True,
+                                   validators=[FileExtensionValidator(allowed_extensions=["jpg", "jpeg", "png"])])
+    cover_image_3d = models.FileField(max_length=255, upload_to=cover_image_3d_path, null=True, blank=True,
+                                      validators=[FileExtensionValidator(allowed_extensions=["jpg", "jpeg", "png"])])
 
     class Meta:
         db_table = 'books_book'

@@ -43,7 +43,6 @@ export const logout = () => (dispatch: Dispatch) => axios.get('/api/user/logout/
   .then((res) => dispatch(logoutSuccess()))
   .catch((err) => dispatch(logoutFailure(err)));
 
-
 const signupSuccess = (user: any) => ({
   type: userConstants.SIGNUP_SUCCESS,
   target: user,
@@ -74,7 +73,6 @@ export const signup = (
   .then((res) => dispatch(signupSuccess(res.data)))
   .catch((err) => dispatch(signupFailure(err)));
 
-
 const getMeSuccess = (user: any) => ({
   type: userConstants.GET_ME_SUCCESS,
   target: user,
@@ -88,7 +86,6 @@ const getMeFailure = (error: any) => ({
 export const getMe = () => (dispatch: Dispatch) => axios.get('/api/user/me/')
   .then((res) => dispatch(getMeSuccess(res.data)))
   .catch((err) => dispatch(getMeFailure(err)));
-
 
 const postBookInBasketSuccess = (basket: any) => ({
   type: basketActions.POST_BOOK_SUCCESS,
@@ -120,7 +117,6 @@ export const postBookInBasket202006NewBook = (id: number, count: number) => (dis
   .then((res) => dispatch(postBookInBasketSuccess(res.data)))
   .catch((err) => dispatch(postBookInBasketFailure(err)));
 
-
 const putBookInBasketSuccess = (basket: any) => ({
   type: basketActions.PUT_BOOK_SUCCESS,
   target: basket,
@@ -151,7 +147,6 @@ export const putBookInBasket202006NewBook = (bookId: number, count: number, bask
   .then((res) => dispatch(putBookInBasketSuccess(res.data)))
   .catch((err) => dispatch(putBookInBasketFailure(err)));
 
-
 const getBasketSuccess = (basket: any) => ({
   type: basketActions.GET_BASKET_SUCCESS,
   target: basket,
@@ -170,7 +165,6 @@ export const getBasket202006NewBook = () => (dispatch: Dispatch) => axios.get('/
   { params: { info: '2020.06.NEWBOOK' } })
   .then((res) => dispatch(getBasketSuccess(res.data)))
   .catch((err) => dispatch(getBasketFailure(err)));
-
 
 const orderBasketSuccess = (basket: any) => ({
   type: basketActions.PUT_ORDER_SUCCESS,
@@ -219,7 +213,6 @@ export const orderBasket202006NewBook = (basketId: number, name: string, email: 
 )
   .then((res) => dispatch(orderBasketSuccess(res.data)))
   .catch((err) => dispatch(orderBasketFailure(err)));
-
 
 const getOrdersSuccess = (basket: any) => ({
   type: basketActions.GET_ORDERS_SUCCESS,

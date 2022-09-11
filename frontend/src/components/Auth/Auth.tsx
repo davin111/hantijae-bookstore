@@ -31,7 +31,6 @@ class Auth extends Component<Props, State> {
     return true;
   }
 
-
   componentDidUpdate(prevProps: Props, prevState: State) {
     if (this.props.history.location.pathname !== this.state.location) {
       this.props.onGetMe().then(() => {

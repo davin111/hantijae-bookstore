@@ -5,7 +5,6 @@ import { bookActions } from '../../store/actions';
 import './BookShelf.css';
 import Books from '../Books/Books';
 
-
 interface Props{
   series: any;
   allSeries: any;

@@ -8,7 +8,6 @@ import ListItemText from '@material-ui/core/ListItemText';
 
 import { userActions } from '../../../store/actions';
 
-
 const styles = (theme: any) => createStyles({
   listItem: {
     padding: theme.spacing(1, 0),

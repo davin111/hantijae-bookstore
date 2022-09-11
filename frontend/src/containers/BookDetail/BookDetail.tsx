@@ -63,8 +63,7 @@ class BookDetail extends Component<Props, State> {
       ));
 
       try {
-        /* eslint-disable-next-line */
-        img = <img src={require(`./book_covers_3d/${this.state.book.title.replace(':', '').replace('!', '').replace('?', '')}.png`)} />;
+        img = <img src={this.state.book.cover_image_3d} />;
       } catch {}
 
       if (this.state.book.visible) {

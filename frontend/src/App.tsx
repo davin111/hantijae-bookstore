@@ -7,7 +7,6 @@ import {
   Main, BookDetail, LoginPage, SignupPage, BookBasket, Order, SearchResult, MyPage, HantijaePage,
 } from './containers';
 
-
 import './App.css';
 
 interface Props {

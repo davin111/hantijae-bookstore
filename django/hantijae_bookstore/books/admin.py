@@ -24,13 +24,27 @@ class BookSeriesInline(admin.TabularInline):
 
 
 class BookAdmin(admin.ModelAdmin):
+    list_per_page = 50
     list_filter = ['series__series', 'category']
     actions = ['set_visible', 'set_invisible']
-    list_display = ['id', 'title', 'subtitle', 'full_price', 'author_list', 'series_list', 'category', 'published_date', '_visible']
+    list_display = ['id', 'title', 'subtitle', 'full_price', 'author_list', 'series_list', 'category', 'published_date',
+                    '_visible']
     fields = ['title', 'subtitle', 'short_description', 'description', 'full_price', 'price', 'isbn', 'page_count',
-              'size', 'category', 'published_date', 'visible', 'kyobo_url', 'aladin_url', 'yes24_url', 'interpark_url']
+              'size', 'category', 'published_date', 'visible', 'kyobo_url', 'aladin_url', 'yes24_url', 'interpark_url',
+              'cover_image', 'cover_image_display', 'cover_image_3d', 'cover_image_3d_display']
+    readonly_fields = ['cover_image_display', 'cover_image_3d_display']
     search_fields = ['title', 'subtitle', 'authors__author__name']
     inlines = [BookAuthorInline, BookSeriesInline]
+
+    def cover_image_display(self, book):
+        if not book.cover_image:
+            return None
+        return mark_safe(f'<img src="{book.cover_image.url}" style="max-width: 150px;" />')
+
+    def cover_image_3d_display(self, book):
+        if not book.cover_image_3d:
+            return None
+        return mark_safe(f'<img src="{book.cover_image_3d.url}" style="max-width: 150px;" />')
 
     def author_list(self, book):
         book_authors = book.authors.all()

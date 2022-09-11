@@ -4,7 +4,6 @@ import { connect } from 'react-redux';
 import { userActions, stateActions } from '../../../store/actions';
 import './BookInBasket.css';
 
-
 export interface BookProps {
   id: number;
   title: string;
@@ -14,6 +13,8 @@ export interface BookProps {
   price: number;
   count: number;
   authors: any[];
+  coverImage?: string;
+  coverImage3d?: string;
   history: any;
   me: any;
   basket: any;
@@ -55,8 +56,7 @@ class BookInBasket extends Component<BookProps> {
       <div className="BookInBasket">
         {/* eslint-disable-next-line */}
         <div className="BookCover" onClick={() => this.props.history.push(`/book=${this.props.id}`)}>
-          {/* eslint-disable-next-line */}
-          <img src={require('../book_covers/' + this.props.title.replace(':', '').replace('!', '').replace('?', '') + '.png')} />
+          <img src={this.props.coverImage} />
         </div>
         <div className="BookInfoInBasket">
           {/* eslint-disable-next-line */}

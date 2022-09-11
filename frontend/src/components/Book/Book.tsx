@@ -5,7 +5,6 @@ import { stateActions } from '../../store/actions';
 import './Book.css';
 import BookCountWithCart from '../BookCountWithCart/BookCountWithCart';
 
-
 export interface BookProps {
   id: number;
   title: string;
@@ -15,6 +14,8 @@ export interface BookProps {
   price: number;
   visible: boolean;
   authors: any[];
+  coverImage?: string;
+  coverImage3d?: string;
   history: any;
   me: any;
   basket: any;
@@ -80,8 +81,7 @@ class Book extends Component<BookProps> {
 
     let img = null;
     try {
-      /* eslint-disable-next-line */
-      img = <img src={require('./book_covers/' + this.props.title.replace(':', '').replace('!', '').replace('?', '') + '.png')} />
+      img = <img src={this.props.coverImage} />
     } catch {}
 
     return (
