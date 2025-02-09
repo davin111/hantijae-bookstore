@@ -84,6 +84,10 @@ if ENV_MODE == 'prod':
         },
     }
 else:
+    secrets_manager = boto3.client("secretsmanager", region_name="ap-northeast-2")
+    credential = secrets_manager.get_secret_value(SecretId="prod/hantijae-bookstore")
+    secret_info = json.loads(credential["SecretString"])
+
     DEBUG = True
     ALLOWED_HOSTS = []
 
@@ -94,12 +98,18 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'hantijae',
-            'USER': 'davin',
-            'PASSWORD': 'hantijae',
-            'HOST': 'localhost',
-            'PORT': '3306',
-        }
+            'NAME': secret_info['DATABASE_NAME'],
+            'USER': secret_info['DATABASE_USER'],
+            'PASSWORD': secret_info['DATABASE_PASSWORD'],
+            'HOST': 'hantijae-bookstore.com',
+            'PORT': secret_info['DATABASE_PORT'],
+            'OPTIONS': {
+                'init_command': "SET sql_mode='STRICT_ALL_TABLES'",
+                'charset': 'utf8mb4',
+                'autocommit': True,
+                'connect_timeout': 3,
+            },
+        },
     }
 
 CACHES = {
