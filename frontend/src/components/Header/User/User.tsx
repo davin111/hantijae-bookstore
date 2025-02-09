@@ -154,7 +154,7 @@ class User extends Component<Props> {
           <Button
             type="button"
             onClick={() => window.open(
-              'http://www.yes24.com/SearchCorner/Search/List?detail_yn=Y&query=%uD55C%uD2F0%uC7AC&domain=BOOK&disp_no=&title=&theme=&author=&company=%uD55C%uD2F0%uC7AC&isbn=&sPrice=&ePrice=&sYear=&sMonth=1&eYear=&eMonth=1&scode=004',
+              'https://www.yes24.com/Product/Search?&domain=ALL&company=한티재&query=%25ED%2595%259C%25ED%258B%25B0%25EC%259E%25AC',
             )}
             variant="contained"
             color="primary"
@@ -164,20 +164,6 @@ class User extends Component<Props> {
             }}
           >
             yes24
-          </Button>
-          <Button
-            type="button"
-            onClick={() => window.open(
-              'http://bsearch.interpark.com/dsearch/book.jsp?sch=all&query=%C7%D1%C6%BC%C0%E7',
-            )}
-            variant="contained"
-            color="primary"
-            size="small"
-            style={{
-              backgroundColor: '#7EC7C5',
-            }}
-          >
-            인터파크
           </Button>
           {/* eslint-disable-next-line */}
           {/* <div className="BasketCount" >{bookCount}</div> */}
