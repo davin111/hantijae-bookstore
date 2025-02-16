@@ -50,6 +50,8 @@ class Book extends Component<BookProps> {
     let shortDesc = '';
     if (this.props.shortDescription.length > 100) {
       shortDesc = `${this.props.shortDescription.substr(0, 100)} ...`;
+    } else {
+      shortDesc = this.props.shortDescription;
     }
 
     let bookCart = null;
