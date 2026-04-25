@@ -181,3 +181,4 @@ django/**/static/
 
 # Claude Code
 CLAUDE.md
+.claude/docs
