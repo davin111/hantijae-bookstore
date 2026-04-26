@@ -183,3 +183,6 @@ django/**/static/
 CLAUDE.md
 .claude/
 .playwright-mcp/
+
+# build artifacts produced by CI (no longer committed)
+frontend/build/
