@@ -1,11 +1,9 @@
 import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
-import Button from '@material-ui/core/Button';
 // import ReactPlayer from 'react-player';
 
 import { bookActions, stateActions, userActions } from '../../store/actions';
 import { basketStatus, userStatus, bookStatus } from '../../constants/constants';
-import { LoginModal, FullBasketModal, BasketInfoModal } from '../../components';
 import './HantijaePage.css';
 
 interface Props {
@@ -59,7 +57,7 @@ class HantijaePage extends Component<Props> {
         <div className="HantijaeUpper">
           <h1 className="HantijaeTitle">도서출판 한티재는...</h1>
           <div className="HantijaeImage">
-            <img src={"https://hantijae-assets.s3.ap-northeast-2.amazonaws.com/misc/kiki.jpeg"} />
+            <img src={"https://hantijae-assets.s3.ap-northeast-2.amazonaws.com/misc/kiki.jpeg"} alt="한티재 마스코트" />
           </div>
         </div>
         <div className="HantijaeDescription">

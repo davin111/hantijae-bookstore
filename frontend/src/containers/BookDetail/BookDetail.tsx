@@ -5,7 +5,7 @@ import ReactPlayer from 'react-player';
 import { bookActions } from '../../store/actions';
 import './BookDetail.css';
 import {
-  BookCountWithCart, LoginModal, FullBasketModal, BasketInfoModal,
+  LoginModal, FullBasketModal, BasketInfoModal,
 } from '../../components';
 
 interface Props {
@@ -63,7 +63,7 @@ class BookDetail extends Component<Props, State> {
       ));
 
       try {
-        img = <img src={this.state.book.cover_image_3d} />;
+        img = <img src={this.state.book.cover_image_3d} alt={this.state.book.title} />;
       } catch {}
 
       if (this.state.book.visible) {

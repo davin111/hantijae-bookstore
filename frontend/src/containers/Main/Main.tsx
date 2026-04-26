@@ -2,7 +2,7 @@ import React, { Component, Dispatch } from 'react';
 import { connect } from 'react-redux';
 
 import {
-  BookShelf, LoginModal, FullBasketModal, BasketInfoModal, EventModal,
+  BookShelf, LoginModal, FullBasketModal, BasketInfoModal,
 } from '../../components';
 import { bookActions } from '../../store/actions';
 import './Main.css';

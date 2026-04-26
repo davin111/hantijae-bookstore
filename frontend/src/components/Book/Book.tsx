@@ -3,7 +3,6 @@ import { connect } from 'react-redux';
 
 import { stateActions } from '../../store/actions';
 import './Book.css';
-import BookCountWithCart from '../BookCountWithCart/BookCountWithCart';
 
 export interface BookProps {
   id: number;
@@ -83,7 +82,7 @@ class Book extends Component<BookProps> {
 
     let img = null;
     try {
-      img = <img src={this.props.coverImage} />
+      img = <img src={this.props.coverImage} alt={this.props.title} />
     } catch {}
 
     return (

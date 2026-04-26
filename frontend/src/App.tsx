@@ -4,7 +4,7 @@ import { ConnectedRouter } from 'connected-react-router';
 
 import { Header, Auth, Footer } from './components';
 import {
-  Main, BookDetail, LoginPage, SignupPage, BookBasket, Order, SearchResult, MyPage, HantijaePage,
+  Main, BookDetail, LoginPage, SignupPage, BookBasket, SearchResult, MyPage, HantijaePage,
 } from './containers';
 
 import './App.css';

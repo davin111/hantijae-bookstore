@@ -115,7 +115,7 @@ class EventModal extends Component<Props, State> {
             ― 성서학자가 들려주는 기독교와 성소수자 이야기
           </h3>
           <div className="NewBookStandModal">
-          <img src={"https://hantijae-assets.s3.amazonaws.com/book-cover-image-3d/04e553a8-5c81-47d9-bce1-35f4a8e69d0a.png"} />
+          <img src={"https://hantijae-assets.s3.amazonaws.com/book-cover-image-3d/04e553a8-5c81-47d9-bce1-35f4a8e69d0a.png"} alt="이벤트 도서 표지" />
           </div>
           <Typography className="EventNoti" variant="body1">
             <Button
