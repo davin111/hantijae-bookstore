@@ -5,27 +5,64 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# main에 동시에 여러 push 들어와도 deploy는 직렬
+# main에 동시 push 들어와도 deploy는 직렬
 concurrency:
   group: deploy-prod
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: SSH and run deploy.sh
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 16
+        uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.LIGHTSAIL_HOST }}
-          username: ec2-user
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
-          port: 22
-          command_timeout: 8m
-          script_stop: true
-          script: |
-            cd /home/ec2-user/hantijae-bookstore
-            git fetch origin main
-            git reset --hard origin/main
-            bash scripts/deploy.sh
+          node-version: '16.17.0'
+
+      - name: Cache yarn deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/yarn
+            frontend/node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('frontend/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: yarn install
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: yarn build
+        working-directory: frontend
+        run: yarn build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.LIGHTSAIL_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.LIGHTSAIL_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Rsync frontend build to instance (atomic swap)
+        run: |
+          rsync -avz --delete-after \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
+            frontend/build/ \
+            ec2-user@${{ secrets.LIGHTSAIL_HOST }}:/var/www/hantijae-frontend.new/
+          ssh -i ~/.ssh/deploy_key ec2-user@${{ secrets.LIGHTSAIL_HOST }} '
+            set -e
+            rm -rf /var/www/hantijae-frontend.old
+            mv /var/www/hantijae-frontend /var/www/hantijae-frontend.old
+            mv /var/www/hantijae-frontend.new /var/www/hantijae-frontend
+            rm -rf /var/www/hantijae-frontend.old
+          '
+
+      - name: Backend deploy (git pull + migrate + uwsgi reload)
+        run: |
+          ssh -i ~/.ssh/deploy_key ec2-user@${{ secrets.LIGHTSAIL_HOST }} \
+            'bash /home/ec2-user/hantijae-bookstore/scripts/deploy.sh'
