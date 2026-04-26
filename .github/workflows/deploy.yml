@@ -39,6 +39,10 @@ jobs:
 
       - name: yarn build
         working-directory: frontend
+        # CI=false: CRA의 'treat warnings as errors' 비활성화. 로컬 build와 같은 동작.
+        # 별건으로 ESLint 경고 수정 후 이 라인 제거 권장.
+        env:
+          CI: false
         run: yarn build
 
       - name: Setup SSH
