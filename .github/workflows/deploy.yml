@@ -25,4 +25,7 @@ jobs:
           command_timeout: 8m
           script_stop: true
           script: |
-            bash /home/ec2-user/hantijae-bookstore/scripts/deploy.sh
+            cd /home/ec2-user/hantijae-bookstore
+            git fetch origin main
+            git reset --hard origin/main
+            bash scripts/deploy.sh
