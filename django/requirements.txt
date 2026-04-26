@@ -5,3 +5,4 @@ djangorestframework==3.11.2
 django-storages==1.13.1
 Markdown==3.2.1
 mysqlclient==1.4.6
+uWSGI==2.0.20

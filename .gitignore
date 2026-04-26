@@ -178,3 +178,8 @@ fixtures/
 dump.rdb
 
 django/**/static/
+
+# Claude Code
+CLAUDE.md
+.claude/
+.playwright-mcp/
