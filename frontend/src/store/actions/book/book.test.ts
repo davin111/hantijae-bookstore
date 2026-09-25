@@ -20,4 +20,13 @@ describe('getBook', () => {
     await getBook(1)(jest.fn());
     expect(mockedGet).toHaveBeenCalledWith('/api/book/1/', { params: {} });
   });
+
+  it('retries once when the first request fails (session race on first load)', async () => {
+    mockedGet.mockReset();
+    mockedGet.mockRejectedValueOnce(new Error('400')).mockResolvedValueOnce({ data: { id: 1 } });
+    const dispatch = jest.fn();
+    await getBook(1, 'tok')(dispatch);
+    expect(mockedGet).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ target: { id: 1 } }));
+  });
 });

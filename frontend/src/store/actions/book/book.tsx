@@ -23,10 +23,16 @@ const getBookFailure = (error: any) => {
   };
 };
 
-export const getBook = (id: number, preview?: string) => (dispatch: Dispatch) => axios.get(
+const fetchBook = (id: number, preview?: string) => axios.get(
   `/api/book/${id}/`,
   { params: preview ? { preview } : {} },
+);
+
+// 첫 로드에서 Auth(/api/user/me/)의 세션 교체와 겹치면 간헐적으로 400(SessionInterrupted)이 난다 → 한 번 재시도
+export const getBook = (id: number, preview?: string) => (dispatch: Dispatch) => (
+  fetchBook(id, preview)
 )
+  .catch(() => fetchBook(id, preview))
   .then((res) => dispatch(getBookSuccess(res.data)))
   .catch((err) => dispatch(getBookFailure(err)));
 
