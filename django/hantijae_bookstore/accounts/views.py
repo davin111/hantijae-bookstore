@@ -111,7 +111,7 @@ class BasketViewSet(viewsets.GenericViewSet):
 
         if not book_id:
             return Response(status=status.HTTP_400_BAD_REQUEST)
-        book = get_object_or_404(Book, id=book_id)
+        book = get_object_or_404(Book, id=book_id, is_published=True)
 
         user = get_user_from_request(request)
         if not user:

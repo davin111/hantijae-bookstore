@@ -100,7 +100,7 @@ class CategorySerializer(serializers.ModelSerializer):
         )
     
     def get_books(self, category):
-        return BookSerializer(category.books.all(), many=True, context=self.context).data
+        return BookSerializer(category.books.filter(is_published=True), many=True, context=self.context).data
 
 
 class SimpleSeriesSerializer(serializers.ModelSerializer):
@@ -124,7 +124,7 @@ class SeriesSerializer(serializers.ModelSerializer):
         )
     
     def get_books(self, series):
-        book_all_series = series.books.all().order_by('-book__published_date')
+        book_all_series = series.books.filter(book__is_published=True).order_by('-book__published_date')
         books = []
         for book_series in book_all_series:
             book_data = SimpleBookSerializer(book_series.book, context=self.context).data

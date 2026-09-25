@@ -25,12 +25,12 @@ class BookSeriesInline(admin.TabularInline):
 
 class BookAdmin(admin.ModelAdmin):
     list_per_page = 50
-    list_filter = ['series__series', 'category']
+    list_filter = ['is_published', 'series__series', 'category']
     actions = ['set_visible', 'set_invisible']
     list_display = ['id', 'title', 'subtitle', 'full_price', 'author_list', 'series_list', 'category', 'published_date',
-                    '_visible']
+                    '_visible', 'is_published']
     fields = ['title', 'subtitle', 'short_description', 'description', 'full_price', 'price', 'isbn', 'page_count',
-              'size', 'category', 'published_date', 'visible', 'kyobo_url', 'aladin_url', 'yes24_url', 'interpark_url',
+              'size', 'category', 'published_date', 'visible', 'is_published', 'kyobo_url', 'aladin_url', 'yes24_url', 'interpark_url',
               'cover_image', 'cover_image_display', 'cover_image_3d', 'cover_image_3d_display']
     readonly_fields = ['cover_image_display', 'cover_image_3d_display']
     search_fields = ['title', 'subtitle', 'authors__author__name']

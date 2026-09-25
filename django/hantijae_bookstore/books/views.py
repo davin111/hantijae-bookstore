@@ -1,18 +1,20 @@
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from books.models import Book, Category, Series
+from books.preview import is_valid_preview_token
 from books.serializers import (BookSerializer, CategorySerializer, SeriesSerializer,
                                SimpleBookSerializer, SimpleSeriesSerializer)
 
 
 class BookViewSet(viewsets.GenericViewSet):
-    queryset = Book.objects.all()
+    queryset = Book.objects.filter(is_published=True)
     serializer_class = BookSerializer
 
     def get_serializer_class(self):
@@ -29,13 +31,15 @@ class BookViewSet(viewsets.GenericViewSet):
             searched_authors = self.get_queryset().filter(
                 authors__author__name__icontains=search_word
             ).values_list('id', flat=True)
-            queryset = Book.objects.filter(Q(id__in=searched_titles) | Q(id__in=searched_authors))
+            queryset = self.get_queryset().filter(Q(id__in=searched_titles) | Q(id__in=searched_authors))
         else:
             queryset = self.get_queryset()
         return Response(self.get_serializer(queryset, many=True).data)
 
     def retrieve(self, request, pk=None):
         book = get_object_or_404(Book, pk=pk)
+        if not book.is_published and not is_valid_preview_token(book.id, request.query_params.get('preview', '')):
+            raise Http404
         return Response(self.get_serializer(book).data)
 
     @action(detail=False, methods=["GET"])
