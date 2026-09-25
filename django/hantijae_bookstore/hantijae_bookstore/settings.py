@@ -195,3 +195,10 @@ INTAKE = {
     'DRIVE_SCAN_SECONDS': 600,
     'DRIVE_STABLE_SECONDS': 1800,
 }
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'console': {'class': 'logging.StreamHandler'}},
+    'loggers': {'intake': {'handlers': ['console'], 'level': 'INFO'}},
+}

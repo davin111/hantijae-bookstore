@@ -32,6 +32,21 @@ sudo systemctl reload hantijae-uwsgi
 echo "(uwsgi reloaded)"
 
 echo ""
+echo "=== 4b. intake worker ==="
+UNIT_SRC="$REPO_DIR/scripts/hantijae-intake.service"
+UNIT_DST="/etc/systemd/system/hantijae-intake.service"
+if [ -f "$UNIT_DST" ]; then
+  if ! cmp -s "$UNIT_SRC" "$UNIT_DST"; then
+    sudo cp "$UNIT_SRC" "$UNIT_DST"
+    sudo systemctl daemon-reload
+  fi
+  sudo systemctl restart hantijae-intake
+  echo "(intake worker restarted)"
+else
+  echo "(intake worker not installed — skip)"
+fi
+
+echo ""
 echo "=== 5. nginx reload (config 변경 가능성) ==="
 sudo nginx -t
 sudo systemctl reload nginx
