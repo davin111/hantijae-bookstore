@@ -1,8 +1,15 @@
 boto3==1.24.70
-Django==3.2.18
 django-filter==2.4.0
-djangorestframework==3.11.2
 django-storages==1.13.1
+Django==3.2.18
+djangorestframework==3.11.2
+google-auth==2.58.1
 Markdown==3.2.1
 mysqlclient==1.4.6
+Pillow==12.3.0
+pyhwp==0.1b15
+pypdf==6.19.0
+python-docx==1.2.0
+requests==2.34.2
+six==1.17.0
 uWSGI==2.0.22

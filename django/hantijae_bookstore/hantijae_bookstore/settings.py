@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     'books.apps.BooksConfig',
     'core.apps.CoreConfig',
     'accounts.apps.AccountsConfig',
+    'intake.apps.IntakeConfig',
 ]
 
 MIDDLEWARE = [
@@ -179,3 +180,18 @@ AWS_DEFAULT_ACL = 'public-read'
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
 
 SITE_URL = os.getenv('SITE_URL', 'https://hantijae-bookstore.com')
+
+INTAKE = {
+    'TELEGRAM_BOT_TOKEN': secret_info.get('TELEGRAM_BOT_TOKEN', ''),
+    'TELEGRAM_INVITE_CODE': secret_info.get('TELEGRAM_INVITE_CODE', ''),
+    'SIDECAR_URL': secret_info.get('AI_SIDECAR_URL', ''),
+    'SIDECAR_TOKEN': secret_info.get('AI_SIDECAR_AUTH_TOKEN', ''),
+    'SIDECAR_MODEL': 'claude-opus-5-5[1m]',
+    'GOOGLE_SERVICE_ACCOUNT_JSON': secret_info.get('GOOGLE_SERVICE_ACCOUNT_JSON', ''),
+    'DRIVE_ROOT_FOLDER_ID': secret_info.get('DRIVE_ROOT_FOLDER_ID', ''),
+    'NOTION_TOKEN': secret_info.get('NOTION_TOKEN', ''),
+    'NOTION_DATA_SOURCE_ID': secret_info.get('NOTION_BOOKS_DATA_SOURCE_ID', ''),
+    'WORK_DIR': os.getenv('INTAKE_WORK_DIR', os.path.join(tempfile.gettempdir(), 'hantijae-intake')),
+    'DRIVE_SCAN_SECONDS': 600,
+    'DRIVE_STABLE_SECONDS': 1800,
+}
