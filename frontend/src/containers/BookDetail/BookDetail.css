@@ -232,3 +232,11 @@
         bottom: 0%;
     }
 }
+
+.PreviewBanner {
+    background: #fff3cd;
+    color: #664d03;
+    padding: 10px 16px;
+    text-align: center;
+    font-weight: 600;
+}

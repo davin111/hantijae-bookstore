@@ -23,7 +23,10 @@ const getBookFailure = (error: any) => {
   };
 };
 
-export const getBook = (id: number) => (dispatch: Dispatch) => axios.get(`/api/book/${id}/`)
+export const getBook = (id: number, preview?: string) => (dispatch: Dispatch) => axios.get(
+  `/api/book/${id}/`,
+  { params: preview ? { preview } : {} },
+)
   .then((res) => dispatch(getBookSuccess(res.data)))
   .catch((err) => dispatch(getBookFailure(err)));
 

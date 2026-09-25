@@ -12,7 +12,7 @@ interface Props {
   location: any;
   book: any;
   getBookStatus: string;
-  onGetBook: (id: number) => any;
+  onGetBook: (id: number, preview?: string) => any;
   history: any;
 }
 
@@ -30,8 +30,12 @@ class BookDetail extends Component<Props, State> {
 
   componentDidMount() {
     window.scrollTo(0, 0);
-    this.props.onGetBook(this.props.location.pathname.split('=')[1])
+    this.props.onGetBook(this.props.location.pathname.split('=')[1], this.previewToken())
       .then(() => this.setState({ book: this.props.book }));
+  }
+
+  previewToken(): string | undefined {
+    return new URLSearchParams(this.props.location.search).get('preview') || undefined;
   }
 
   render() {
@@ -117,6 +121,9 @@ class BookDetail extends Component<Props, State> {
 
     return (
       <div>
+        {this.previewToken() && (
+          <div className="PreviewBanner">검수용 미리보기 — 아직 사이트에 공개되지 않은 책입니다</div>
+        )}
         <div className="BookDetailUpper">
           <div className="BookCoverStand">
             {img}
@@ -187,7 +194,7 @@ const mapStateToProps = (state: any) => ({
 });
 
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
-  onGetBook: (id: number) => dispatch(bookActions.getBook(id)),
+  onGetBook: (id: number, preview?: string) => dispatch(bookActions.getBook(id, preview)),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(BookDetail);
