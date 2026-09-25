@@ -132,6 +132,15 @@ def normalize_extraction(data, categories, series) -> Normalized:
     return Normalized(fields, authors, series_id, index or None, str(data.get('isbn_addon') or ''), unresolved, notes)
 
 
+def find_isbn_duplicate(isbn, exclude_pk=None) -> Optional[int]:
+    """표기(하이픈 유무·부가기호)와 무관하게 숫자로 비교한 같은 ISBN의 다른 책 ID."""
+    digits = isbn_digits(isbn)
+    if not digits:
+        return None
+    rows = Book.objects.exclude(isbn__isnull=True).exclude(pk=exclude_pk).only('id', 'isbn')
+    return next((b.id for b in rows if isbn_digits(b.isbn) == digits), None)
+
+
 def check_book(book, unresolved, edited, source_text, source_quality) -> List[dict]:
     ws = [warning(f'missing:{k}', f'{FIELD_LABELS[k]}을(를) 보도자료에서 찾지 못했어요 — 답장으로 알려 주세요', True)
           for k in REQUIRED if k in unresolved]
@@ -139,10 +148,9 @@ def check_book(book, unresolved, edited, source_text, source_quality) -> List[di
     if book.isbn and not isbn13_valid(digits):
         ws.append(warning('isbn_invalid', f'ISBN {book.isbn}이(가) 올바르지 않아요', True))
     elif digits:
-        dup = [b.id for b in Book.objects.exclude(pk=book.pk).exclude(isbn__isnull=True).only('id', 'isbn')
-               if isbn_digits(b.isbn) == digits]
+        dup = find_isbn_duplicate(book.isbn, exclude_pk=book.pk)
         if dup:
-            ws.append(warning('isbn_duplicate', f'이미 사이트에 있는 ISBN이에요 (책 #{dup[0]})', True))
+            ws.append(warning('isbn_duplicate', f'이미 사이트에 있는 ISBN이에요 (책 #{dup})', True))
     if not book.cover_image:
         ws.append(warning('no_front_cover', '앞표지 이미지가 없어요 — 이 메시지에 사진으로 답장해 주세요', True))
     if not book.cover_image_3d:

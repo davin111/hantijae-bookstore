@@ -88,3 +88,33 @@ class CompareTest(TestCase):
         act = dict(exp, isbn='979-11-92455-59-4', title='연대와  환대', series='팸플릿 28')
         self.assertTrue(all(compare(exp, act).values()))
         self.assertFalse(compare(exp, dict(act, page_count=135))['page_count'])
+
+
+@override_settings(INTAKE={'WORK_DIR': WORK, 'DRIVE_SCAN_SECONDS': 600, 'DRIVE_STABLE_SECONDS': 1800})
+class CrashResilienceTest(TestCase):
+    def setUp(self):
+        self.bot = mock.Mock()
+
+    def test_update_that_crashed_the_worker_is_skipped_once(self):
+        WorkerState.put('telegram_inflight', 7)
+        tg = mock.Mock()
+        tg.get_updates.return_value = [{'update_id': 7, 'message': {}}, {'update_id': 8, 'message': {}}]
+        pipeline.run_iteration(Deps(tg=tg, llm=None, bot=self.bot))
+        self.assertEqual(self.bot.handle_update.call_count, 1)          # 7은 건너뛰고 8만 처리
+        self.assertEqual(WorkerState.get('telegram_offset'), 9)
+        self.assertIsNone(WorkerState.get('telegram_inflight'))
+        self.assertIn('7', self.bot.notify_admin.call_args_list[0].args[0])
+
+    def test_interrupted_sources_are_retried_then_failed(self):
+        a = IntakeSource.objects.create(kind=IntakeSource.DRIVE, title='a', status=IntakeSource.PROCESSING, attempts=1)
+        b = IntakeSource.objects.create(kind=IntakeSource.DRIVE, title='b', status=IntakeSource.PROCESSING, attempts=3)
+        pipeline.recover_interrupted(Deps(tg=None, llm=None, bot=self.bot))
+        self.assertEqual(IntakeSource.objects.get(pk=a.pk).status, IntakeSource.QUEUED)
+        self.assertEqual(IntakeSource.objects.get(pk=b.pk).status, IntakeSource.FAILED)
+        self.bot.notify_admin.assert_called_once()
+
+    def test_process_source_counts_attempts(self):
+        src = IntakeSource.objects.create(kind=IntakeSource.TELEGRAM, title='t', local_dir=tempfile.mkdtemp(),
+                                          status=IntakeSource.QUEUED)
+        pipeline.process_source(src, Deps(tg=None, llm=FakeLLM(REPLY), bot=self.bot))
+        self.assertEqual(IntakeSource.objects.get(pk=src.pk).attempts, 1)

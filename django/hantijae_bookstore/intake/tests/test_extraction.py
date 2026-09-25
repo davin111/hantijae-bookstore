@@ -101,3 +101,12 @@ class ZipNameTest(SimpleTestCase):
         self.assertIsNone(extraction.zip_member_name(self.info(b'dir/._a.jpg')))
         self.assertIsNone(extraction.zip_member_name(self.info(b'../../etc/passwd')))
         self.assertIsNone(extraction.zip_member_name(self.info(b'folder/')))
+
+
+class TransparencyTest(SimpleTestCase):
+    def test_transparent_png_becomes_white_not_black(self):
+        from io import BytesIO
+        path = os.path.join(tempfile.mkdtemp(), 't.png')
+        Image.new('RGBA', (50, 50), (0, 0, 0, 0)).save(path)
+        out = Image.open(BytesIO(to_jpeg(path, 100)))
+        self.assertGreater(min(out.getpixel((10, 10))), 240)

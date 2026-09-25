@@ -156,3 +156,75 @@ class BotTest(TestCase):
         self.bot(drive_ops=ops).handle_update(
             msg(ADMIN, 'https://drive.google.com/drive/folders/1AbCdEfGhIjK', chat_type='private'))
         ops.ingest.assert_called_once_with('1AbCdEfGhIjK')
+
+
+class StrictFakeTG(FakeTG):
+    """텔레그램처럼 텍스트 메시지에 editMessageCaption을 거절한다."""
+    def __init__(self):
+        super().__init__()
+        self.kinds = {}
+
+    def _msg(self, kind='text'):
+        m = super()._msg()
+        self.kinds[m['message_id']] = kind
+        return m
+
+    def send_message(self, chat_id, text, reply_to=None, buttons=None):
+        self.calls.append(('send', chat_id, text, buttons))
+        return self._msg('text')
+
+    def send_photo(self, chat_id, photo, caption, buttons=None, reply_to=None):
+        self.calls.append(('photo', chat_id, caption, buttons))
+        return self._msg('photo')
+
+    def edit_caption(self, chat_id, message_id, caption, buttons=None):
+        from intake.telegram_api import TelegramError
+        if self.kinds.get(message_id) == 'text':
+            raise TelegramError('editMessageCaption: Bad Request: there is no caption in the message to edit')
+        self.calls.append(('edit', chat_id, caption, buttons))
+
+    def edit_text(self, chat_id, message_id, text, buttons=None):
+        from intake.telegram_api import TelegramError
+        if self.kinds.get(message_id) == 'photo':
+            raise TelegramError('editMessageText: Bad Request: there is no text in the message to edit')
+        self.calls.append(('edit_text', chat_id, text, buttons))
+
+
+@override_settings(INTAKE=CONFIG)
+class BotRealTelegramRulesTest(TestCase):
+    def setUp(self):
+        self.tg = StrictFakeTG()
+        cat = Category.objects.create(name='에세이')
+        book = Book.objects.create(title='표지 없는 책', full_price=1, page_count=10, category=cat,
+                                   published_date=date(2026, 1, 1), is_published=False)
+        src = IntakeSource.objects.create(kind=IntakeSource.DRIVE, title='x')
+        self.draft = BookDraft.objects.create(source=src, book=book, state=BookDraft.REVIEW,
+                                              extracted={'_unresolved': [], '_edited': [], '_notes': [],
+                                                         '_source_quality': 0.9})
+        TelegramChat.objects.create(chat_id=ADMIN, kind=TelegramChat.ADMIN)
+        TelegramChat.objects.create(chat_id=FAMILY, kind=TelegramChat.FAMILY)
+        WorkerState.put('mode', 'live')
+
+    def test_coverless_draft_can_be_fixed_by_photo_reply(self):
+        bot = Bot(self.tg, FakeLLM({}), config=CONFIG)
+        bot.notify_draft(self.draft)                                   # 표지 없음 → 텍스트 메시지
+        draft_msg = BookDraft.objects.get().message_id
+        bot.handle_update(msg(FAMILY, '', reply_to=draft_msg, photo=[{'file_id': 'p1'}]))
+        self.assertTrue(Book.objects.get().cover_image)
+        self.assertIn('앞표지를 이 사진으로 바꿨어요', self.tg.texts())
+        self.assertFalse([t for t in self.tg.texts() if '오류' in t])
+
+    def test_reply_to_patch_proposal_starts_a_new_patch_for_the_same_draft(self):
+        reply = {'changes': [{'field': 'subtitle', 'new_value': '새 부제'}], 'questions': []}
+        bot = Bot(self.tg, FakeLLM(reply), config=CONFIG)
+        bot.notify_draft(self.draft)
+        bot.handle_update(msg(FAMILY, '부제 바꿔줘', reply_to=BookDraft.objects.get().message_id))
+        proposal_id = PendingPatch.objects.get().message_id
+        bot.handle_update(msg(FAMILY, '아, 그리고 부제는 새 부제로', reply_to=proposal_id))
+        self.assertEqual(PendingPatch.objects.count(), 2)
+
+    def test_reply_to_other_bot_message_gets_guidance(self):
+        bot = Bot(self.tg, FakeLLM({}), config=CONFIG)
+        sent = self.tg.send_message(FAMILY, '반영했어요')
+        bot.handle_update(msg(FAMILY, '고마워', reply_to=sent['message_id']))
+        self.assertIn('초안 사진 메시지', self.tg.texts()[-1])

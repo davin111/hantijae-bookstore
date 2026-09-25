@@ -20,15 +20,23 @@ class TelegramAPI:
     def call(self, method, _files=None, _http_timeout=60, **params):
         url = f'{self.base}/bot{self.token}/{method}'
         params = {k: v for k, v in params.items() if v is not None}
-        if _files:
-            data = {k: json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v for k, v in params.items()}
-            res = self.session.post(url, data=data, files=_files, timeout=_http_timeout)
-        else:
-            res = self.session.post(url, json=params, timeout=_http_timeout)
-        payload = res.json()
+        try:
+            if _files:
+                data = {k: json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v
+                        for k, v in params.items()}
+                res = self.session.post(url, data=data, files=_files, timeout=_http_timeout)
+            else:
+                res = self.session.post(url, json=params, timeout=_http_timeout)
+            payload = res.json()
+        except (requests.RequestException, ValueError) as e:
+            # requests 예외 문구에는 URL(= 봇 토큰)이 들어간다. from None 으로 원본 예외 체인도 끊는다.
+            raise TelegramError(f'{method}: {self._redact(e)}') from None
         if not payload.get('ok'):
             raise TelegramError(f"{method}: {payload.get('description')}")
         return payload['result']
+
+    def _redact(self, e):
+        return str(e).replace(self.token, '***') if self.token else str(e)
 
     @staticmethod
     def _reply(reply_to):
@@ -53,6 +61,13 @@ class TelegramAPI:
             if 'message is not modified' not in str(e):
                 raise
 
+    def edit_text(self, chat_id, message_id, text, buttons=None):
+        try:
+            self.call('editMessageText', chat_id=chat_id, message_id=message_id, text=text[:4096], reply_markup=buttons)
+        except TelegramError as e:
+            if 'message is not modified' not in str(e):
+                raise
+
     def answer_callback(self, callback_id, text=''):
         self.call('answerCallbackQuery', callback_query_id=callback_id, text=text[:200] or None)
 
@@ -61,9 +76,13 @@ class TelegramAPI:
 
     def download_file(self, file_id, dest_path):
         info = self.call('getFile', file_id=file_id)   # 봇 API는 20MB까지
-        with self.session.get(f"{self.base}/file/bot{self.token}/{info['file_path']}", stream=True, timeout=120) as res:
-            res.raise_for_status()
-            with open(dest_path, 'wb') as fh:
-                for chunk in res.iter_content(1 << 16):
-                    fh.write(chunk)
+        try:
+            with self.session.get(f"{self.base}/file/bot{self.token}/{info['file_path']}", stream=True,
+                                  timeout=120) as res:
+                res.raise_for_status()
+                with open(dest_path, 'wb') as fh:
+                    for chunk in res.iter_content(1 << 16):
+                        fh.write(chunk)
+        except requests.RequestException as e:
+            raise TelegramError(f'download: {self._redact(e)}') from None
         return dest_path

@@ -145,7 +145,8 @@ def ingest(drive, folder_id):
 
 def download_folder(drive, folder_id, dest):
     for it, rel in list_tree(drive, folder_id):
-        if os.path.splitext(rel)[1].lower() in SKIP_EXT or int(it.get('size') or 0) > MAX_DOWNLOAD:
+        if (os.path.splitext(rel)[1].lower() in SKIP_EXT or int(it.get('size') or 0) > MAX_DOWNLOAD
+                or it.get('mimeType', '').startswith('application/vnd.google-apps')):  # 구글 문서류는 alt=media 불가(403)
             continue
         target = os.path.join(dest, *rel.split('/'))
         os.makedirs(os.path.dirname(target), exist_ok=True)

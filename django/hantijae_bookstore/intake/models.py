@@ -20,6 +20,7 @@ class IntakeSource(BaseModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=SEEN)
     local_dir = models.CharField(max_length=1000, blank=True, help_text="텔레그램으로 받은 파일 저장 위치")
     requested_chat_id = models.BigIntegerField(null=True, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0, help_text="처리 시도 횟수 (OOM 등으로 중단되면 누적)")
     error = models.TextField(blank=True)
 
     def __str__(self):

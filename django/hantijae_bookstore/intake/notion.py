@@ -44,19 +44,20 @@ def _text(v):
 
 
 def _match_row(rows, book_title):
+    """(행, 'exact'|'prefix') 또는 (None, None). 노션엔 작업 제목(앞부분)만 적힌 행이 많아 유일한 접두 일치도 허용한다."""
     key = normalize_key(book_title)
     exact = [r for r in rows if normalize_key(_title(r)) == key]
     if len(exact) == 1:
-        return exact[0]
+        return exact[0], 'exact'
     prefix = [r for r in rows if normalize_key(_title(r)) and
               (key.startswith(normalize_key(_title(r))) or normalize_key(_title(r)).startswith(key))]
-    return prefix[0] if len(prefix) == 1 and not exact else None
+    return (prefix[0], 'prefix') if len(prefix) == 1 and not exact else (None, None)
 
 
 def fill_notion_row(client, data_source_id, book, isbn_addon, site_url):
     first_word = book.title.split()[0].strip(',.') if book.title.split() else book.title
     rows = client.query_by_title(data_source_id, first_word)
-    row = _match_row(rows, book.title)
+    row, how = _match_row(rows, book.title)
     if row is None:
         return {'page_id': None, 'filled': [], 'note': f"노션에서 '{book.title}' 행을 하나로 특정하지 못했어요 ({len(rows)}개 후보)"}
     candidates = {
@@ -74,4 +75,8 @@ def fill_notion_row(client, data_source_id, book, isbn_addon, site_url):
              if v is not None and k in row['properties'] and _is_empty(row['properties'][k])}
     if props:
         client.update_page(row['id'], props)
-    return {'page_id': row['id'], 'filled': sorted(props), 'note': ''}
+    note = ''
+    if how == 'prefix':
+        note = (f"노션 '{_title(row)}' 행과 접두 일치로 매칭해 빈 칸({', '.join(sorted(props)) or '없음'})을 채웠어요 "
+                f"— 다른 책이면 노션에서 되돌려 주세요")
+    return {'page_id': row['id'], 'filled': sorted(props), 'note': note}

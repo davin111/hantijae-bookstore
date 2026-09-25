@@ -62,3 +62,10 @@ class FillNotionTest(TestCase):
         fake = FakeNotion([page('p1', '사그라다 파밀리아, 가족의 탄생')], options=['152*225'])
         notion.fill_notion_row(fake, 'ds', self.book, '', 'https://x')
         self.assertNotIn('판형', fake.updates[0][1])
+
+    def test_prefix_match_is_reported_to_admin(self):
+        fake = FakeNotion([page('p1', '사그라다 파밀리아')])
+        r = notion.fill_notion_row(fake, 'ds', self.book, '', 'https://x')
+        self.assertEqual(r['page_id'], 'p1')
+        self.assertIn('접두 일치', r['note'])
+        self.assertIn('사그라다 파밀리아', r['note'])

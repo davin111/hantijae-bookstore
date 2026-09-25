@@ -16,8 +16,9 @@ WorkingDirectory=/home/ec2-user/hantijae-bookstore/django/hantijae_bookstore
 ExecStart=/home/ec2-user/.pyenv/versions/hantijae-bookstore/bin/python manage.py intake_worker
 Restart=always
 RestartSec=10
-# 1GB 서버: 큰 PDF 처리 중 메모리가 튀면 MySQL 대신 워커가 죽도록 상한을 둔다
-MemoryMax=300M
+# 1GB 서버(+스왑 1GB): 큰 이미지 처리 중 메모리가 튀면 MySQL 대신 워커가 죽도록 상한을 둔다.
+# 죽은 입력은 telegram_inflight·attempts 로 건너뛰어 재시작 루프가 되지 않는다.
+MemoryMax=450M
 NoNewPrivileges=true
 ProtectSystem=full
 # uWSGI와 같은 /var/tmp 캐시 디렉터리를 공유해야 하므로 PrivateTmp 끔

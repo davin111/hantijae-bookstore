@@ -3,6 +3,11 @@ from intake.mapping import FIELD_LABELS
 from intake.telegram_api import keyboard
 
 CAPTION_LIMIT = 1024
+
+
+def tg_len(s):
+    """텔레그램은 길이를 UTF-16 코드 유닛으로 센다(이모지 = 2)."""
+    return len(s.encode('utf-16-le')) // 2
 ROLE_VERB = {'지은이': '지음', '옮긴이': '옮김', '엮은이': '엮음', '기획': '기획'}
 
 
@@ -40,9 +45,11 @@ def draft_caption(snap, warnings, preview, published=False):
     for keep in range(len(lines), -1, -1):
         shown = lines[:keep] + ([f'… 외 {len(lines) - keep}건'] if keep < len(lines) else [])
         body = '\n'.join(head + ([''] + shown if shown else []))
-        if len(body) + len(tail) <= CAPTION_LIMIT:
+        if tg_len(body) + tg_len(tail) <= CAPTION_LIMIT:
             return body + tail
-    return body[:CAPTION_LIMIT - len(tail)] + tail
+    while body and tg_len(body) + tg_len(tail) > CAPTION_LIMIT:
+        body = body[:-1]
+    return body + tail
 
 
 def draft_buttons(draft_id, version, published=False):

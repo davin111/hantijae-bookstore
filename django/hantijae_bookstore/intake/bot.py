@@ -79,17 +79,27 @@ class Bot:
         if draft.book.cover_image:
             with draft.book.cover_image.open('rb') as fh:
                 sent = self.tg.send_photo(chat, fh.read(), self._caption(draft), self._buttons(draft))
+            kind = 'photo'
         else:
             sent = self.tg.send_message(chat, self._caption(draft), buttons=self._buttons(draft))
+            kind = 'text'
         draft.chat_id, draft.message_id = chat, sent['message_id']
-        draft.save(update_fields=['chat_id', 'message_id', 'updated_at'])
+        # 텔레그램은 텍스트 메시지에 editMessageCaption 을 거절한다 → 나중에 고칠 때 종류별 API를 쓴다
+        draft.files = dict(draft.files or {}, message_kind=kind)
+        draft.save(update_fields=['chat_id', 'message_id', 'files', 'updated_at'])
         admin_notes = [w['message'] for w in draft.warnings if w['audience'] == 'admin']
         if admin_notes:
             self.notify_admin(f'초안 #{draft.id} 관리자 메모\n' + '\n'.join(f'• {n}' for n in admin_notes))
 
+    def _edit(self, draft, text, buttons=None):
+        if (draft.files or {}).get('message_kind') == 'text':
+            self.tg.edit_text(draft.chat_id, draft.message_id, text, buttons)
+        else:
+            self.tg.edit_caption(draft.chat_id, draft.message_id, text, buttons)
+
     def refresh_draft_message(self, draft):
         if draft.message_id:
-            self.tg.edit_caption(draft.chat_id, draft.message_id, self._caption(draft), self._buttons(draft))
+            self._edit(draft, self._caption(draft), self._buttons(draft))
 
     # ---- 진입점 ----
     def handle_update(self, update):
@@ -125,10 +135,18 @@ class Bot:
             if src:
                 return self.collect_newbook(src, msg, text)
             draft = BookDraft.objects.filter(chat_id=chat_id, message_id=reply['message_id']).select_related('book').first()
+            if draft is None:
+                patch = PendingPatch.objects.filter(message_id=reply['message_id'], draft__chat_id=chat_id) \
+                    .select_related('draft__book').first()
+                draft = patch.draft if patch else None      # "이렇게 바꿀게요"에 단 답장도 같은 초안의 수정 요청
             if draft and draft.book and draft.state in (BookDraft.REVIEW, BookDraft.PUBLISHED):
                 return self.on_draft_reply(draft, msg, text, actor)
         if kind == TelegramChat.ADMIN and parse_folder_id(text):
             return self.ingest_folder(chat_id, parse_folder_id(text))
+        if reply and kind == TelegramChat.FAMILY:
+            # privacy mode 에선 봇 메시지에 단 답장만 들어온다 → 초안이 아닌 메시지에 답장한 경우 안내
+            return self.tg.send_message(chat_id, '고칠 내용은 책 초안 사진 메시지(📕)에 답장으로 적어 주세요.',
+                                        reply_to=msg['message_id'])
 
     def register(self, chat, kind, code):
         expected = self.config.get('TELEGRAM_INVITE_CODE')
@@ -159,7 +177,7 @@ class Bot:
         elif cmd == '/ingest' and parse_folder_id(arg) or (cmd == '/ingest' and re.fullmatch(r'[\w-]{10,}', arg)):
             return self.ingest_folder(chat_id, parse_folder_id(arg) or arg)
         elif cmd == '/retry' and arg.isdigit():
-            n = IntakeSource.objects.filter(pk=int(arg)).update(status=IntakeSource.QUEUED, error='')
+            n = IntakeSource.objects.filter(pk=int(arg)).update(status=IntakeSource.QUEUED, error='', attempts=0)
             text = '다시 대기열에 넣었어요' if n else '그런 자료가 없어요'
         else:
             text = '사용법: /status · /mode live|admin_only · /drive on|off · /notion on|off · /baseline · /ingest <폴더 링크> · /retry <번호>'
@@ -270,7 +288,7 @@ class Bot:
         if action == 'delok':
             draft = drafts.discard(args[0], args[1])
             if draft.message_id:
-                self.tg.edit_caption(draft.chat_id, draft.message_id, '🗑 폐기된 초안이에요')
+                self._edit(draft, '🗑 폐기된 초안이에요')
             return '폐기했어요'
         if action == 'img':
             draft = drafts.cycle_3d(args[0], args[1], actor)

@@ -119,3 +119,15 @@ class DraftsTest(TestCase):
         draft = drafts.discard(draft.id, draft.version)
         self.assertEqual(draft.state, BookDraft.DISCARDED)
         self.assertFalse(Book.objects.filter(pk=book_id).exists())
+
+    def test_same_format_duplicate_isbn_becomes_blocking_warning(self):
+        Book.objects.create(title='기존', full_price=1, page_count=1, category=Category.objects.first(),
+                            published_date='2026-01-01', isbn='979-11-92455-87-7')
+        draft = drafts.create_draft(self.source, self.result())      # IntegrityError 없이 초안 생성
+        self.assertIsNone(draft.book.isbn)
+        self.assertIn('isbn_duplicate', {w['code'] for w in draft.warnings if w['blocking']})
+        p = drafts.propose_patch(draft, 'isbn', '엄마', FakeLLM(
+            {'changes': [{'field': 'isbn', 'new_value': '979-11-92455-82-2'}], 'questions': []}))
+        draft, _ = drafts.apply_patch(p.id, '엄마')
+        self.assertFalse([w for w in draft.warnings if w['blocking']])
+

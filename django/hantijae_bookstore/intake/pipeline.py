@@ -26,9 +26,26 @@ def _fail(source, deps, message, family_notice=False):
         deps.bot.notify_family_or_admin('초안 준비가 늦어지고 있어요. 확인 중이에요.')
 
 
+MAX_ATTEMPTS = 3
+
+
+def recover_interrupted(deps, max_attempts=MAX_ATTEMPTS):
+    """처리 도중 워커가 죽은(OOM 등) 자료: 재시도하되 max_attempts 넘으면 실패 처리해 무한 재시작을 끊는다."""
+    for src in IntakeSource.objects.filter(status=IntakeSource.PROCESSING):
+        if src.attempts >= max_attempts:
+            src.status = IntakeSource.FAILED
+            src.error = f'처리 중 {src.attempts}번 중단됐어요(메모리 부족 등). 자료 크기를 확인해 주세요.'
+            src.save(update_fields=['status', 'error', 'updated_at'])
+            deps.bot.notify_admin(f'❌ 자료 #{src.id} {src.title}\n{src.error}\n다시 시도: /retry {src.id}')
+        else:
+            src.status = IntakeSource.QUEUED
+            src.save(update_fields=['status', 'updated_at'])
+
+
 def process_source(source, deps):
     source.status = IntakeSource.PROCESSING
-    source.save(update_fields=['status', 'updated_at'])
+    source.attempts += 1
+    source.save(update_fields=['status', 'attempts', 'updated_at'])
     is_drive = source.kind == IntakeSource.DRIVE
     work = os.path.join(settings.INTAKE['WORK_DIR'], 'sources', str(source.id)) if is_drive else source.local_dir
     try:
@@ -80,8 +97,15 @@ def run_iteration(deps, now=None, sleep=time.sleep):
     close_old_connections()
     try:
         for update in deps.tg.get_updates(WorkerState.get('telegram_offset', 0) or 0, timeout=50):
-            deps.bot.handle_update(update)
-            WorkerState.put('telegram_offset', update['update_id'] + 1)
+            uid = update['update_id']
+            if WorkerState.get('telegram_inflight') == uid:
+                # 이 업데이트를 처리하다 워커가 죽었다(OOM 등). 같은 입력을 영원히 반복하지 않도록 건너뛴다.
+                deps.bot.notify_admin(f'⚠️ 텔레그램 업데이트 {uid} 처리 중 워커가 중단돼 건너뛰었어요')
+            else:
+                WorkerState.put('telegram_inflight', uid)
+                deps.bot.handle_update(update)
+            WorkerState.put('telegram_offset', uid + 1)
+            WorkerState.put('telegram_inflight', None)
         now = now or timezone.now()
         if deps.drive and WorkerState.get('drive_autoscan', False) and _scan_due(now):
             scan(deps.drive, deps.drive_root, now=now, stable_seconds=settings.INTAKE['DRIVE_STABLE_SECONDS'])

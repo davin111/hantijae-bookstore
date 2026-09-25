@@ -90,3 +90,9 @@ class DriveTest(TestCase):
         drive.download_folder(fake, 'bk', dest)
         self.assertEqual(sorted(fake.downloads), ['front', 'img', 'pdf'])
         self.assertTrue(os.path.exists(os.path.join(dest, '새책_미리보기', '새책_앞표지.jpg')))
+
+    def test_google_native_files_are_skipped(self):
+        t = tree(item('gdoc', '메모', 'application/vnd.google-apps.document'))
+        fake, dest = FakeDrive(t), tempfile.mkdtemp()
+        drive.download_folder(fake, 'bk', dest)
+        self.assertNotIn('gdoc', fake.downloads)

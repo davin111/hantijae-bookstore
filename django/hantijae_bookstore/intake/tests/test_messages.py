@@ -47,3 +47,9 @@ class MessagesTest(SimpleTestCase):
     def test_parse_callback(self):
         self.assertEqual(messages.parse_callback('pubok:12:3'), ('pubok', [12, 3]))
         self.assertEqual(messages.parse_callback('noop'), ('noop', []))
+
+    def test_caption_limit_counts_utf16_units(self):
+        # 이모지는 UTF-16 두 단위라 len()보다 텔레그램 기준 길이가 길다
+        many = [{'code': str(i), 'message': '가' * 40, 'blocking': i % 2 == 0, 'audience': 'family'} for i in range(40)]
+        cap = messages.draft_caption(SNAP, many, 'https://x/p')
+        self.assertLessEqual(messages.tg_len(cap), messages.CAPTION_LIMIT)

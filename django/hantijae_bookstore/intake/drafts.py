@@ -10,8 +10,9 @@ from django.utils import timezone
 from books.models import Author, Book, BookAuthor, BookSeries, Category, Series
 from intake.images import to_jpeg
 from intake.llm import complete_json
-from intake.mapping import (MAX_PRICE, ROLE_TO_TYPE, TYPE_TO_ROLE, aladin_search_url, check_book, format_isbn,
-                            match_name, normalize_extraction, normalize_size, parse_date, to_int, warning)
+from intake.mapping import (MAX_PRICE, ROLE_TO_TYPE, TYPE_TO_ROLE, aladin_search_url, check_book,
+                            find_isbn_duplicate, format_isbn, match_name, normalize_extraction, normalize_size,
+                            parse_date, to_int, warning)
 from intake.models import BookDraft, DraftRevision, PendingPatch
 from intake.prompts import PATCH_SYSTEM, build_patch_user
 
@@ -78,6 +79,12 @@ def create_draft(source, result):
     series = {s.name: s.id for s in Series.objects.all()}
     n = normalize_extraction(result.data, categories, series)
     f = n.fields
+    notes = list(n.notes)
+    dup = find_isbn_duplicate(f['isbn'])
+    if dup:
+        # Book.isbn 은 unique 라 그대로 넣으면 IntegrityError. 비워 두고 차단 경고로 알린다.
+        notes.append(warning('isbn_duplicate', f"이미 사이트에 있는 ISBN이에요 (책 #{dup}) — 같은 책이면 폐기해 주세요", True))
+        f = dict(f, isbn=None, aladin_url='')
     with transaction.atomic():
         book = Book.objects.create(
             title=f['title'] or source.title, subtitle=f['subtitle'],
@@ -86,7 +93,6 @@ def create_draft(source, result):
             published_date=f['published_date'] or timezone.localdate(),
             category_id=f['category_id'] or Category.objects.order_by('id').values_list('id', flat=True).first(),
             aladin_url=f['aladin_url'], visible=True, is_published=False)
-        notes = list(n.notes)
         for name, type_ in n.authors:
             author, note = resolve_author(name)
             notes += [note] if note else []
@@ -182,6 +188,8 @@ def _apply_changes(draft, changes, request_text, actor):
     ex = dict(draft.extracted)
     ex['_unresolved'] = [u for u in ex.get('_unresolved', []) if u not in fields]
     ex['_edited'] = sorted(set(ex.get('_edited', [])) | set(fields))
+    if 'isbn' in fields:
+        ex['_notes'] = [n for n in ex.get('_notes', []) if n.get('code') != 'isbn_duplicate']
     draft.extracted = ex
     draft.version += 1
     draft.save()
