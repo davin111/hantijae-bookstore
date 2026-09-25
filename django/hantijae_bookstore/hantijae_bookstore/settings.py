@@ -1,5 +1,7 @@
 import os
 import json
+import sys
+import tempfile
 
 import boto3
 
@@ -50,7 +52,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'hantijae_bookstore.wsgi.application'
 
-if ENV_MODE == 'prod':
+if ENV_MODE == 'test':
+    # 운영 DB·Secrets Manager 없이 도는 테스트 전용 설정
+    secret_info = {}
+    DEBUG = False
+    ALLOWED_HOSTS = ['testserver', 'localhost']
+    SECRET_KEY = 'test-only-secret-key'
+    AWS_STORAGE_BUCKET_NAME = 'hantijae-assets-test'
+    DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
+    if 'test' in sys.argv:
+        # accounts/0001이 0002에서야 생기는 커스텀 User를 참조해 빈 DB에선 마이그레이션이 깨진다(운영 DB는 이미 적용 완료).
+        # 테스트 DB는 현재 모델로 바로 만든다. 모델↔마이그레이션 일치는 `makemigrations --check`로 따로 확인.
+        MIGRATION_MODULES = {app: None for app in ('accounts', 'books', 'core', 'intake')}
+elif ENV_MODE == 'prod':
     secrets_manager = boto3.client("secretsmanager", region_name="ap-northeast-2")
     credential = secrets_manager.get_secret_value(SecretId="prod/hantijae-bookstore")
     secret_info = json.loads(credential["SecretString"])
@@ -112,12 +126,17 @@ else:
         },
     }
 
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'TIMEOUT': 3600,
+if ENV_MODE == 'test':
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'TIMEOUT': 3600}}
+else:
+    # uWSGI 워커들과 intake 워커가 같은 캐시를 봐야 무효화가 전파된다 (LocMemCache는 프로세스별)
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+            'LOCATION': os.getenv('DJANGO_CACHE_DIR', '/var/tmp/hantijae-django-cache'),
+            'TIMEOUT': 3600,
+        }
     }
-}
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -150,6 +169,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 STATIC_URL = '/django_static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+if ENV_MODE == 'test':
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    MEDIA_ROOT = os.path.join(tempfile.gettempdir(), 'hantijae-test-media')
+    MEDIA_URL = '/media/'
+else:
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 AWS_DEFAULT_ACL = 'public-read'
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+
+SITE_URL = os.getenv('SITE_URL', 'https://hantijae-bookstore.com')
