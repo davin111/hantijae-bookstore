@@ -7,6 +7,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from books.constants import PUBLIC_SERIES_ORDER
 from books.models import Book, Category, Series
 from books.preview import is_valid_preview_token
 from books.serializers import (BookSerializer, CategorySerializer, SeriesSerializer,
@@ -73,9 +74,8 @@ class SeriesViewSet(viewsets.GenericViewSet):
         data = cache.get("series")
         if data is None:
             queryset = self.get_queryset()
-            fixed_tuple = ("단행본", "교양문고", "산문선", "시선", "팸플릿")
             data = []
-            for name in fixed_tuple:
+            for name in PUBLIC_SERIES_ORDER:
                 try:
                     series = queryset.get(name=name)
                     data.append(self.get_serializer(series).data)
