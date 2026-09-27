@@ -15,19 +15,29 @@ interface Mark {
 
 // sessionStorage를 못 쓰는 환경(프라이빗 모드 등)에서는 window.name으로 대신 기억한다 —
 // window.name은 같은 탭에서 페이지를 새로 불러와도(전체 페이지 이동) 유지된다.
-function readMark(): Mark | null {
+function readWindowNameMark(): Mark | null {
   try {
-    return JSON.parse(window.sessionStorage.getItem(KEY) || 'null');
-  } catch (e) {
-    try {
-      if (window.name.startsWith(WINDOW_NAME_PREFIX)) {
-        return JSON.parse(window.name.slice(WINDOW_NAME_PREFIX.length));
-      }
-    } catch (e2) {
-      return null;
+    if (window.name.startsWith(WINDOW_NAME_PREFIX)) {
+      return JSON.parse(window.name.slice(WINDOW_NAME_PREFIX.length));
     }
+  } catch (e) {
     return null;
   }
+  return null;
+}
+
+// sessionStorage에 쓸 수 있는 표시가 없으면(못 읽거나, 비어 있거나, 깨져 있으면) window.name도 본다 —
+// setItem만 막힌 환경(읽기는 되는데 쓰기만 실패)에서는 표시가 window.name에만 남아 있을 수 있다.
+function readMark(): Mark | null {
+  try {
+    const saved = JSON.parse(window.sessionStorage.getItem(KEY) || 'null');
+    if (saved) {
+      return saved;
+    }
+  } catch (e) {
+    // sessionStorage 접근 자체가 막힌 환경 — 아래에서 window.name을 본다
+  }
+  return readWindowNameMark();
 }
 
 function writeMark(target: string): void {
