@@ -1,6 +1,12 @@
 """텔레그램 문구·버튼 (순수 함수). callback_data는 64바이트 제한이라 ID와 버전만 싣는다."""
+from datetime import timedelta
+from zoneinfo import ZoneInfo
+
+from django.utils import timezone
+
 from intake.mapping import FIELD_LABELS
 from intake.telegram_api import keyboard
+from web.models import Notice
 
 CAPTION_LIMIT = 1024
 
@@ -111,4 +117,41 @@ def review_buttons(item):
         return keyboard([[(o['label'], f'rv:{item.id}:{i}')] for i, o in enumerate(item.options)])
     if item.status in ('applied', 'kept'):
         return keyboard([[('↩️ 다시 고르기', f'rvu:{item.id}')]])
+    return None
+
+
+KST = ZoneInfo('Asia/Seoul')
+NOTICE_PROMPT = ('사이트 첫 화면 맨 위에 띄울 알림을 이 메시지에 답장으로 적어 주세요.\n'
+                 '무엇을 · 언제까지 · 연결할 주소를 함께 적어 주시면 돼요.\n'
+                 '예) 『무궁화호를 위하여』 알라딘 북펀드 3월 2일까지 https://…')
+
+
+def _kday(dt):
+    d = dt.astimezone(KST)
+    return f'{d.month}월 {d.day}일'
+
+
+def notice_card(notice, warnings=(), head=None):
+    heads = {Notice.DRAFT: '📣 알림 띠 미리보기', Notice.POSTED: '📣 첫 화면에 떠 있는 알림', Notice.REMOVED: '🗑 내린 알림'}
+    lines = [head or heads.get(notice.state, '📣 알림 띠'),
+             f'{notice.message} · {notice.link_label} →' if notice.link_url else notice.message]
+    if notice.ends_at:
+        lines.append(f'기간: {_kday(notice.starts_at)} ~ {_kday(notice.ends_at - timedelta(seconds=1))}')
+    else:
+        lines.append(f'기간: {_kday(notice.starts_at)}부터 내릴 때까지')
+    lines.append(f'연결: {notice.link_url}' if notice.link_url else '연결: 없음')
+    lines += [f'⚠️ {w}' for w in warnings]
+    if notice.state != Notice.REMOVED:
+        lines.append('고칠 내용은 이 메시지에 답장으로 적어 주세요.')
+    return '\n'.join(lines)
+
+
+def notice_buttons(notice, now=None):
+    now = now or timezone.now()
+    if notice.state == Notice.DRAFT:
+        return keyboard([[('✅ 게시', f'ntpub:{notice.id}'), ('취소', f'ntdel:{notice.id}')]])
+    if notice.state == Notice.POSTED:
+        return keyboard([[('내리기', f'ntoff:{notice.id}')]])
+    if notice.state == Notice.REMOVED and (notice.ends_at is None or notice.ends_at > now):
+        return keyboard([[('다시 띄우기', f'nton:{notice.id}')]])
     return None

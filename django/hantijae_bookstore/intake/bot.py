@@ -8,11 +8,12 @@ from typing import Protocol
 from django.conf import settings
 
 from books.preview import preview_url
-from intake import drafts, messages, review
+from intake import drafts, messages, notices, review
 from intake.llm import LLMError
 from intake.models import BookDraft, IntakeSource, PendingPatch, ReviewItem, TelegramChat, WorkerState
 from intake.notion import fill_notion_row
 from intake.publish import PublishBlocked, publish
+from web.models import Notice
 
 log = logging.getLogger('intake')
 FOLDER_RE = re.compile(r'drive\.google\.com/(?:drive/(?:u/\d+/)?folders/|open\?id=)([\w-]{10,})')
@@ -127,6 +128,8 @@ class Bot:
             return
         if kind == TelegramChat.ADMIN and cmd in ADMIN_COMMANDS:
             return self.admin_command(chat_id, cmd, arg)
+        if cmd == '/notice':
+            return self.start_notice(chat_id, msg['message_id'], actor)
         if cmd == '/newbook':
             return self.start_newbook(chat_id, msg['message_id'], actor)
         reply = msg.get('reply_to_message')
@@ -137,6 +140,10 @@ class Bot:
             item = ReviewItem.objects.filter(chat_id=chat_id, message_id=reply['message_id']).first()
             if item and text:
                 return self.on_review_reply(item, msg, text, actor)
+            notice = Notice.objects.filter(chat_id=chat_id, message_id=reply['message_id']) \
+                .exclude(state=Notice.REMOVED).first()
+            if notice and text:
+                return self.on_notice_reply(notice, msg, text, actor)
             draft = BookDraft.objects.filter(chat_id=chat_id, message_id=reply['message_id']).select_related('book').first()
             if draft is None:
                 patch = PendingPatch.objects.filter(message_id=reply['message_id'], draft__chat_id=chat_id) \
@@ -270,7 +277,7 @@ class Bot:
         action, args = messages.parse_callback(cq.get('data'))
         try:
             text = self.dispatch_callback(action, args, chat_id, cq, cq.get('from', {}).get('first_name', '')) or ''
-        except (drafts.StaleError, drafts.PatchError, review.ReviewError) as e:
+        except (drafts.StaleError, drafts.PatchError, review.ReviewError, notices.NoticeError) as e:
             text = str(e)
         except PublishBlocked as e:
             text = ('공개를 막는 항목이 있어요: ' + ', '.join(w['message'] for w in e.warnings)) if e.warnings else '공개할 수 없는 상태예요'
@@ -321,6 +328,15 @@ class Bot:
         if action == 'rvu':
             self.refresh_review_message(review.undo(args[0], actor, self.notion))
             return '다시 고를 수 있어요'
+        if action in ('ntpub', 'nton'):
+            notice = notices.set_state(args[0], Notice.POSTED)
+            self._refresh_notice(notice)
+            self.tg.send_message(chat_id, f'✅ 첫 화면에 띄웠어요: {settings.SITE_URL}', reply_to=notice.message_id)
+            return '게시했어요'
+        if action in ('ntdel', 'ntoff'):
+            notice = notices.set_state(args[0], Notice.REMOVED)
+            self._refresh_notice(notice)
+            return '취소했어요' if action == 'ntdel' else '내렸어요'
         return ''
 
     # ---- 확인 부탁 ----
@@ -352,6 +368,35 @@ class Bot:
         item.save(update_fields=['note', 'updated_at'])
         self.notify_admin(f'📝 확인 부탁 {item.seq} {item.title}\n{actor}: {text}')
         self.tg.send_message(msg['chat']['id'], '메모 남겼어요. 확인해서 반영할게요.', reply_to=msg['message_id'])
+
+    # ---- 알림 띠 ----
+    def start_notice(self, chat_id, message_id, actor):
+        live = Notice.objects.active().first()
+        if live:
+            sent = self.tg.send_message(chat_id, messages.notice_card(live), buttons=messages.notice_buttons(live))
+            notices.attach_message(live, chat_id, sent['message_id'])
+        prompt = self.tg.send_message(chat_id, messages.NOTICE_PROMPT, reply_to=message_id)
+        notices.start(chat_id, prompt['message_id'], actor)
+
+    def on_notice_reply(self, notice, msg, text, actor):
+        chat_id = msg['chat']['id']
+        self.tg.send_typing(chat_id)
+        try:
+            warnings = notices.fill_from_text(notice, text, self.llm)
+        except LLMError as e:
+            self.notify_admin(f'⚠️ 알림 띠 요청 처리 실패: {e}')
+            return self.tg.send_message(chat_id, '지금은 알림을 만들지 못했어요. 잠시 후 다시 답장해 주세요.',
+                                        reply_to=msg['message_id'])
+        except notices.NoticeError as e:
+            return self.tg.send_message(chat_id, str(e), reply_to=msg['message_id'])
+        sent = self.tg.send_message(chat_id, messages.notice_card(notice, warnings), reply_to=msg['message_id'],
+                                    buttons=messages.notice_buttons(notice))
+        notices.attach_message(notice, chat_id, sent['message_id'])
+
+    def _refresh_notice(self, notice):
+        if notice.chat_id and notice.message_id:
+            self.tg.edit_text(notice.chat_id, notice.message_id, messages.notice_card(notice),
+                              buttons=messages.notice_buttons(notice))
 
     def _fill_notion(self, draft):
         if not (self.notion and WorkerState.get('notion_write', False)):

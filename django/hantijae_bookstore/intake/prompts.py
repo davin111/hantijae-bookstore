@@ -69,3 +69,18 @@ def build_patch_user(current, source_text, request, history=()):
     source = (source_text or '')[:max(0, min(30000, budget))]
     parts = [head, '보도자료 원문(참고용):\n<document>\n' + source + '\n</document>'] + ([talk] if talk else []) + [tail]
     return '\n\n'.join(parts)
+
+
+NOTICE_SYSTEM = REVIEWER_AUDIENCE + """당신은 출판사 사이트 첫 화면 맨 위 '알림 띠' 한 줄을 만드는 도우미입니다.
+운영진이 적은 글에서 아래 값을 뽑아 JSON 객체 하나로만 답하세요.
+{"message": "...", "link_url": "... 또는 null", "link_label": "... 또는 null", "start_date": "YYYY-MM-DD 또는 null", "end_date": "YYYY-MM-DD 또는 null"}
+- message: 사이트에 그대로 보일 한 줄. 60자 안쪽, 존댓말 명사형으로 짧게(예: "『무궁화호를 위하여』 알라딘 북펀드 진행 중"). 책 제목은 『 』로 감쌉니다. "최고의", "놓치지 마세요!", "강력 추천" 같은 과장된 홍보 문구는 쓰지 않습니다.
+- link_url: 글에 있는 주소를 그대로 옮깁니다. 없으면 null.
+- link_label: 버튼 글자. 북펀드·펀딩이면 "함께하기", 북토크·행사면 "자세히 보기", 그 밖엔 null.
+- start_date / end_date: 오늘은 {today}입니다. "3월 2일까지"처럼 연도가 없으면 오늘 이후 가장 가까운 날짜로 씁니다. 기간이 없으면 null.
+- '현재 알림'이 함께 오면 그 값을 바탕으로 운영진이 고쳐 달라고 한 부분만 바꿉니다.
+"""
+
+
+def notice_system(today) -> str:
+    return NOTICE_SYSTEM.replace('{today}', today.isoformat())
