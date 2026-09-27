@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import { RouteComponentProps } from 'react-router-dom';
 
 const KEY = 'hantijae:leave-spa';
 const RETRY_WINDOW_MS = 10000;
@@ -57,14 +58,24 @@ function writeMark(target: string): void {
 // 전체 페이지 이동으로 넘긴다 — 로그인 후 history.push('/') 같은 기존 호출을 하나하나 고치지 않아도 된다.
 // nginx 전환 전처럼 같은 주소가 10초 안에 다시 React로 돌아오면 반복하지 않고 안내만 보여 준다.
 // 읽기·쓰기를 따로 두는 이유: 저장이 실패해도 이미 읽어 둔 recent 값을 덮어쓰지 않기 위해서다.
-class LeaveSpa extends Component<{}, State> {
-  constructor(props: {}) {
+//
+// 반복 안내(stuck)는 "SPA가 회원 화면 밖의 주소로 처음 열렸을 때"(history.action === 'POP', 첫 로드나
+// 실제 뒤로가기)만 걱정할 문제다. 책바구니에서 책을 클릭하는 것처럼 앱 안에서 옮겨온 경우
+// (history.action === 'PUSH'/'REPLACE')는 서버 새로고침이 이번이 처음이므로 안내 없이 그대로 넘긴다.
+class LeaveSpa extends Component<RouteComponentProps, State> {
+  constructor(props: RouteComponentProps) {
     super(props);
     this.state = { stuck: false };
   }
 
   componentDidMount() {
+    const { history } = this.props;
     const target = window.location.pathname + window.location.search;
+    if (history.action !== 'POP') {
+      writeMark(target);
+      window.location.assign(target);
+      return;
+    }
     const saved = readMark();
     const isRecent = saved && saved.target === target && Date.now() - saved.at < RETRY_WINDOW_MS;
     const recent = Boolean(isRecent);
