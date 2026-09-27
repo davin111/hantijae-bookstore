@@ -1,4 +1,4 @@
-"""텔레그램 업데이트 처리. 권한은 대화방 단위: 등록된 가족 그룹과 관리자 1:1 방만 응답한다."""
+"""텔레그램 업데이트 처리. 권한은 대화방 단위: 등록된 검수 그룹과 관리자 1:1 방만 응답한다."""
 import logging
 import os
 import re
@@ -51,15 +51,15 @@ class Bot:
         return TelegramChat.objects.filter(kind=kind).order_by('-id').values_list('chat_id', flat=True).first()
 
     def review_chat_id(self):
-        family = self._chat(TelegramChat.FAMILY)
-        return family if WorkerState.get('mode', 'admin_only') == 'live' and family else self._chat(TelegramChat.ADMIN)
+        group = self._chat(TelegramChat.REVIEWERS)
+        return group if WorkerState.get('mode', 'admin_only') == 'live' and group else self._chat(TelegramChat.ADMIN)
 
     def notify_admin(self, text):
         admin = self._chat(TelegramChat.ADMIN)
         if admin:
             self.tg.send_message(admin, text)
 
-    def notify_family_or_admin(self, text):
+    def notify_reviewers_or_admin(self, text):
         chat = self.review_chat_id()
         if chat:
             self.tg.send_message(chat, text)
@@ -121,7 +121,7 @@ class Bot:
         if cmd == '/start' and chat.get('type') == 'private':
             return self.register(chat, TelegramChat.ADMIN, arg)
         if cmd == '/register' and chat.get('type') in ('group', 'supergroup'):
-            return self.register(chat, TelegramChat.FAMILY, arg)
+            return self.register(chat, TelegramChat.REVIEWERS, arg)
         kind = self.chat_kind(chat_id)
         if not kind:
             return
@@ -146,7 +146,7 @@ class Bot:
                 return self.on_draft_reply(draft, msg, text, actor)
         if kind == TelegramChat.ADMIN and parse_folder_id(text):
             return self.ingest_folder(chat_id, parse_folder_id(text))
-        if reply and kind == TelegramChat.FAMILY:
+        if reply and kind == TelegramChat.REVIEWERS:
             # privacy mode 에선 봇 메시지에 단 답장만 들어온다 → 초안이 아닌 메시지에 답장한 경우 안내
             return self.tg.send_message(chat_id, '고칠 내용은 책 초안 사진 메시지(📕)에 답장으로 적어 주세요.',
                                         reply_to=msg['message_id'])
@@ -156,7 +156,7 @@ class Bot:
         if not expected or code != expected:
             return
         TelegramChat.objects.update_or_create(chat_id=chat['id'], defaults={'kind': kind, 'title': chat.get('title', '')})
-        self.tg.send_message(chat['id'], '등록됐어요. 새 책 초안이 준비되면 여기로 알려 드릴게요.' if kind == TelegramChat.FAMILY
+        self.tg.send_message(chat['id'], '등록됐어요. 새 책 초안이 준비되면 여기로 알려 드릴게요.' if kind == TelegramChat.REVIEWERS
                              else '관리자 방으로 등록됐어요. /status 로 상태를 볼 수 있어요.')
 
     def admin_command(self, chat_id, cmd, arg):

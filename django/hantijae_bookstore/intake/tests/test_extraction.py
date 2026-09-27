@@ -121,11 +121,11 @@ class PatchPromptRulesTest(SimpleTestCase):
         self.assertIn('구분 줄 넣어줘', user)
         self.assertIn('어떤 모양?', user)
 
-    def test_patch_prompt_knows_family_audience_is_non_developer(self):
-        from intake.prompts import FAMILY_AUDIENCE, PATCH_SYSTEM
-        self.assertTrue(PATCH_SYSTEM.startswith(FAMILY_AUDIENCE))
+    def test_patch_prompt_knows_reviewers_are_non_developers(self):
+        from intake.prompts import REVIEWER_AUDIENCE, PATCH_SYSTEM
+        self.assertTrue(PATCH_SYSTEM.startswith(REVIEWER_AUDIENCE))
         for phrase in ('비개발자', '영문 필드 이름', '책 소개'):
-            self.assertIn(phrase, FAMILY_AUDIENCE)
+            self.assertIn(phrase, REVIEWER_AUDIENCE)
 
     def test_patch_prompt_fits_sidecar_limit_with_50_history_lines(self):
         from intake.prompts import MAX_USER_CHARS, build_patch_user

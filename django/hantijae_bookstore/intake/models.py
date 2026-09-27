@@ -74,7 +74,7 @@ class PendingPatch(BaseModel):
 
 
 class ReviewItem(BaseModel):
-    """가족 '확인 부탁' 한 건. 노션·사이트 값이 다를 때 어느 값으로 맞출지 가족이 버튼으로 고른다."""
+    """검수 방의 '확인 부탁' 한 건. 노션·사이트 값이 다를 때 어느 값으로 맞출지 검수자가 버튼으로 고른다."""
     PENDING, APPLIED, KEPT, STALE = 'pending', 'applied', 'kept', 'stale'
     STATUS_CHOICES = ((PENDING, '대기'), (APPLIED, '반영'), (KEPT, '그대로'), (STALE, '값이 바뀌어 중단'))
 
@@ -92,13 +92,13 @@ class ReviewItem(BaseModel):
     decided_by = models.CharField(max_length=200, blank=True)
     chat_id = models.BigIntegerField(null=True, blank=True)
     message_id = models.BigIntegerField(null=True, blank=True)
-    note = models.TextField(blank=True, help_text="가족이 답장으로 남긴 메모")
+    note = models.TextField(blank=True, help_text="검수자가 답장으로 남긴 메모")
 
 
 class TelegramChat(BaseModel):
-    """권한은 대화방 단위다. 등록된 가족 그룹과 관리자 1:1 방만 봇이 응답한다."""
-    FAMILY, ADMIN = 'family', 'admin'
-    KIND_CHOICES = ((FAMILY, '가족 그룹'), (ADMIN, '관리자 1:1'))
+    """권한은 대화방 단위다. 등록된 검수 그룹과 관리자 1:1 방만 봇이 응답한다."""
+    REVIEWERS, ADMIN = 'reviewers', 'admin'
+    KIND_CHOICES = ((REVIEWERS, '검수 그룹'), (ADMIN, '관리자 1:1'))
 
     chat_id = models.BigIntegerField(unique=True)
     kind = models.CharField(max_length=20, choices=KIND_CHOICES)

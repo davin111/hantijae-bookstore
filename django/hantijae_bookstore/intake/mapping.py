@@ -22,7 +22,7 @@ FIELD_LABELS = {'title': '제목', 'subtitle': '부제', 'authors': '저자', 'i
 MAX_PRICE = 65535  # MySQL SMALLINT UNSIGNED (PositiveSmallIntegerField)
 
 
-def warning(code, message, blocking=False, audience='family'):
+def warning(code, message, blocking=False, audience='reviewer'):
     return {'code': code, 'message': message, 'blocking': blocking, 'audience': audience}
 
 
@@ -133,7 +133,7 @@ def normalize_extraction(data, categories, series) -> Normalized:
 
 
 def book_label(book_id) -> str:
-    """가족에게 보이는 책 표시. 내부 번호(#id) 대신 제목을 쓴다."""
+    """검수자에게 보이는 책 표시. 내부 번호(#id) 대신 제목을 쓴다."""
     title = Book.objects.filter(pk=book_id).values_list('title', flat=True).first()
     return f'『{title}』' if title else '다른 책'
 

@@ -14,7 +14,7 @@ from intake.models import BookDraft, IntakeSource, PendingPatch, TelegramChat, W
 
 WORK = tempfile.mkdtemp()
 CONFIG = {'TELEGRAM_INVITE_CODE': 'letmein', 'WORK_DIR': WORK, 'NOTION_DATA_SOURCE_ID': 'ds'}
-ADMIN, FAMILY = 100, -200
+ADMIN, GROUP = 100, -200
 
 
 class FakeTG:
@@ -60,7 +60,7 @@ class FakeLLM:
 
 def msg(chat_id, text='', reply_to=None, chat_type='group', **extra):
     m = {'message_id': 1, 'chat': {'id': chat_id, 'type': chat_type, 'title': 't'},
-         'from': {'first_name': '엄마'}, 'text': text}
+         'from': {'first_name': '검수자A'}, 'text': text}
     if reply_to:
         m['reply_to_message'] = {'message_id': reply_to}
     m.update(extra)
@@ -68,7 +68,7 @@ def msg(chat_id, text='', reply_to=None, chat_type='group', **extra):
 
 
 def cb(chat_id, data):
-    return {'update_id': 2, 'callback_query': {'id': 'q', 'data': data, 'from': {'first_name': '아빠'},
+    return {'update_id': 2, 'callback_query': {'id': 'q', 'data': data, 'from': {'first_name': '검수자B'},
                                                'message': {'message_id': 555, 'chat': {'id': chat_id}}}}
 
 
@@ -80,11 +80,11 @@ class BotTest(TestCase):
         book = Book.objects.create(title='무지개를 변호하다', subtitle='삶과 생각', full_price=22000, page_count=264,
                                    category=cat, published_date=date(2026, 6, 1), is_published=False)
         src = IntakeSource.objects.create(kind=IntakeSource.DRIVE, title='x')
-        self.draft = BookDraft.objects.create(source=src, book=book, state=BookDraft.REVIEW, chat_id=FAMILY,
+        self.draft = BookDraft.objects.create(source=src, book=book, state=BookDraft.REVIEW, chat_id=GROUP,
                                               message_id=777, extracted={'_unresolved': [], '_edited': [], '_notes': [],
                                                                          '_source_quality': 0.9})
         TelegramChat.objects.create(chat_id=ADMIN, kind=TelegramChat.ADMIN)
-        TelegramChat.objects.create(chat_id=FAMILY, kind=TelegramChat.FAMILY)
+        TelegramChat.objects.create(chat_id=GROUP, kind=TelegramChat.REVIEWERS)
 
     def bot(self, reply=None, **kw):
         return Bot(self.tg, FakeLLM(reply or {}), config=CONFIG, **kw)
@@ -101,7 +101,7 @@ class BotTest(TestCase):
         self.bot().handle_update(msg(5, '/start letmein', chat_type='private'))
         self.assertEqual(TelegramChat.objects.get().kind, TelegramChat.ADMIN)
         self.bot().handle_update(msg(-9, '/register@hantijae_bot letmein'))
-        self.assertTrue(TelegramChat.objects.filter(chat_id=-9, kind=TelegramChat.FAMILY).exists())
+        self.assertTrue(TelegramChat.objects.filter(chat_id=-9, kind=TelegramChat.REVIEWERS).exists())
 
     def test_unregistered_chat_is_ignored(self):
         self.bot().handle_update(msg(-12345, '/status'))
@@ -110,20 +110,20 @@ class BotTest(TestCase):
 
     def test_reply_proposes_patch_and_apply_updates_caption(self):
         reply = {'changes': [{'field': 'subtitle', 'new_value': '삶과 싸움'}], 'questions': []}
-        self.bot(reply).handle_update(msg(FAMILY, '부제는 삶과 싸움이야', reply_to=777))
+        self.bot(reply).handle_update(msg(GROUP, '부제는 삶과 싸움이야', reply_to=777))
         self.assertIn('• 부제: 삶과 생각 → 삶과 싸움', self.tg.texts()[-1])
         patch = PendingPatch.objects.get()
-        self.bot().handle_update(cb(FAMILY, f'apply:{patch.id}'))
+        self.bot().handle_update(cb(GROUP, f'apply:{patch.id}'))
         self.assertEqual(Book.objects.get().subtitle, '삶과 싸움')
         self.assertTrue(any(c[0] == 'edit' and '삶과 싸움' in c[2] for c in self.tg.calls))
         self.assertEqual(self.tg.calls[-1], ('answer', 'q', '반영했어요'))
 
     def test_stale_callback_answers_with_message(self):
-        self.bot().handle_update(cb(FAMILY, f'img:{self.draft.id}:{self.draft.version + 3}'))
+        self.bot().handle_update(cb(GROUP, f'img:{self.draft.id}:{self.draft.version + 3}'))
         self.assertIn('다른 분이', self.tg.calls[-1][2])
 
     def test_publish_is_blocked_in_admin_only_mode(self):
-        self.bot().handle_update(cb(FAMILY, f'pubok:{self.draft.id}:{self.draft.version}'))
+        self.bot().handle_update(cb(GROUP, f'pubok:{self.draft.id}:{self.draft.version}'))
         self.assertIn('리허설', self.tg.calls[-1][2])
         self.assertFalse(Book.objects.get().is_published)
 
@@ -134,20 +134,20 @@ class BotTest(TestCase):
         with mock.patch('intake.publish.check_book', return_value=[]), \
                 mock.patch('intake.bot.fill_notion_row', return_value={'page_id': 'p1', 'filled': ['ISBN'], 'note': ''}) as fill:
             Bot(self.tg, FakeLLM({}), notion=notion, config=CONFIG).handle_update(
-                cb(FAMILY, f'pubok:{self.draft.id}:{self.draft.version}'))
+                cb(GROUP, f'pubok:{self.draft.id}:{self.draft.version}'))
         self.assertTrue(Book.objects.get().is_published)
         fill.assert_called_once()
         self.assertEqual(BookDraft.objects.get().notion_page_id, 'p1')
 
     def test_newbook_collects_files_then_queues(self):
         bot = self.bot()
-        bot.handle_update(msg(FAMILY, '/newbook'))
+        bot.handle_update(msg(GROUP, '/newbook'))
         prompt_id = self.tg.next_id
         src = IntakeSource.objects.get(kind=IntakeSource.TELEGRAM)
-        bot.handle_update(msg(FAMILY, '', reply_to=prompt_id,
+        bot.handle_update(msg(GROUP, '', reply_to=prompt_id,
                               document={'file_id': 'f1', 'file_name': '보도자료_새책.pdf', 'file_size': 1000}))
         self.assertTrue(os.path.exists(os.path.join(src.local_dir, '보도자료_새책.pdf')))
-        bot.handle_update(msg(FAMILY, '완료', reply_to=prompt_id))
+        bot.handle_update(msg(GROUP, '완료', reply_to=prompt_id))
         self.assertEqual(IntakeSource.objects.get(pk=src.pk).status, IntakeSource.QUEUED)
 
     def test_admin_link_triggers_ingest(self):
@@ -202,14 +202,14 @@ class BotRealTelegramRulesTest(TestCase):
                                               extracted={'_unresolved': [], '_edited': [], '_notes': [],
                                                          '_source_quality': 0.9})
         TelegramChat.objects.create(chat_id=ADMIN, kind=TelegramChat.ADMIN)
-        TelegramChat.objects.create(chat_id=FAMILY, kind=TelegramChat.FAMILY)
+        TelegramChat.objects.create(chat_id=GROUP, kind=TelegramChat.REVIEWERS)
         WorkerState.put('mode', 'live')
 
     def test_coverless_draft_can_be_fixed_by_photo_reply(self):
         bot = Bot(self.tg, FakeLLM({}), config=CONFIG)
         bot.notify_draft(self.draft)                                   # 표지 없음 → 텍스트 메시지
         draft_msg = BookDraft.objects.get().message_id
-        bot.handle_update(msg(FAMILY, '', reply_to=draft_msg, photo=[{'file_id': 'p1'}]))
+        bot.handle_update(msg(GROUP, '', reply_to=draft_msg, photo=[{'file_id': 'p1'}]))
         self.assertTrue(Book.objects.get().cover_image)
         self.assertIn('앞표지를 이 사진으로 바꿨어요', self.tg.texts())
         self.assertFalse([t for t in self.tg.texts() if '오류' in t])
@@ -218,15 +218,15 @@ class BotRealTelegramRulesTest(TestCase):
         reply = {'changes': [{'field': 'subtitle', 'new_value': '새 부제'}], 'questions': []}
         bot = Bot(self.tg, FakeLLM(reply), config=CONFIG)
         bot.notify_draft(self.draft)
-        bot.handle_update(msg(FAMILY, '부제 바꿔줘', reply_to=BookDraft.objects.get().message_id))
+        bot.handle_update(msg(GROUP, '부제 바꿔줘', reply_to=BookDraft.objects.get().message_id))
         proposal_id = PendingPatch.objects.get().message_id
-        bot.handle_update(msg(FAMILY, '아, 그리고 부제는 새 부제로', reply_to=proposal_id))
+        bot.handle_update(msg(GROUP, '아, 그리고 부제는 새 부제로', reply_to=proposal_id))
         self.assertEqual(PendingPatch.objects.count(), 2)
 
     def test_reply_to_other_bot_message_gets_guidance(self):
         bot = Bot(self.tg, FakeLLM({}), config=CONFIG)
-        sent = self.tg.send_message(FAMILY, '반영했어요')
-        bot.handle_update(msg(FAMILY, '고마워', reply_to=sent['message_id']))
+        sent = self.tg.send_message(GROUP, '반영했어요')
+        bot.handle_update(msg(GROUP, '고마워', reply_to=sent['message_id']))
         self.assertIn('초안 사진 메시지', self.tg.texts()[-1])
 
 
@@ -238,6 +238,6 @@ class CancelFlowTest(TestCase):
         PendingPatch.objects.create(draft=self.draft, base_version=1, changes=[{'field': 'subtitle', 'new_value': 'x'}],
                                     request_text='부제 바꿔줘')
         reply = {'changes': [], 'questions': [], 'cancel_previous': True, 'message': '알겠어요, 부제 변경은 취소할게요.'}
-        Bot(self.tg, FakeLLM(reply), config=CONFIG).handle_update(msg(FAMILY, '취소', reply_to=777))
+        Bot(self.tg, FakeLLM(reply), config=CONFIG).handle_update(msg(GROUP, '취소', reply_to=777))
         self.assertEqual(set(PendingPatch.objects.values_list('status', flat=True)), {PendingPatch.CANCELLED})
         self.assertEqual(self.tg.texts()[-1], '알겠어요, 부제 변경은 취소할게요.')

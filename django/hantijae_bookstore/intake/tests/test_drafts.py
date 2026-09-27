@@ -65,9 +65,9 @@ class DraftsTest(TestCase):
     def test_missing_price_blocks_until_patched(self):
         draft = drafts.create_draft(self.source, self.result(price=None))
         self.assertIn('missing:full_price', {w['code'] for w in draft.warnings if w['blocking']})
-        patch = drafts.propose_patch(draft, '가격은 22000원', '엄마',
+        patch = drafts.propose_patch(draft, '가격은 22000원', '검수자A',
                                      FakeLLM({'changes': [{'field': 'full_price', 'new_value': 22000}], 'questions': []}))
-        draft, rev = drafts.apply_patch(patch.id, '엄마')
+        draft, rev = drafts.apply_patch(patch.id, '검수자A')
         self.assertEqual(draft.book.full_price, 22000)
         self.assertEqual(rev.changes, [{'field': 'full_price', 'old': 0, 'new': 22000}])
         self.assertFalse([w for w in draft.warnings if w['blocking']])
@@ -75,7 +75,7 @@ class DraftsTest(TestCase):
 
     def test_propose_drops_unknown_and_noop_fields(self):
         draft = drafts.create_draft(self.source, self.result())
-        patch = drafts.propose_patch(draft, '...', '엄마', FakeLLM({'changes': [
+        patch = drafts.propose_patch(draft, '...', '검수자A', FakeLLM({'changes': [
             {'field': 'visible', 'new_value': False},
             {'field': 'title', 'new_value': '무지개를 변호하다'},
             {'field': 'subtitle', 'new_value': '트랜스젠더 변호사 박한희의 삶과 싸움'}], 'questions': []}))
@@ -84,21 +84,21 @@ class DraftsTest(TestCase):
     def test_stale_patch_is_rejected(self):
         draft = drafts.create_draft(self.source, self.result())
         reply = {'changes': [{'field': 'subtitle', 'new_value': '가'}], 'questions': []}
-        p1 = drafts.propose_patch(draft, 'a', '엄마', FakeLLM(reply))
-        p2 = drafts.propose_patch(draft, 'b', '아빠', FakeLLM(dict(reply, changes=[{'field': 'subtitle', 'new_value': '나'}])))
-        drafts.apply_patch(p1.id, '엄마')
+        p1 = drafts.propose_patch(draft, 'a', '검수자A', FakeLLM(reply))
+        p2 = drafts.propose_patch(draft, 'b', '검수자B', FakeLLM(dict(reply, changes=[{'field': 'subtitle', 'new_value': '나'}])))
+        drafts.apply_patch(p1.id, '검수자A')
         with self.assertRaises(drafts.StaleError):
-            drafts.apply_patch(p2.id, '아빠')
+            drafts.apply_patch(p2.id, '검수자B')
         self.assertEqual(PendingPatch.objects.get(pk=p2.id).status, PendingPatch.STALE)
         with self.assertRaises(drafts.StaleError):
-            drafts.apply_patch(p1.id, '엄마')   # 같은 제안 두 번 반영도 거절
+            drafts.apply_patch(p1.id, '검수자A')   # 같은 제안 두 번 반영도 거절
 
     def test_revert_restores_old_values(self):
         draft = drafts.create_draft(self.source, self.result())
-        p = drafts.propose_patch(draft, 'x', '엄마', FakeLLM({'changes': [
+        p = drafts.propose_patch(draft, 'x', '검수자A', FakeLLM({'changes': [
             {'field': 'authors', 'new_value': [{'name': '박한희', 'role': '지은이'}, {'name': '홍길동', 'role': '옮긴이'}]},
             {'field': 'category', 'new_value': '사회과학'}], 'questions': []}))
-        draft, rev = drafts.apply_patch(p.id, '엄마')
+        draft, rev = drafts.apply_patch(p.id, '검수자A')
         self.assertEqual(draft.book.authors.count(), 2)
         draft, _ = drafts.revert_revision(rev.id, '나')
         self.assertEqual([ba.author.name for ba in draft.book.authors.all()], ['박한희'])
@@ -106,15 +106,15 @@ class DraftsTest(TestCase):
 
     def test_invalid_patch_value_raises_and_rolls_back(self):
         draft = drafts.create_draft(self.source, self.result())
-        p = drafts.propose_patch(draft, 'x', '엄마', FakeLLM({'changes': [
+        p = drafts.propose_patch(draft, 'x', '검수자A', FakeLLM({'changes': [
             {'field': 'subtitle', 'new_value': '새 부제'}, {'field': 'isbn', 'new_value': '123'}], 'questions': []}))
         with self.assertRaises(drafts.PatchError):
-            drafts.apply_patch(p.id, '엄마')
+            drafts.apply_patch(p.id, '검수자A')
         self.assertEqual(Book.objects.get(pk=draft.book_id).subtitle, DATA['subtitle'])
 
     def test_cycle_3d_and_discard(self):
         draft = drafts.create_draft(self.source, self.result())
-        draft = drafts.cycle_3d(draft.id, draft.version, '엄마')
+        draft = drafts.cycle_3d(draft.id, draft.version, '검수자A')
         self.assertEqual(draft.files['cover_3d_index'], 1)
         book_id = draft.book_id
         draft = drafts.discard(draft.id, draft.version)
@@ -128,9 +128,9 @@ class DraftsTest(TestCase):
         self.assertIsNone(draft.book.isbn)
         self.assertIn('isbn_duplicate', {w['code'] for w in draft.warnings if w['blocking']})
         self.assertIn('『기존』', next(w['message'] for w in draft.warnings if w['code'] == 'isbn_duplicate'))
-        p = drafts.propose_patch(draft, 'isbn', '엄마', FakeLLM(
+        p = drafts.propose_patch(draft, 'isbn', '검수자A', FakeLLM(
             {'changes': [{'field': 'isbn', 'new_value': '979-11-92455-82-2'}], 'questions': []}))
-        draft, _ = drafts.apply_patch(p.id, '엄마')
+        draft, _ = drafts.apply_patch(p.id, '검수자A')
         self.assertFalse([w for w in draft.warnings if w['blocking']])
 
 
@@ -151,13 +151,13 @@ class ConversationContextTest(TestCase):
 
     def test_follow_up_answer_carries_the_whole_draft_conversation(self):
         draft = drafts.create_draft(self.source, self.result())
-        old = drafts.propose_patch(draft, '가격은 22000원', '아빠',
+        old = drafts.propose_patch(draft, '가격은 22000원', '검수자B',
                                    FakeLLM({'changes': [{'field': 'full_price', 'new_value': 22000}], 'questions': []}))
         PendingPatch.objects.filter(pk=old.pk).update(created_at=timezone.now() - timezone.timedelta(hours=5))
-        first = drafts.propose_patch(draft, '추천 문구 아래에 구분 줄을 넣어줘', '엄마',
+        first = drafts.propose_patch(draft, '추천 문구 아래에 구분 줄을 넣어줘', '검수자A',
                                      FakeLLM({'changes': [], 'questions': ['구분 줄을 어떤 모양으로 넣을까요?']}))
         llm = CapturingLLM({'changes': [{'field': 'subtitle', 'new_value': 'x'}], 'questions': []})
-        drafts.propose_patch(draft, '* * * 모양으로 넣어줘', '엄마', llm)
+        drafts.propose_patch(draft, '* * * 모양으로 넣어줘', '검수자A', llm)
         self.assertIn('추천 문구 아래에 구분 줄을 넣어줘', llm.users[0])
         self.assertIn('구분 줄을 어떤 모양으로 넣을까요?', llm.users[0])
         self.assertIn('가격은 22000원', llm.users[0])          # 30분 제한 없이 같은 초안의 대화 전부
@@ -165,6 +165,6 @@ class ConversationContextTest(TestCase):
 
     def test_cancel_open_patches(self):
         draft = drafts.create_draft(self.source, self.result())
-        p = drafts.propose_patch(draft, 'x', '엄마', FakeLLM({'changes': [], 'questions': ['어디에요?']}))
+        p = drafts.propose_patch(draft, 'x', '검수자A', FakeLLM({'changes': [], 'questions': ['어디에요?']}))
         self.assertEqual(drafts.cancel_open_patches(draft), 1)
         self.assertEqual(PendingPatch.objects.get(pk=p.pk).status, PendingPatch.CANCELLED)

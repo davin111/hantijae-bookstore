@@ -18,12 +18,12 @@ from intake.models import IntakeSource, WorkerState
 log = logging.getLogger('intake')
 
 
-def _fail(source, deps, message, family_notice=False):
+def _fail(source, deps, message, notify_reviewers=False):
     source.status, source.error = IntakeSource.FAILED, message
     source.save(update_fields=['status', 'error', 'updated_at'])
     deps.bot.notify_admin(f'❌ 자료 #{source.id} {source.title}\n{message}\n다시 시도: /retry {source.id}')
-    if family_notice:
-        deps.bot.notify_family_or_admin('초안 준비가 늦어지고 있어요. 확인 중이에요.')
+    if notify_reviewers:
+        deps.bot.notify_reviewers_or_admin('초안 준비가 늦어지고 있어요. 확인 중이에요.')
 
 
 MAX_ATTEMPTS = 3
@@ -63,10 +63,10 @@ def process_source(source, deps):
     except LLMAuthError as e:
         _fail(source, deps, f'사이드카 인증 실패 — AI_SIDECAR_AUTH_TOKEN 또는 구독 토큰을 확인하세요 ({e})')
     except LLMError as e:
-        _fail(source, deps, f'사이드카 호출 실패: {e}', family_notice=True)
+        _fail(source, deps, f'사이드카 호출 실패: {e}', notify_reviewers=True)
     except Exception as e:
         log.exception('process_source failed')
-        _fail(source, deps, f'{type(e).__name__}: {e}', family_notice=True)
+        _fail(source, deps, f'{type(e).__name__}: {e}', notify_reviewers=True)
     else:
         source.status = IntakeSource.PROCESSED
         source.save(update_fields=['status', 'updated_at'])

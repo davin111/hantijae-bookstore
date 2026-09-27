@@ -75,7 +75,7 @@ class CheckBookTest(TestCase):
         ws = mapping.check_book(self.make(), [], [], '한국 최초로 커밍아웃한 변호사', 0.9)
         self.assertIn('isbn_duplicate', self.codes(ws, blocking=True))
         msg = next(w['message'] for w in ws if w['code'] == 'isbn_duplicate')
-        self.assertIn('『기존』', msg)      # 가족은 내부 번호(#id)를 모른다 → 책 제목으로 알린다
+        self.assertIn('『기존』', msg)      # 검수자는 내부 번호(#id)를 모른다 → 책 제목으로 알린다
         self.assertNotIn('#', msg)
 
     def test_missing_cover_and_unresolved_are_blocking(self):

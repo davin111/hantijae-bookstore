@@ -62,7 +62,7 @@ class PipelineTest(TestCase):
             self.assertIsNone(pipeline.process_source(src, self.deps(FakeLLM(error=LLMAuthError('401')))))
         self.assertEqual(IntakeSource.objects.get(pk=src.pk).status, IntakeSource.FAILED)
         self.assertIn('인증', self.bot.notify_admin.call_args.args[0])
-        self.bot.notify_family_or_admin.assert_not_called()
+        self.bot.notify_reviewers_or_admin.assert_not_called()
 
     def test_worker_iteration_closes_old_connections(self):
         tg = mock.Mock()

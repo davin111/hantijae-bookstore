@@ -12,8 +12,8 @@ SNAP = {'title': '무지개를 변호하다', 'subtitle': '트랜스젠더 변�
 class MessagesTest(SimpleTestCase):
     def test_caption_contents(self):
         cap = messages.draft_caption(SNAP, [
-            {'code': 'a', 'message': '가격 확인', 'blocking': False, 'audience': 'family'},
-            {'code': 'b', 'message': 'ISBN 중복', 'blocking': True, 'audience': 'family'},
+            {'code': 'a', 'message': '가격 확인', 'blocking': False, 'audience': 'reviewer'},
+            {'code': 'b', 'message': 'ISBN 중복', 'blocking': True, 'audience': 'reviewer'},
             {'code': 'c', 'message': '관리자용', 'blocking': False, 'audience': 'admin'}], 'https://x/book=1?preview=t')
         self.assertIn('📕 무지개를 변호하다', cap)
         self.assertIn('박한희 지음 · 홍길동 옮김', cap)
@@ -24,7 +24,7 @@ class MessagesTest(SimpleTestCase):
         self.assertIn('https://x/book=1?preview=t', cap)
 
     def test_caption_is_truncated_to_1024(self):
-        many = [{'code': str(i), 'message': '아주 긴 경고 문장입니다 ' * 5, 'blocking': False, 'audience': 'family'}
+        many = [{'code': str(i), 'message': '아주 긴 경고 문장입니다 ' * 5, 'blocking': False, 'audience': 'reviewer'}
                 for i in range(30)]
         cap = messages.draft_caption(dict(SNAP, subtitle='부제' * 300), many, 'https://x/p')
         self.assertLessEqual(len(cap), messages.CAPTION_LIMIT)
@@ -50,6 +50,6 @@ class MessagesTest(SimpleTestCase):
 
     def test_caption_limit_counts_utf16_units(self):
         # 이모지는 UTF-16 두 단위라 len()보다 텔레그램 기준 길이가 길다
-        many = [{'code': str(i), 'message': '가' * 40, 'blocking': i % 2 == 0, 'audience': 'family'} for i in range(40)]
+        many = [{'code': str(i), 'message': '가' * 40, 'blocking': i % 2 == 0, 'audience': 'reviewer'} for i in range(40)]
         cap = messages.draft_caption(SNAP, many, 'https://x/p')
         self.assertLessEqual(messages.tg_len(cap), messages.CAPTION_LIMIT)

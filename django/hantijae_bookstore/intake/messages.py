@@ -39,8 +39,8 @@ def draft_caption(snap, warnings, preview, published=False):
         head.append(_short(snap['subtitle'], 120))
     head += [_authors(snap), _meta(snap), f"ISBN {snap.get('isbn') or '-'}"]
     tail = '\n'.join(['', f'미리보기 → {preview}', '고칠 내용은 이 메시지에 답장으로 적어 주세요.'])
-    family = sorted((w for w in warnings if w['audience'] == 'family'), key=lambda w: not w['blocking'])
-    lines = [f"{'🚫' if w['blocking'] else '⚠️'} {w['message']}" for w in family]
+    shown = sorted((w for w in warnings if w['audience'] == 'reviewer'), key=lambda w: not w['blocking'])
+    lines = [f"{'🚫' if w['blocking'] else '⚠️'} {w['message']}" for w in shown]
     # 경고를 뒤에서부터 줄여 1024자에 맞춘다. 미리보기 링크(tail)는 절대 자르지 않는다.
     for keep in range(len(lines), -1, -1):
         shown = lines[:keep] + ([f'… 외 {len(lines) - keep}건'] if keep < len(lines) else [])

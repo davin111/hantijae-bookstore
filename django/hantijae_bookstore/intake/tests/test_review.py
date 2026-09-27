@@ -13,7 +13,7 @@ from intake import review
 from intake.bot import Bot
 from intake.messages import review_buttons
 from intake.models import ReviewItem, TelegramChat, WorkerState
-from intake.tests.test_bot import ADMIN, CONFIG, FAMILY, FakeTG, cb, msg
+from intake.tests.test_bot import ADMIN, CONFIG, GROUP, FakeTG, cb, msg
 
 PAGE = 'page-1'
 
@@ -79,7 +79,7 @@ class ReviewApplyTest(TestCase):
         self.assertEqual(self.item.status, ReviewItem.PENDING)
 
     def test_choose_writes_only_the_side_that_differs(self):
-        item, changed = review.choose(self.item.id, 0, '엄마', self.notion)
+        item, changed = review.choose(self.item.id, 0, '검수자A', self.notion)
         self.assertEqual(self.notion.updates, [(PAGE, {'쪽수': {'number': 368}})])
         self.assertEqual(self.fresh().page_count, 368)
         self.assertEqual(item.status, ReviewItem.APPLIED)
@@ -88,49 +88,49 @@ class ReviewApplyTest(TestCase):
         self.notion.updates.clear()
         other = review.create_item('b1', 2, item_spec(book_id=self.book.id, options=[
             {'label': '320', 'set': {'쪽수': 368}}, {'label': '140', 'set': {'쪽수': 140}}]), self.notion)
-        _, changed = review.choose(other.id, 1, '엄마', self.notion)
+        _, changed = review.choose(other.id, 1, '검수자A', self.notion)
         self.assertEqual(self.fresh().page_count, 140)
         self.assertEqual(changed, [('노션', '쪽수', 368, 140), ('사이트', '쪽수', 368, 140)])
 
     def test_keep_option_writes_nothing(self):
-        item, changed = review.choose(self.item.id, 2, '아빠', self.notion)
+        item, changed = review.choose(self.item.id, 2, '검수자B', self.notion)
         self.assertEqual((item.status, changed, self.notion.updates), (ReviewItem.KEPT, [], []))
 
     def test_value_changed_since_posting_is_not_overwritten(self):
         self.notion.pages[PAGE]['properties']['쪽수'] = number(300)   # 누가 노션을 직접 고침
         with self.assertRaises(review.ReviewError):
-            review.choose(self.item.id, 0, '엄마', self.notion)
+            review.choose(self.item.id, 0, '검수자A', self.notion)
         self.assertEqual(self.notion.updates, [])
         self.assertEqual(ReviewItem.objects.get(pk=self.item.id).status, ReviewItem.STALE)
 
     def test_decided_item_cannot_be_chosen_again(self):
-        review.choose(self.item.id, 2, '아빠', self.notion)
+        review.choose(self.item.id, 2, '검수자B', self.notion)
         with self.assertRaises(review.ReviewError):
-            review.choose(self.item.id, 0, '엄마', self.notion)
+            review.choose(self.item.id, 0, '검수자A', self.notion)
 
     def test_notion_failure_leaves_site_and_item_untouched(self):
         other = review.create_item('b1', 2, item_spec(book_id=self.book.id, options=[{'label': 'x', 'set': {'쪽수': 140}}]),
                                    self.notion)
         self.notion.fail = True
         with self.assertRaises(RuntimeError):
-            review.choose(other.id, 0, '엄마', self.notion)
+            review.choose(other.id, 0, '검수자A', self.notion)
         self.assertEqual(self.fresh().page_count, 368)
         self.assertEqual(ReviewItem.objects.get(pk=other.id).status, ReviewItem.PENDING)
 
     def test_undo_restores_both_sides_and_reopens(self):
         other = review.create_item('b1', 2, item_spec(book_id=self.book.id, options=[{'label': 'x', 'set': {'쪽수': 140}}]),
                                    self.notion)
-        review.choose(other.id, 0, '엄마', self.notion)
-        item = review.undo(other.id, '엄마', self.notion)
+        review.choose(other.id, 0, '검수자A', self.notion)
+        item = review.undo(other.id, '검수자A', self.notion)
         self.assertEqual(item.status, ReviewItem.PENDING)
         self.assertEqual(self.notion.pages[PAGE]['properties']['쪽수']['number'], 320)
         self.assertEqual(self.fresh().page_count, 368)
 
     def test_undo_refuses_when_values_changed_after_choice(self):
-        review.choose(self.item.id, 0, '엄마', self.notion)
+        review.choose(self.item.id, 0, '검수자A', self.notion)
         self.notion.pages[PAGE]['properties']['쪽수'] = number(999)
         with self.assertRaises(review.ReviewError):
-            review.undo(self.item.id, '엄마', self.notion)
+            review.undo(self.item.id, '검수자A', self.notion)
 
     def test_blank_fill_sets_text_date_and_select(self):
         Book.objects.filter(pk=self.book.id).update(subtitle='성서학자가 들려주는 이야기')
@@ -140,7 +140,7 @@ class ReviewApplyTest(TestCase):
             {'label': '채우기', 'set': {'부제': '성서학자가 들려주는 이야기', '발행일': '2020-09-14', '판형': '130*204',
                                      'ISBN': '979-11-90178-35-8 03230'}}, {'label': '비워 두기', 'set': {}}])
         item = review.create_item('b1', 2, spec, self.notion)
-        _, changed = review.choose(item.id, 0, '엄마', self.notion)
+        _, changed = review.choose(item.id, 0, '검수자A', self.notion)
         props = self.notion.pages[PAGE]['properties']
         self.assertEqual(props['부제']['rich_text'][0]['plain_text'], '성서학자가 들려주는 이야기')
         self.assertEqual(props['발행일']['date'], {'start': '2020-09-14'})
@@ -158,9 +158,9 @@ class ReviewBotTest(TestCase):
                                         published_date=date(2020, 9, 14))
         self.notion = FakeNotion(쪽수=number(320))
         TelegramChat.objects.create(chat_id=ADMIN, kind=TelegramChat.ADMIN)
-        TelegramChat.objects.create(chat_id=FAMILY, kind=TelegramChat.FAMILY)
+        TelegramChat.objects.create(chat_id=GROUP, kind=TelegramChat.REVIEWERS)
         self.item = review.create_item('b1', 1, item_spec(book_id=self.book.id), self.notion)
-        ReviewItem.objects.filter(pk=self.item.id).update(chat_id=FAMILY, message_id=555)
+        ReviewItem.objects.filter(pk=self.item.id).update(chat_id=GROUP, message_id=555)
         self.bot = Bot(self.tg, None, notion=self.notion, config=CONFIG)
 
     def test_buttons_fit_callback_limit(self):
@@ -169,7 +169,7 @@ class ReviewBotTest(TestCase):
                 self.assertLessEqual(len(b['callback_data'].encode()), 64)
 
     def test_choice_button_applies_and_edits_message(self):
-        self.bot.handle_update(cb(FAMILY, f'rv:{self.item.id}:0'))
+        self.bot.handle_update(cb(GROUP, f'rv:{self.item.id}:0'))
         edits = [c for c in self.tg.calls if c[0] == 'edit_text']
         self.assertIn('✅', edits[-1][2])
         self.assertIn('노션 쪽수 320 → 368', edits[-1][2])
@@ -177,26 +177,26 @@ class ReviewBotTest(TestCase):
         self.assertEqual(self.notion.pages[PAGE]['properties']['쪽수']['number'], 368)
 
     def test_undo_button_reopens_choices(self):
-        self.bot.handle_update(cb(FAMILY, f'rv:{self.item.id}:0'))
-        self.bot.handle_update(cb(FAMILY, f'rvu:{self.item.id}'))
+        self.bot.handle_update(cb(GROUP, f'rv:{self.item.id}:0'))
+        self.bot.handle_update(cb(GROUP, f'rvu:{self.item.id}'))
         last = [c for c in self.tg.calls if c[0] == 'edit_text'][-1]
         self.assertIn(f'rv:{self.item.id}:0', json.dumps(last[3]))
         self.assertEqual(self.notion.pages[PAGE]['properties']['쪽수']['number'], 320)
 
     def test_stale_choice_is_reported_to_admin(self):
         self.notion.pages[PAGE]['properties']['쪽수'] = number(300)
-        self.bot.handle_update(cb(FAMILY, f'rv:{self.item.id}:0'))
+        self.bot.handle_update(cb(GROUP, f'rv:{self.item.id}:0'))
         self.assertTrue(any(c[1] == ADMIN for c in self.tg.calls if c[0] == 'send'))
         self.assertIn('바뀌', [c for c in self.tg.calls if c[0] == 'answer'][-1][2])
 
     def test_reply_to_review_message_is_kept_as_note_and_forwarded(self):
-        self.bot.handle_update(msg(FAMILY, '노션은 본문 기준이라 둘 다 맞아', reply_to=555))
+        self.bot.handle_update(msg(GROUP, '노션은 본문 기준이라 둘 다 맞아', reply_to=555))
         self.assertIn('본문 기준', ReviewItem.objects.get(pk=self.item.id).note)
         self.assertTrue(any(c[1] == ADMIN and '본문 기준' in c[2] for c in self.tg.calls if c[0] == 'send'))
         self.assertFalse(any('초안 사진' in c[2] for c in self.tg.calls if c[0] == 'send'))
 
     def test_admin_is_told_when_batch_is_done(self):
-        self.bot.handle_update(cb(FAMILY, f'rv:{self.item.id}:2'))
+        self.bot.handle_update(cb(GROUP, f'rv:{self.item.id}:2'))
         self.assertTrue(any(c[1] == ADMIN and '모두' in c[2] for c in self.tg.calls if c[0] == 'send'))
 
     def test_status_counts_pending_reviews(self):
@@ -211,7 +211,7 @@ class ReviewPostCommandTest(TestCase):
         self.book = Book.objects.create(title='성서', full_price=16000, page_count=368, category=cat,
                                         published_date=date(2020, 9, 14))
         TelegramChat.objects.create(chat_id=ADMIN, kind=TelegramChat.ADMIN)
-        TelegramChat.objects.create(chat_id=FAMILY, kind=TelegramChat.FAMILY)
+        TelegramChat.objects.create(chat_id=GROUP, kind=TelegramChat.REVIEWERS)
         WorkerState.put('mode', 'live')
         self.tg, self.notion = TG(), FakeNotion(쪽수=number(320))
         spec = {'batch': '2026-09-27 대조', 'intro': '안녕하세요',
@@ -229,14 +229,14 @@ class ReviewPostCommandTest(TestCase):
             call_command('intake_review', self.path, *args, stdout=out)
         return out.getvalue()
 
-    def test_posts_intro_and_items_to_family_skipping_changed_ones(self):
+    def test_posts_intro_and_items_to_reviewers_skipping_changed_ones(self):
         out = self.run_cmd()
         sent = [c for c in self.tg.calls if c[0] == 'send']
-        self.assertEqual([c[1] for c in sent], [FAMILY, FAMILY])
+        self.assertEqual([c[1] for c in sent], [GROUP, GROUP])
         self.assertEqual(sent[0][2], '안녕하세요')
         self.assertIn('🔎 확인 부탁 1/1', sent[1][2])
         item = ReviewItem.objects.get()
-        self.assertEqual((item.chat_id, item.message_id), (FAMILY, 1002))
+        self.assertEqual((item.chat_id, item.message_id), (GROUP, 1002))
         self.assertIn('바뀐 항목', out)
 
     def test_dry_run_sends_nothing(self):

@@ -1,4 +1,4 @@
-"""가족방에 '확인 부탁' 묶음을 보낸다.
+"""검수 방에 '확인 부탁' 묶음을 보낸다.
 
 JSON: {"batch": 이름, "intro": 첫 안내문(선택),
        "items": [{"book_id", "notion_page_id", "title", "body", "options": [{"label", "set": {항목: 값}}],
@@ -19,7 +19,7 @@ PAUSE = 3.5   # 텔레그램은 그룹방에 봇 메시지를 분당 20개까지
 
 
 class Command(BaseCommand):
-    help = "가족방에 확인 부탁 묶음을 보낸다 (JSON 파일)"
+    help = "검수 방에 확인 부탁 묶음을 보낸다 (JSON 파일)"
 
     def add_arguments(self, parser):
         parser.add_argument('path')
