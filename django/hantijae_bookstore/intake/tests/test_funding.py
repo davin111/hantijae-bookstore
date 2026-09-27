@@ -108,6 +108,14 @@ class ScanTest(TestCase):
         funding.scan(get=FakeGet(pages), now=NOW, sleep=lambda s: None)
         self.assertFalse(FundingCampaign.objects.filter(external_id='3013').exists())
 
+    def test_unreadable_publisher_is_reported_and_retried(self):
+        # 마크업이 바뀌어 '펴낸곳'을 못 읽으면 '우리 것 아님'으로 영구 기록하지 않고, 관리자에게 알려야 한다.
+        pages = dict(PAGES, **{funding.ALADIN_VIEW_URL.format(pid=3013): '<html></html>'})
+        result = funding.scan(get=FakeGet(pages), now=NOW, sleep=lambda s: None)
+        self.assertFalse(FundingCampaign.objects.filter(external_id='3013').exists())
+        self.assertEqual([c.platform for c in result.new], ['tumblbug'])
+        self.assertIn('알라딘 북펀드: 펴낸곳을 읽지 못한 펀딩 1건', result.errors)
+
 
 @override_settings(INTAKE=CONFIG)
 class FundBotTest(TestCase):

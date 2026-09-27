@@ -9,7 +9,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from html import unescape
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 from django.utils import timezone
 
@@ -102,11 +102,11 @@ def _record(found: Found) -> FundingCampaign:
                                           starts_at=found.starts_at, ends_at=found.ends_at, is_ours=found.is_ours)
 
 
-def _scan_aladin(get, now, sleep) -> List[FundingCampaign]:
+def _scan_aladin(get, now, sleep) -> Tuple[List[FundingCampaign], int]:
     pids = aladin_pids(get(ALADIN_LIST_URL))
     if not pids:
         raise ValueError('펀딩 목록이 비어 있음 (페이지 구조가 바뀌었을 수 있음)')
-    new, fetched = [], 0
+    new, fetched, unreadable = [], 0, 0
     for pid in pids:
         if fetched >= MAX_ALADIN_FETCH:
             break
@@ -117,12 +117,18 @@ def _scan_aladin(get, now, sleep) -> List[FundingCampaign]:
         try:
             found = parse_aladin_view(pid, get(ALADIN_VIEW_URL.format(pid=pid)))
         except Exception:
-            log.warning('aladin fund %s unreadable', pid, exc_info=True)
+            log.warning('aladin fund %s unreadable (page fetch/parse failed)', pid, exc_info=True)
             continue   # 기록하지 않아 다음 확인 때 다시 본다
+        if not found.publisher:
+            # 펴낸곳을 못 읽으면 우리 펀딩인지 알 수 없다 — '아님'으로 영구 기록하지 않고 다음 확인 때 다시 본다.
+            # 마크업이 바뀌어 계속 못 읽으면 관리자에게 알려야 하므로 개수를 센다.
+            log.warning('aladin fund %s unreadable (no 펴낸곳)', pid)
+            unreadable += 1
+            continue
         camp = _record(found)
         if found.is_ours and is_live(found, now):
             new.append(camp)
-    return new
+    return new, unreadable
 
 
 def _scan_tumblbug(get, now) -> List[FundingCampaign]:
@@ -141,11 +147,17 @@ def scan(get: Callable[[str], str] = http_get, now=None, sleep=None) -> ScanResu
     now = now or timezone.now()
     sleep = sleep or time.sleep   # 호출 시점에 찾아야 테스트의 mock.patch('intake.funding.time.sleep')가 먹는다
     result = ScanResult()
-    for label, run in (('알라딘 북펀드', lambda: _scan_aladin(get, now, sleep)),
-                       ('텀블벅', lambda: _scan_tumblbug(get, now))):
-        try:
-            result.new += run()
-        except Exception as e:
-            log.warning('%s scan failed', label, exc_info=True)
-            result.errors.append(f'{label}: {type(e).__name__}')
+    try:
+        new, unreadable = _scan_aladin(get, now, sleep)
+        result.new += new
+        if unreadable:
+            result.errors.append(f'알라딘 북펀드: 펴낸곳을 읽지 못한 펀딩 {unreadable}건')
+    except Exception as e:
+        log.warning('알라딘 북펀드 scan failed', exc_info=True)
+        result.errors.append(f'알라딘 북펀드: {type(e).__name__}')
+    try:
+        result.new += _scan_tumblbug(get, now)
+    except Exception as e:
+        log.warning('텀블벅 scan failed', exc_info=True)
+        result.errors.append(f'텀블벅: {type(e).__name__}')
     return result
