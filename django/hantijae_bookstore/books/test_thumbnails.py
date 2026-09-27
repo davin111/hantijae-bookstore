@@ -4,8 +4,9 @@ from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.db import DatabaseError
+from django.db import DatabaseError, connection, transaction
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from PIL import Image
 
 from books.models import Book, Category
@@ -82,6 +83,19 @@ class ThumbnailTest(TestCase):
             b.cover_image = png(600, 900, 'RGB')
             b.save()
         self.assertTrue(Book.objects.get(pk=b.pk).pk)
+
+    def test_update_is_wrapped_in_its_own_savepoint(self):
+        # Book.save()는 호출하는 쪽의 transaction.atomic() 안에서 불릴 수 있다(intake 파이프라인이 그렇게 한다).
+        # .update()를 자체 savepoint로 감싸 둬야, DB 오류를 여기서 파이썬으로 잡아도 바깥 트랜잭션까지
+        # 깨지지 않는다(savepoint까지만 되돌리고 바깥은 그대로 살아 있음) — 실제로 savepoint가 쓰였는지 확인한다.
+        b = self.make(cover_image=png())
+        b = Book.objects.get(pk=b.pk)
+        with transaction.atomic(), CaptureQueriesContext(connection) as ctx:
+            with mock.patch.object(Book.objects, 'filter', side_effect=DatabaseError('boom')):
+                self.assertFalse(refresh_cover_thumbnail(b))
+            self.assertTrue(Book.objects.filter(pk=b.pk).exists())
+        self.assertTrue(any('SAVEPOINT' in q['sql'].upper() for q in ctx.captured_queries),
+                        [q['sql'] for q in ctx.captured_queries])
 
     def test_command_fills_missing_only_unless_force(self):
         b = self.make(cover_image=png())
