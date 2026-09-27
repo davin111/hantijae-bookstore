@@ -22,3 +22,5 @@ urlpatterns = [
     path('api/user/', include('accounts.urls')),
     path('', include('web.urls')),
 ]
+
+handler404 = 'web.views.not_found'

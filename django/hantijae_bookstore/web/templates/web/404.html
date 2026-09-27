@@ -1,0 +1,10 @@
+{% extends 'web/base.html' %}
+{% block content %}
+<div class="wrap">
+  <header class="page-head">
+    <h1 class="page-title serif">찾으시는 페이지가 없습니다.</h1>
+    <p class="page-sub">주소가 바뀌었거나 없어진 페이지예요. <a href="/">첫 화면으로 가기</a></p>
+  </header>
+  {% include 'web/_book_grid.html' with books=suggestions %}
+</div>
+{% endblock %}

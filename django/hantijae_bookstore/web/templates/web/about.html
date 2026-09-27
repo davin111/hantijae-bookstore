@@ -1,0 +1,14 @@
+{% extends 'web/base.html' %}
+{% block content %}
+<div class="wrap about">
+  <h1 class="page-title serif">{{ site.SITE_NAME }}</h1>
+  <img class="about-mascot" src="{{ site.MASCOT_IMAGE_URL }}" alt="한티재 마스코트">
+  <p>{{ site.SITE_DESCRIPTION }}</p>
+  <p>{{ site.FOUNDED_YEAR }}년 대구에서 문을 열어 지금까지 {{ book_count }}종의 책을 펴냈습니다.</p>
+  <h2 class="block-title serif">한티재 채널</h2>
+  <ul class="channel-list">{% for label, url in site.CHANNELS %}<li><a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a></li>{% endfor %}</ul>
+  <h2 class="block-title serif">연락처</h2>
+  <address class="about-contact">{{ site.ADDRESS }}<br>TEL {{ site.TEL }} · FAX {{ site.FAX }}<br><a href="mailto:{{ site.EMAIL }}">{{ site.EMAIL }}</a></address>
+</div>
+{% include 'web/_blog_posts.html' %}
+{% endblock %}

@@ -122,3 +122,14 @@ def search_page(request, q):
         'query': q, 'page': page, 'books': list(page.object_list), 'base_path': base_path,
         'suggestions': catalog.recent_books(6) if not page.paginator.count else [],
     }, meta=page_meta(path, title=f'‘{q}’ 검색', noindex=True), search_query=q)
+
+
+def about(request):
+    return render_page(request, 'web/about.html', {
+        'book_count': catalog.published_count(), 'blog_posts': blog.latest_posts(),
+    }, meta=page_meta('/hantijae', title='한티재 소개'), nav_active='about')
+
+
+def not_found(request, exception=None):
+    return render_page(request, 'web/404.html', {'suggestions': catalog.recent_books(6)},
+                       meta=page_meta(request.path, title='페이지를 찾을 수 없습니다', noindex=True), status=404)
