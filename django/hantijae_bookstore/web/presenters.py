@@ -103,6 +103,10 @@ def file_url(f) -> str:
     return f.url if f else ''
 
 
+def cover_card_url(book) -> str:
+    return file_url(book.cover_thumbnail) or file_url(book.cover_image)
+
+
 def cover_url(book) -> str:
     return file_url(book.cover_image)
 

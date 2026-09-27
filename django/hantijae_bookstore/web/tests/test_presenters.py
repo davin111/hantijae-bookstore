@@ -70,6 +70,16 @@ class StoreLinkTest(SimpleTestCase):
         self.assertEqual([l.store for l in p.store_links(book(aladin_url='https://aladin.kr/p/X'))], ['aladin'])
 
 
+class CoverUrlTest(SimpleTestCase):
+    def test_cover_card_url_prefers_thumbnail(self):
+        f = lambda url: SimpleNamespace(url=url) if url else None  # noqa: E731
+        b = SimpleNamespace(cover_thumbnail=f('/t.jpg'), cover_image=f('/c.png'), cover_image_3d=None)
+        self.assertEqual(p.cover_card_url(b), '/t.jpg')
+        b.cover_thumbnail = None
+        self.assertEqual(p.cover_card_url(b), '/c.png')
+        self.assertEqual(p.cover_3d_url(b), '/c.png')
+
+
 class DescriptionTest(SimpleTestCase):
     def test_parse_description_sections_lead_and_collapsible(self):
         text = ('갈릴레이 온도계부터,\n일기예보의 시대\n\n본문 첫 문단입니다.\n​\n'

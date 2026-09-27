@@ -51,6 +51,9 @@ class Book(BaseModel):
         extension = filename.split('.')[-1]
         return "book-cover-image-3d/{}.{}".format(uuid.uuid4(), extension)
 
+    def cover_thumbnail_path(self, filename):
+        return "book-cover-thumbnail/{}.jpg".format(uuid.uuid4())
+
     title = models.CharField(null=False, blank=False, max_length=500)
     subtitle = models.CharField(null=False, blank=True, max_length=1000)
     short_description = models.TextField(null=False, blank=True)
@@ -73,6 +76,22 @@ class Book(BaseModel):
                                    validators=[FileExtensionValidator(allowed_extensions=["jpg", "jpeg", "png"])])
     cover_image_3d = models.FileField(max_length=255, upload_to=cover_image_3d_path, null=True, blank=True,
                                       validators=[FileExtensionValidator(allowed_extensions=["jpg", "jpeg", "png"])])
+    cover_thumbnail = models.FileField(max_length=255, upload_to=cover_thumbnail_path, null=True, blank=True,
+                                       editable=False, help_text="목록 카드용 축소 표지 (표지를 바꾸면 자동 생성)")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # .only()로 지연 로딩된 필드는 건드리지 않는다 — self.cover_image 로 읽으면 책마다 쿼리가 하나씩 더 나간다
+        raw = self.__dict__.get('cover_image')
+        self._cover_name_at_load = getattr(raw, 'name', raw) or ''
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        cover = self.cover_image.name if self.cover_image else ''
+        if cover and (cover != self._cover_name_at_load or not self.cover_thumbnail):
+            from books.thumbnails import refresh_cover_thumbnail  # 모델 로딩 순서 때문에 지연 import
+            refresh_cover_thumbnail(self)
+        self._cover_name_at_load = cover
 
     class Meta:
         db_table = 'books_book'
