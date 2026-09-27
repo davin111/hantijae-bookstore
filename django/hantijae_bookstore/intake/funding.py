@@ -62,14 +62,19 @@ def _text(html: str) -> str:
 def parse_aladin_view(pid: str, html: str) -> Found:
     text = _text(html)
     # 실제 페이지는 '펴낸곳:', '펴낸 곳:'(띄어 씀), '출판사:', '발행처:' 를 섞어 쓴다 — 다 받아야 한다(2026-09-28 실사 확인).
-    pub = re.search(r'(?:펴낸\s*곳|출판사|발행처)\s*:\s*(.+?)\s+(?:-\s|판형|정가|출간|※)', text)
+    # 캡처 그룹 길이를 ~40자로 묶어 둔다: 리워드형 페이지 중에는 라벨 뒤에 판형/정가/출간/※ 표시가 바로 나오지 않는
+    # 템플릿이 있어서(pid 3014, 3016에서 실사 확인), 묶지 않으면 본문·인라인 JS를 수백 자 건너뛰어 엉뚱한 내용을
+    # 출판사로 읽어버린다 — 그 안에 '한티재'가 있으면 남의 펀딩을 우리 것으로 잘못 올릴 수 있다.
+    pub = re.search(r'(?:펴낸\s*곳|출판사|발행처)\s*:\s*(\S(?:.{0,38}?\S)?)\s+(?:-\s|판형|정가|출간|※)', text)
     publisher = pub.group(1).strip() if pub else ''
+    # 위 그룹은 이미 ~40자로 묶여 있지만, 안전판으로 한 번 더 길이를 확인하고서만 한티재 여부를 판단한다.
+    is_ours = bool(pub and len(publisher) <= 40 and PUBLISHER in publisher)
     title_m = re.search(r'<meta property="og:title" content="([^"]*)"', html)
     title = unescape(title_m.group(1)).strip() if title_m else ''
     end_m = re.search(r'마감\s*(\d{4}-\d{2}-\d{2})', text)
     ends_at = kst_midnight(date.fromisoformat(end_m.group(1)) + timedelta(days=1)) if end_m else None
     return Found(FundingCampaign.ALADIN, pid, ALADIN_VIEW_URL.format(pid=pid), title, publisher, None, ends_at,
-                 PUBLISHER in publisher, PUBLISHER in text)
+                 is_ours, PUBLISHER in text)
 
 
 def _kst(value) -> Optional[datetime]:

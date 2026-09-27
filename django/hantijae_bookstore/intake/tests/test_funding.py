@@ -70,6 +70,19 @@ class ParseTest(TestCase):
         ours_with_space_label = funding.parse_aladin_view('1', aladin_view(publisher='한티재', label='펴낸 곳'))
         self.assertTrue(ours_with_space_label.is_ours)
 
+    def test_parse_aladin_view_bounds_publisher_capture_on_reward_tier_pages(self):
+        # 리워드형 페이지는 라벨 뒤에 판형/정가/출간/※ 표시가 바로 나오지 않고, 한참 뒤(다른 북펀드 안내 등)에야
+        # 나오는 경우가 있다(pid 3014, 3016 실사 확인) — 그 사이에 '한티재'가 우연히 섞여 있어도 남의 펀딩을
+        # 우리 것으로 잘못 읽으면 안 된다.
+        filler = ('* 표지 및 상세 제작 사양은 변경될 수 있습니다. 리워드 구성에 따라 제공되는 사양이 다를 수 있으며, '
+                  '배송 시점은 순차적으로 안내됩니다. 이번 펀딩과 함께 진행 중인 다른 북펀드 목록도 확인해 보세요: '
+                  '한티재, 다른작은출판사, 어느모임 등 여러 곳에서 새 책을 준비하고 있습니다. '
+                  '자세한 사양과 일정은 추후 별도로 공지할 예정이며 문의사항은 고객센터로 연락해 주세요 그럼 정가 안내')
+        page = f'<ul><li>펴낸 곳: 문화과학사</li></ul><p>{filler}</p>'
+        found = funding.parse_aladin_view('1', page)
+        self.assertNotIn('한티재', found.publisher)
+        self.assertFalse(found.is_ours)
+
     def test_parse_aladin_view_mentions_publisher_without_label(self):
         # 펴낸곳/출판사 라벨이 없어도 본문에 한티재가 언급되면 표시해 둔다 — 우리 것 아님으로 바로 단정하지 않기 위해서다.
         mentioned = funding.parse_aladin_view('1', '<meta property="og:title" content="새 책" />한티재의 새 책입니다, 펴낸곳 표시가 없는 페이지')
