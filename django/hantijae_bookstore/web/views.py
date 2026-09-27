@@ -8,8 +8,9 @@ from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 
 from books.models import Book
-from web import presenters
-from web.models import StoreClick
+from web import blog, catalog, presenters
+from web.models import StoreClick, current_notice
+from web.pages import page_meta, render_page
 
 log = logging.getLogger(__name__)
 # 미리보기 수집기·검색 로봇이 링크를 따라와도 클릭으로 세지 않는다
@@ -34,3 +35,21 @@ def store_redirect(request, book_id, store):
         except DatabaseError:
             log.exception('store click not recorded')
     return HttpResponseRedirect(url)
+
+
+def home(request):
+    series = catalog.public_series()
+    books = catalog.recent_books(7)
+    hero, recent = (books[0], books[1:]) if books else (None, [])
+    shelf_series = series[0] if series else None
+    return render_page(request, 'web/home.html', {
+        'hero': hero,
+        'hero_series': catalog.book_series(hero) if hero else None,
+        'hero_links': presenters.store_links(hero) if hero else [],
+        'hero_summary': presenters.strip_marks(hero.short_description).strip() if hero else '',
+        'recent': recent,
+        'shelf_series': shelf_series,
+        'shelf_books': list(catalog.series_books(shelf_series)[:12]) if shelf_series else [],
+        'notice': current_notice(),
+        'blog_posts': blog.latest_posts(),
+    }, meta=page_meta('/'), nav_active='home', nav_series=series)

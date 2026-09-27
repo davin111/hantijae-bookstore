@@ -178,6 +178,7 @@ fixtures/
 dump.rdb
 
 django/**/static/
+!django/hantijae_bookstore/web/static/
 
 # Claude Code
 CLAUDE.md

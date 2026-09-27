@@ -1,0 +1,1 @@
+{% if not book.visible %}<p class="out-of-print">절판된 책입니다</p>{% elif links %}<div class="store-buttons">{% for l in links %}<a class="btn{% if first_fill and forloop.first %} btn-fill{% endif %}" href="{% if direct %}{{ l.url }}{% else %}/go/{{ book.id }}/{{ l.store }}{% endif %}" target="_blank" rel="nofollow noopener">{{ l.label }}</a>{% endfor %}</div>{% endif %}

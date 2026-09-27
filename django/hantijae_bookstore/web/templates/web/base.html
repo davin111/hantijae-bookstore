@@ -1,0 +1,66 @@
+{% load static %}<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ meta.title }}</title>
+  <meta name="description" content="{{ meta.description }}">
+  {% if meta.noindex %}<meta name="robots" content="noindex">{% endif %}
+  <link rel="canonical" href="{{ meta.url }}">
+  <meta property="og:site_name" content="{{ site.SITE_NAME }}">
+  <meta property="og:locale" content="ko_KR">
+  <meta property="og:type" content="{{ meta.og_type }}">
+  <meta property="og:title" content="{{ meta.og_title }}">
+  <meta property="og:description" content="{{ meta.description }}">
+  <meta property="og:url" content="{{ meta.url }}">
+  <meta property="og:image" content="{{ meta.image }}">
+  {% for prop, value in meta.extra %}<meta property="{{ prop }}" content="{{ value }}">
+  {% endfor %}<meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#F6F3EC">
+  <link rel="icon" href="/hantijae-white-logo-192.png">
+  <link rel="apple-touch-icon" href="/hantijae-white-logo-192.png">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap">
+  <link rel="stylesheet" href="{% static 'web/site.css' %}">
+  {% if naver_analytics_id %}<script src="https://wcs.naver.net/wcslog.js"></script>
+  <script>if (!window.wcs_add) window.wcs_add = {}; wcs_add["wa"] = "{{ naver_analytics_id|escapejs }}"; if (window.wcs) { wcs_do(); }</script>{% endif %}
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  {% block notice %}{% endblock %}
+  <header class="site-header">
+    <div class="wrap header-top">
+      <a class="brand" href="/"><img src="{{ site.TITLE_IMAGE_URL }}" alt="한티재 온라인 책창고" width="1427" height="309"></a>
+      <nav class="store-links" aria-label="온라인 서점의 한티재 책">
+        {% for label, url in site.PUBLISHER_STORE_LINKS %}<a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{% endfor %}
+      </nav>
+    </div>
+    <div class="header-nav">
+      <div class="wrap nav-row">
+        <nav class="section-nav" aria-label="책 둘러보기">
+          <a href="/"{% if nav_active == 'home' %} aria-current="page"{% endif %}>신간</a>
+          {% for s in nav_series %}<a href="/series={{ s.id }}"{% if nav_active == s.id %} aria-current="page"{% endif %}>{{ s.name }}</a>
+          {% endfor %}<a href="/hantijae"{% if nav_active == 'about' %} aria-current="page"{% endif %}>한티재</a>
+        </nav>
+        <form class="search" action="/search" method="get" role="search">
+          <input type="search" name="q" value="{{ search_query }}" placeholder="책 제목, 지은이" aria-label="책 검색">
+        </form>
+      </div>
+    </div>
+  </header>
+  <main id="main">{% block content %}{% endblock %}</main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p class="footer-name">{{ site.SITE_NAME }}</p>
+      <address>{{ site.ADDRESS }}<br>TEL {{ site.TEL }} · FAX {{ site.FAX }}<br><a href="mailto:{{ site.EMAIL }}">{{ site.EMAIL }}</a></address>
+      <nav class="channels" aria-label="한티재 채널">
+        {% for label, url in site.CHANNELS %}<a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{% endfor %}
+      </nav>
+      <p class="footer-small">© {{ site.SITE_NAME }} · <a href="/login">로그인</a> · <a href="/mypage">마이페이지</a></p>
+    </div>
+  </footer>
+</body>
+</html>

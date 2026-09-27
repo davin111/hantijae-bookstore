@@ -172,6 +172,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 STATIC_URL = '/django_static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
+if ENV_MODE == 'prod' or os.getenv('MANIFEST_STATIC') == '1':
+    # 파일 이름에 내용 해시를 붙여 배포 즉시 새 CSS가 보이고 긴 캐시가 안전해진다 (collectstatic 필수 — deploy.sh가 실행)
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+
 if ENV_MODE == 'test':
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     MEDIA_ROOT = os.path.join(tempfile.gettempdir(), 'hantijae-test-media')
@@ -183,6 +187,7 @@ AWS_DEFAULT_ACL = 'public-read'
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
 
 SITE_URL = os.getenv('SITE_URL', 'https://hantijae-bookstore.com')
+NAVER_ANALYTICS_ID = secret_info.get('NAVER_ANALYTICS_ID', '')
 
 INTAKE = {
     'TELEGRAM_BOT_TOKEN': secret_info.get('TELEGRAM_BOT_TOKEN', ''),

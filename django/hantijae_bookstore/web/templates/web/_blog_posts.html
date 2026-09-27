@@ -1,0 +1,13 @@
+{% load web_tags %}{% if blog_posts %}
+<section class="wrap block" aria-labelledby="blog-title">
+  <h2 class="block-title serif" id="blog-title">한티재 이야기</h2>
+  <ul class="posts">
+    {% for post in blog_posts %}<li><a href="{{ post.url }}" target="_blank" rel="noopener">
+      <p class="post-meta">{{ post.category }}{% if post.category and post.date %} · {% endif %}{{ post.date|date_ko }}</p>
+      <p class="post-title">{{ post.title }}</p>
+    </a></li>
+    {% endfor %}
+  </ul>
+  <p class="more"><a href="{{ site.BLOG_URL }}" target="_blank" rel="noopener">블로그에서 모두 보기 →</a></p>
+</section>
+{% endif %}

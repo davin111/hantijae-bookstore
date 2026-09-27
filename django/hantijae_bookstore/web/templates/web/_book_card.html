@@ -1,0 +1,5 @@
+{% load web_tags %}<li class="book-card"><a href="/book={{ book.id }}">
+  <div class="card-cover">{% with src=book|cover_card_url %}{% if src %}<img src="{{ src }}" alt="{{ book.title }} 표지" loading="lazy" decoding="async" width="320" height="480">{% else %}<span class="no-cover"></span>{% endif %}{% endwith %}</div>
+  <p class="card-title">{{ book.title }}</p>
+  <p class="card-credit">{{ book|card_credit }}</p>
+</a></li>
