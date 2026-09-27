@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from django.utils import timezone
 
 from intake.llm import complete_json
+from intake.models import FundingCampaign
 from intake.prompts import notice_system
 from web.models import Notice
 
@@ -106,4 +107,28 @@ def set_state(notice_id: int, state: str) -> Notice:
         raise NoticeError('이미 처리된 알림이에요.')
     notice.state = state
     notice.save(update_fields=['state', 'updated_at'])
+    return notice
+
+
+def campaign_message(camp) -> str:
+    last_day = (camp.ends_at - timedelta(seconds=1)).astimezone(KST)
+    until = f'{last_day.month}월 {last_day.day}일까지'
+    if camp.platform == FundingCampaign.ALADIN:
+        name, where = f"『{camp.title.split(' - ')[0].strip()}』", '알라딘 북펀드'
+    else:
+        name, where = camp.title.strip(), '텀블벅 펀딩'
+    room = MAX_LEN - len(f' {where} 진행 중 · {until}')
+    if len(name) > room:
+        name = name[:max(room - 1, 1)].rstrip() + '…'
+    return f'{name} {where} 진행 중 · {until}'
+
+
+def from_campaign(camp, now=None, post=True) -> Notice:
+    """감지한 펀딩으로 알림을 만든다. 문구는 템플릿(LLM 없이) — 틀리면 카드에 답장으로 고친다."""
+    now = now or timezone.now()
+    notice = Notice.objects.create(message=campaign_message(camp), link_url=camp.url, link_label='함께하기',
+                                   starts_at=now, ends_at=camp.ends_at,
+                                   state=Notice.POSTED if post else Notice.DRAFT, created_by='북펀드 자동 감지')
+    camp.notice = notice
+    camp.save(update_fields=['notice', 'updated_at'])
     return notice

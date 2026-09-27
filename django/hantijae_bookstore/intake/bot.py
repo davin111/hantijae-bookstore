@@ -6,18 +6,19 @@ import unicodedata
 from typing import Protocol
 
 from django.conf import settings
+from django.utils import timezone
 
 from books.preview import preview_url
-from intake import drafts, messages, notices, review
+from intake import drafts, funding, messages, notices, review
 from intake.llm import LLMError
-from intake.models import BookDraft, IntakeSource, PendingPatch, ReviewItem, TelegramChat, WorkerState
+from intake.models import BookDraft, FundingCampaign, IntakeSource, PendingPatch, ReviewItem, TelegramChat, WorkerState
 from intake.notion import fill_notion_row
 from intake.publish import PublishBlocked, publish
 from web.models import Notice
 
 log = logging.getLogger('intake')
 FOLDER_RE = re.compile(r'drive\.google\.com/(?:drive/(?:u/\d+/)?folders/|open\?id=)([\w-]{10,})')
-ADMIN_COMMANDS = ('/status', '/mode', '/drive', '/notion', '/baseline', '/ingest', '/retry')
+ADMIN_COMMANDS = ('/status', '/mode', '/drive', '/notion', '/baseline', '/ingest', '/retry', '/fund')
 DONE_WORDS = ('완료', '끝', '다 보냈어요', '다보냈어요')
 MAX_TG_FILE = 20 * 1024 * 1024
 
@@ -40,9 +41,10 @@ class DriveOps(Protocol):
 
 
 class Bot:
-    def __init__(self, tg, llm, notion=None, drive_ops=None, config=None):
+    def __init__(self, tg, llm, notion=None, drive_ops=None, config=None, fund_get=None):
         self.tg, self.llm, self.notion, self.drive_ops = tg, llm, notion, drive_ops
         self.config = config or settings.INTAKE
+        self.fund_get = fund_get   # 테스트에서 가짜 페이지를 넣는다. 기본은 funding.http_get
 
     # ---- 방 ----
     def chat_kind(self, chat_id):
@@ -190,8 +192,23 @@ class Bot:
         elif cmd == '/retry' and arg.isdigit():
             n = IntakeSource.objects.filter(pk=int(arg)).update(status=IntakeSource.QUEUED, error='', attempts=0)
             text = '다시 대기열에 넣었어요' if n else '그런 자료가 없어요'
+        elif cmd == '/fund':
+            if arg in ('on', 'off'):
+                WorkerState.put('fund_autoscan', arg == 'on')
+                text = f'fund={arg}'
+            elif arg in ('auto', 'confirm'):
+                WorkerState.put('fund_mode', arg)
+                text = f'fund_mode={arg}'
+            elif arg == 'now':
+                text = f'북펀드 확인을 마쳤어요. 새로 찾은 펀딩 {len(self.run_fund_scan())}건'
+            else:
+                ours = FundingCampaign.objects.filter(is_ours=True).order_by('-id')[:5]
+                head = (f"fund={'on' if WorkerState.get('fund_autoscan', True) else 'off'} "
+                        f"mode={WorkerState.get('fund_mode', 'auto')} 마지막 확인 {WorkerState.get('last_fund_scan', '-')}")
+                text = '\n'.join([head] + [f'• {c.get_platform_display()} {c.title} {c.url}' for c in ours])
         else:
-            text = '사용법: /status · /mode live|admin_only · /drive on|off · /notion on|off · /baseline · /ingest <폴더 링크> · /retry <번호>'
+            text = ('사용법: /status · /mode live|admin_only · /drive on|off · /notion on|off · /baseline · '
+                    '/ingest <폴더 링크> · /retry <번호> · /fund [on|off|auto|confirm|now]')
         self.tg.send_message(chat_id, text)
 
     def ingest_folder(self, chat_id, folder_id):
@@ -411,3 +428,29 @@ class Bot:
             draft.save(update_fields=['notion_page_id', 'updated_at'])
         if r['note']:
             self.notify_admin(r['note'])
+
+    # ---- 북펀드 ----
+    def run_fund_scan(self, now=None):
+        now = now or timezone.now()
+        result = funding.scan(get=self.fund_get or funding.http_get, now=now)
+        if result.errors:
+            today = now.astimezone(notices.KST).date().isoformat()
+            if WorkerState.get('fund_error_day') != today:
+                WorkerState.put('fund_error_day', today)
+                self.notify_admin('⚠️ 북펀드 확인 실패: ' + ', '.join(result.errors)
+                                  + '\n그동안은 /notice 로 직접 올려 주세요.')
+        for camp in result.new:
+            self.announce_campaign(camp, now)
+        return result.new
+
+    def announce_campaign(self, camp, now=None):
+        confirm = WorkerState.get('fund_mode', 'auto') == 'confirm'
+        notice = notices.from_campaign(camp, now, post=not confirm)
+        chat = self.review_chat_id()
+        if chat:
+            head = ('📣 새 북펀드를 찾았어요. 첫 화면 알림으로 올릴까요?' if confirm
+                    else '📣 새 북펀드를 찾아 사이트 첫 화면에 알림을 올렸어요')
+            sent = self.tg.send_message(chat, messages.notice_card(notice, head=head),
+                                        buttons=messages.notice_buttons(notice))
+            notices.attach_message(notice, chat, sent['message_id'])
+        return notice

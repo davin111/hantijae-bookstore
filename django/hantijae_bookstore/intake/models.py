@@ -117,3 +117,25 @@ class WorkerState(models.Model):
     @classmethod
     def put(cls, key, value):
         cls.objects.update_or_create(key=key, defaults={'value': value})
+
+
+class FundingCampaign(BaseModel):
+    """알라딘 북펀드·텀블벅에서 본 펀딩. 한티재 것이 아닌 것도 기록해 같은 페이지를 다시 받지 않는다."""
+    ALADIN, TUMBLBUG = 'aladin', 'tumblbug'
+    PLATFORM_CHOICES = ((ALADIN, '알라딘 북펀드'), (TUMBLBUG, '텀블벅'))
+
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
+    external_id = models.CharField(max_length=100)
+    url = models.URLField(max_length=500)
+    title = models.CharField(max_length=500, blank=True)
+    publisher = models.CharField(max_length=200, blank=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True, help_text='펀딩이 닫히는 순간(마감일 다음 날 0시, 한국 시간)')
+    is_ours = models.BooleanField(default=False)
+    notice = models.ForeignKey('web.Notice', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        unique_together = (('platform', 'external_id'),)
+
+    def __str__(self):
+        return f'{self.get_platform_display()} {self.title}'

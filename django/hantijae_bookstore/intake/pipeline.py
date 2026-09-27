@@ -92,6 +92,13 @@ def _scan_due(now):
     return (now - datetime.fromisoformat(last)).total_seconds() >= settings.INTAKE['DRIVE_SCAN_SECONDS']
 
 
+def _fund_scan_due(now):
+    last = WorkerState.get('last_fund_scan')
+    if not last:
+        return True
+    return (now - datetime.fromisoformat(last)).total_seconds() >= settings.INTAKE.get('FUND_SCAN_SECONDS', 6 * 3600)
+
+
 def run_iteration(deps, now=None, sleep=time.sleep):
     # 장시간 도는 프로세스는 MySQL wait_timeout으로 끊긴 연결을 매 루프 정리해야 한다
     close_old_connections()
@@ -113,6 +120,10 @@ def run_iteration(deps, now=None, sleep=time.sleep):
             for name, folder_id in counts.get('skipped', []):
                 # 제목 일치만으로 건너뛰므로 잘못 건너뛴 신간이 조용히 묻히지 않게 알린다
                 deps.bot.notify_admin(f'⏭️ 드라이브 폴더 건너뜀: {name}\n사이트에 같은 제목의 책이 있어요. 신간이면 /ingest {folder_id}')
+        if WorkerState.get('fund_autoscan', True) and _fund_scan_due(now):
+            # 실패해도 다음 확인은 6시간 뒤 — 외부 사이트를 계속 두드리지 않게 먼저 기록한다
+            WorkerState.put('last_fund_scan', now.isoformat())
+            deps.bot.run_fund_scan(now)
         run_pending(deps)
     except Exception as e:
         log.exception('worker iteration failed')

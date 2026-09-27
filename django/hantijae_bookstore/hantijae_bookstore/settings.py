@@ -202,6 +202,7 @@ INTAKE = {
     'WORK_DIR': os.getenv('INTAKE_WORK_DIR', os.path.join(tempfile.gettempdir(), 'hantijae-intake')),
     'DRIVE_SCAN_SECONDS': 600,
     'DRIVE_STABLE_SECONDS': 1800,
+    'FUND_SCAN_SECONDS': 6 * 3600,
 }
 
 LOGGING = {
