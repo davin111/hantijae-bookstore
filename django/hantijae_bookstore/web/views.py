@@ -4,7 +4,7 @@ from urllib.parse import quote, urlparse
 
 from django.conf import settings
 from django.db import DatabaseError
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 
 from books.models import Book
@@ -133,3 +133,9 @@ def about(request):
 def not_found(request, exception=None):
     return render_page(request, 'web/404.html', {'suggestions': catalog.recent_books(6)},
                        meta=page_meta(request.path, title='페이지를 찾을 수 없습니다', noindex=True), status=404)
+
+
+def robots_txt(request):
+    body = (f'User-agent: *\nAllow: /\nDisallow: /go/\n\n'
+            f'Sitemap: {settings.SITE_URL.rstrip("/")}/sitemap.xml\n')
+    return HttpResponse(body, content_type='text/plain; charset=utf-8')
