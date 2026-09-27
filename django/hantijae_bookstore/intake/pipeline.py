@@ -108,8 +108,11 @@ def run_iteration(deps, now=None, sleep=time.sleep):
             WorkerState.put('telegram_inflight', None)
         now = now or timezone.now()
         if deps.drive and WorkerState.get('drive_autoscan', False) and _scan_due(now):
-            scan(deps.drive, deps.drive_root, now=now, stable_seconds=settings.INTAKE['DRIVE_STABLE_SECONDS'])
+            counts = scan(deps.drive, deps.drive_root, now=now, stable_seconds=settings.INTAKE['DRIVE_STABLE_SECONDS'])
             WorkerState.put('last_drive_scan', now.isoformat())
+            for name, folder_id in counts.get('skipped', []):
+                # 제목 일치만으로 건너뛰므로 잘못 건너뛴 신간이 조용히 묻히지 않게 알린다
+                deps.bot.notify_admin(f'⏭️ 드라이브 폴더 건너뜀: {name}\n사이트에 같은 제목의 책이 있어요. 신간이면 /ingest {folder_id}')
         run_pending(deps)
     except Exception as e:
         log.exception('worker iteration failed')

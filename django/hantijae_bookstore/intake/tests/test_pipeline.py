@@ -74,6 +74,18 @@ class PipelineTest(TestCase):
         self.assertEqual(WorkerState.get('telegram_offset'), 8)
         self.bot.handle_update.assert_called_once()
 
+    def test_skipped_drive_folders_are_reported_to_admin(self):
+        tg = mock.Mock()
+        tg.get_updates.return_value = []
+        WorkerState.put('drive_autoscan', True)
+        deps = Deps(tg=tg, llm=None, bot=self.bot, drive=mock.Mock(), drive_root='root')
+        counts = {'new': 0, 'changed': 0, 'queued': 0, 'ignored': 1, 'skipped': [('보도자료_무지개를변호하다', 'old')]}
+        with mock.patch('intake.pipeline.scan', return_value=counts), mock.patch('intake.pipeline.run_pending'):
+            pipeline.run_iteration(deps)
+        msg = self.bot.notify_admin.call_args.args[0]
+        self.assertIn('보도자료_무지개를변호하다', msg)
+        self.assertIn('/ingest old', msg)
+
     def test_iteration_survives_errors(self):
         tg = mock.Mock()
         tg.get_updates.side_effect = RuntimeError('network down')

@@ -55,8 +55,9 @@ class DriveClient:
 
 
 def title_key(folder_name):
+    # 시리즈 번호 접두어(P028_, 시선023_, 시선002, 01 …)는 한 번만 벗긴다. 제목 자체의 숫자(1.5그레타)는 남는다.
     name = re.sub(r'^보도자료_', '', nfc(folder_name))
-    return normalize_key(re.sub(r'^P\d+_?', '', name))
+    return normalize_key(re.sub(r'^(?:P|시선)?\d{2,3}_?', '', name))
 
 
 def walk_book_folders(drive, root_id, max_depth=4):
@@ -98,7 +99,7 @@ def has_doc_and_image(entries):
 
 def scan(drive, root_id, now=None, stable_seconds=1800):
     now = now or timezone.now()
-    counts = {'new': 0, 'changed': 0, 'queued': 0, 'ignored': 0}
+    counts = {'new': 0, 'changed': 0, 'queued': 0, 'ignored': 0, 'skipped': []}
     known_titles = {normalize_key(t) for t in Book.objects.values_list('title', flat=True)}
     for folder, path in walk_book_folders(drive, root_id):
         src = IntakeSource.objects.filter(drive_folder_id=folder['id']).first()
@@ -119,6 +120,8 @@ def scan(drive, root_id, now=None, stable_seconds=1800):
             src.status = IntakeSource.IGNORED if title_key(folder['name']) in known_titles else IntakeSource.QUEUED
             src.save(update_fields=['status', 'updated_at'])
             counts['ignored' if src.status == IntakeSource.IGNORED else 'queued'] += 1
+            if src.status == IntakeSource.IGNORED:
+                counts['skipped'].append((nfc(folder['name']), folder['id']))
     return counts
 
 

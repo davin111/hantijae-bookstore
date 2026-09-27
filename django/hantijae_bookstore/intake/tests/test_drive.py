@@ -60,6 +60,22 @@ class DriveTest(TestCase):
         self.assertEqual(drive.title_key('보도자료_P028_연대와환대'), '연대와환대')
         self.assertEqual(drive.title_key('보도자료_사그라다 파밀리아, 가족의 탄생'), '사그라다파밀리아가족의탄생')
 
+    def test_title_key_strips_series_number_prefixes(self):
+        import unicodedata
+        self.assertEqual(drive.title_key('보도자료_시선023_나는산속으로더깊이들어간다'), '나는산속으로더깊이들어간다')
+        self.assertEqual(drive.title_key('보도자료_시선002학교는입이크다'), '학교는입이크다')
+        self.assertEqual(drive.title_key('보도자료_07내일날씨,어떻습니까?'), '내일날씨어떻습니까')
+        self.assertEqual(drive.title_key(unicodedata.normalize('NFD', '보도자료_시선014_사계')), '사계')
+        # 접두어는 한 번만 벗긴다 — 제목 자체의 숫자는 남는다
+        self.assertEqual(drive.title_key('보도자료_P016_1.5그레타'), '15그레타')
+        self.assertEqual(drive.title_key('보도자료_힘내라논술2025'), '힘내라논술2025')
+
+    def test_scan_reports_skipped_folders(self):
+        fake, t0 = FakeDrive(tree()), timezone.now()
+        drive.scan(fake, 'root', now=t0)
+        counts = drive.scan(fake, 'root', now=t0 + timedelta(minutes=31))
+        self.assertEqual(counts['skipped'], [('보도자료_무지개를변호하다', 'old')])
+
     def test_scan_waits_for_stability_then_queues_or_ignores(self):
         fake, t0 = FakeDrive(tree()), timezone.now()
         drive.scan(fake, 'root', now=t0)
