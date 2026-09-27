@@ -127,6 +127,7 @@ class DraftsTest(TestCase):
         draft = drafts.create_draft(self.source, self.result())      # IntegrityError 없이 초안 생성
         self.assertIsNone(draft.book.isbn)
         self.assertIn('isbn_duplicate', {w['code'] for w in draft.warnings if w['blocking']})
+        self.assertIn('『기존』', next(w['message'] for w in draft.warnings if w['code'] == 'isbn_duplicate'))
         p = drafts.propose_patch(draft, 'isbn', '엄마', FakeLLM(
             {'changes': [{'field': 'isbn', 'new_value': '979-11-92455-82-2'}], 'questions': []}))
         draft, _ = drafts.apply_patch(p.id, '엄마')

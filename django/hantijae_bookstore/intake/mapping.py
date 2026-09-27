@@ -132,6 +132,12 @@ def normalize_extraction(data, categories, series) -> Normalized:
     return Normalized(fields, authors, series_id, index or None, str(data.get('isbn_addon') or ''), unresolved, notes)
 
 
+def book_label(book_id) -> str:
+    """가족에게 보이는 책 표시. 내부 번호(#id) 대신 제목을 쓴다."""
+    title = Book.objects.filter(pk=book_id).values_list('title', flat=True).first()
+    return f'『{title}』' if title else '다른 책'
+
+
 def find_isbn_duplicate(isbn, exclude_pk=None) -> Optional[int]:
     """표기(하이픈 유무·부가기호)와 무관하게 숫자로 비교한 같은 ISBN의 다른 책 ID."""
     digits = isbn_digits(isbn)
@@ -150,7 +156,7 @@ def check_book(book, unresolved, edited, source_text, source_quality) -> List[di
     elif digits:
         dup = find_isbn_duplicate(book.isbn, exclude_pk=book.pk)
         if dup:
-            ws.append(warning('isbn_duplicate', f'이미 사이트에 있는 ISBN이에요 (책 #{dup})', True))
+            ws.append(warning('isbn_duplicate', f'이미 사이트에 있는 {book_label(dup)}과 ISBN이 같아요', True))
     if not book.cover_image:
         ws.append(warning('no_front_cover', '앞표지 이미지가 없어요 — 이 메시지에 사진으로 답장해 주세요', True))
     if not book.cover_image_3d:

@@ -11,7 +11,7 @@ from django.utils import timezone
 from books.models import Author, Book, BookAuthor, BookSeries, Category, Series
 from intake.images import to_jpeg
 from intake.llm import complete_json
-from intake.mapping import (MAX_PRICE, ROLE_TO_TYPE, TYPE_TO_ROLE, aladin_search_url, check_book,
+from intake.mapping import (MAX_PRICE, ROLE_TO_TYPE, TYPE_TO_ROLE, aladin_search_url, book_label, check_book,
                             find_isbn_duplicate, format_isbn, match_name, normalize_extraction, normalize_size,
                             parse_date, to_int, warning)
 from intake.models import BookDraft, DraftRevision, PendingPatch
@@ -84,7 +84,7 @@ def create_draft(source, result):
     dup = find_isbn_duplicate(f['isbn'])
     if dup:
         # Book.isbn 은 unique 라 그대로 넣으면 IntegrityError. 비워 두고 차단 경고로 알린다.
-        notes.append(warning('isbn_duplicate', f"이미 사이트에 있는 ISBN이에요 (책 #{dup}) — 같은 책이면 폐기해 주세요", True))
+        notes.append(warning('isbn_duplicate', f"이미 사이트에 있는 {book_label(dup)}과 ISBN이 같아요 — 같은 책이면 폐기해 주세요", True))
         f = dict(f, isbn=None, aladin_url='')
     with transaction.atomic():
         book = Book.objects.create(
