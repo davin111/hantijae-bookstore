@@ -105,7 +105,9 @@ class DetailTest(TestCase):
 
     def test_author_video_only_for_known_book(self):
         video = f.book('영상 있는 책', id=109)
-        self.assertIn('youtube-nocookie.com/embed/SGU5AzdzMNg', self.get(video).content.decode())
+        body = self.get(video).content.decode()
+        self.assertIn('youtube-nocookie.com/embed/SGU5AzdzMNg', body)
+        self.assertIn('referrerpolicy="strict-origin-when-cross-origin"', body)
         self.assertNotIn('youtube-nocookie', self.get(self.book).content.decode())   # 푸터 유튜브 채널 링크와 구분
 
     def test_missing_book_is_404(self):

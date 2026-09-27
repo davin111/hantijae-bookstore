@@ -17,7 +17,7 @@
     </div>
   </div>
   <div class="wrap">
-    {% if video_url %}<section class="video" aria-labelledby="video-title"><h2 class="block-title serif" id="video-title">저자 인터뷰</h2><div class="video-frame"><iframe src="{{ video_url }}" title="저자 인터뷰 영상" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div></section>{% endif %}
+    {% if video_url %}<section class="video" aria-labelledby="video-title"><h2 class="block-title serif" id="video-title">저자 인터뷰</h2><div class="video-frame"><iframe src="{{ video_url }}" title="저자 인터뷰 영상" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div></section>{% endif %}
     {% if section_nav %}<nav class="section-links" aria-label="책 소개 구획">{% for s in section_nav %}<a href="#{{ s.anchor }}">{{ s.title }}</a>{% endfor %}</nav>{% endif %}
     <div class="reading">
       {% for s in sections %}
