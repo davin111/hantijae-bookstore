@@ -38,15 +38,27 @@ PATCH_SYSTEM = """당신은 출판사 사이트의 도서 정보 수정 요청�
 - 웹 도구를 사용하지 마세요.
 - 요청에 명시된 부분만 바꾸고, 언급되지 않은 필드는 절대 넣지 마세요.
 - 소개글을 고칠 때는 요청된 부분 외의 문장을 그대로 유지하세요.
+- '책 소개'·'소개글'은 description(상세 소개), '요약'·'짧은 소개'는 short_description 입니다.
+- 요청에 인용된 문장이나 '첫 행' 같은 위치 표현이 있으면 현재 도서 정보에서 그 필드와 위치를 스스로 찾으세요. 찾을 수 있으면 필드를 되묻지 마세요.
+- 사이트 표시 규칙: 소개글의 줄바꿈(\\n)은 그대로 줄바꿈으로, 빈 줄(\\n\\n)은 문단 간격으로 보입니다. `**문장**`으로 감싼 부분은 굵게 보입니다. 그 밖의 서식(기울임·밑줄·색·글자 크기·링크)은 지원하지 않으니, 요청되면 changes 없이 questions에 지원하지 않는다고 짧게 알리고 대안을 제안하세요.
+- 구분선 모양을 따로 말하지 않으면 '* * *' 를 앞뒤로 빈 줄을 둔 별도 줄로 넣으세요.
+- '이 초안의 지난 대화'가 주어지면 이번 메시지는 그 흐름의 연속입니다. 봇 질문에 대한 답이면 원래 요청과 합쳐서 처리하고, 앞선 요청을 없던 일로 하려는 뜻(예: '취소', '그건 됐어')이면 cancel_previous 를 true 로 하세요.
 - 요청이 모호하거나 어떤 값으로 바꿔야 할지 확실하지 않으면 changes를 비우고 questions에 짧은 한국어 질문을 넣으세요.
 - 허용 필드: title, subtitle, authors, series, series_number, category, size, page_count, full_price, isbn, published_date, short_description, description
 - authors 값은 [{"name": "...", "role": "지은이|옮긴이|엮은이|기획"}] 전체 목록입니다.
-- JSON 객체 하나만 출력: {"changes": [{"field": "...", "new_value": ...}], "questions": ["..."]}"""
+- JSON 객체 하나만 출력: {"changes": [{"field": "...", "new_value": ...}], "questions": ["..."], "cancel_previous": false, "message": ""}
+- message: 바꿀 것도 되물을 것도 없을 때(예: 취소 확인) 사용자에게 보낼 짧은 한국어 답. 그 밖에는 빈 문자열."""
 
 
-def build_patch_user(current, source_text, request):
-    return '\n\n'.join([
-        '현재 도서 정보:\n' + json.dumps(current, ensure_ascii=False, indent=1),
-        '보도자료 원문(참고용):\n<document>\n' + (source_text or '')[:30000] + '\n</document>',
-        '수정 요청:\n' + request,
-    ])
+MAX_USER_CHARS = 48000   # 사이드카 /complete userMessage 한도 50,000자에 여유를 둔다
+
+
+def build_patch_user(current, source_text, request, history=()):
+    head = '현재 도서 정보:\n' + json.dumps(current, ensure_ascii=False, indent=1)
+    talk = ('이 초안의 지난 대화(오래된 순):\n' + '\n'.join(f'- {h}' for h in history)) if history else ''
+    tail = '수정 요청:\n' + request
+    # 대화 맥락과 현재 정보는 온전히 두고, 참고용 원문이 남는 분량만 쓴다
+    budget = MAX_USER_CHARS - len(head) - len(talk) - len(tail) - 100
+    source = (source_text or '')[:max(0, min(30000, budget))]
+    parts = [head, '보도자료 원문(참고용):\n<document>\n' + source + '\n</document>'] + ([talk] if talk else []) + [tail]
+    return '\n\n'.join(parts)

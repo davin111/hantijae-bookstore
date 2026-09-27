@@ -3,6 +3,7 @@ import { connect } from 'react-redux';
 
 import { stateActions } from '../../store/actions';
 import './Book.css';
+import { stripMarks } from '../../utils/richText';
 
 export interface BookProps {
   id: number;
@@ -47,10 +48,11 @@ class Book extends Component<BookProps> {
     }
 
     let shortDesc = '';
-    if (this.props.shortDescription.length > 100) {
-      shortDesc = `${this.props.shortDescription.substr(0, 100)} ...`;
+    const plainDesc = stripMarks(this.props.shortDescription);
+    if (plainDesc.length > 100) {
+      shortDesc = `${plainDesc.substr(0, 100)} ...`;
     } else {
-      shortDesc = this.props.shortDescription;
+      shortDesc = plainDesc;
     }
 
     let bookCart = null;

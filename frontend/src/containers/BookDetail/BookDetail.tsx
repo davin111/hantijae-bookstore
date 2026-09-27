@@ -4,6 +4,7 @@ import ReactPlayer from 'react-player';
 
 import { bookActions } from '../../store/actions';
 import './BookDetail.css';
+import { renderInline } from '../../utils/richText';
 import {
   LoginModal, FullBasketModal, BasketInfoModal,
 } from '../../components';
@@ -61,7 +62,7 @@ class BookDetail extends Component<Props, State> {
 
       desc = this.state.book.description.split('\n').map((line: string) => (
         <span>
-          {line}
+          {renderInline(line)}
           <br />
         </span>
       ));

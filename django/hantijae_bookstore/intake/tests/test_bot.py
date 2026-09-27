@@ -228,3 +228,16 @@ class BotRealTelegramRulesTest(TestCase):
         sent = self.tg.send_message(FAMILY, '반영했어요')
         bot.handle_update(msg(FAMILY, '고마워', reply_to=sent['message_id']))
         self.assertIn('초안 사진 메시지', self.tg.texts()[-1])
+
+
+@override_settings(INTAKE=CONFIG)
+class CancelFlowTest(TestCase):
+    setUp = BotTest.setUp
+
+    def test_cancel_understood_from_context_closes_open_patches(self):
+        PendingPatch.objects.create(draft=self.draft, base_version=1, changes=[{'field': 'subtitle', 'new_value': 'x'}],
+                                    request_text='부제 바꿔줘')
+        reply = {'changes': [], 'questions': [], 'cancel_previous': True, 'message': '알겠어요, 부제 변경은 취소할게요.'}
+        Bot(self.tg, FakeLLM(reply), config=CONFIG).handle_update(msg(FAMILY, '취소', reply_to=777))
+        self.assertEqual(set(PendingPatch.objects.values_list('status', flat=True)), {PendingPatch.CANCELLED})
+        self.assertEqual(self.tg.texts()[-1], '알겠어요, 부제 변경은 취소할게요.')

@@ -1,4 +1,5 @@
 """초안 = is_published=False 인 Book. 모든 변경은 버전·잠금·이력과 함께."""
+import json
 import os
 
 from django.conf import settings
@@ -201,14 +202,57 @@ def _apply_changes(draft, changes, request_text, actor):
     return rev
 
 
+HISTORY_LIMIT = 50
+_STATUS_LABEL = {PendingPatch.APPLIED: '반영됨', PendingPatch.CANCELLED: '취소됨', PendingPatch.STALE: '만료'}
+
+
+def _clip(v, n=80):
+    s = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+    s = (s or '').replace('\n', ' ')
+    return s if len(s) <= n else s[:n - 1] + '…'
+
+
+def conversation_history(draft, limit=HISTORY_LIMIT):
+    """같은 초안에서 오간 요청·봇 응답·결과를 오래된 순으로 (최근 limit건)."""
+    rows = list(PendingPatch.objects.filter(draft=draft).order_by('-id')[:limit])[::-1]
+    out = []
+    for p in rows:
+        if p.changes:
+            bot = '제안 ' + '; '.join(f"{c['field']}→{_clip(c.get('new_value'), 60)}" for c in p.changes)
+        elif p.questions:
+            bot = '질문 ' + ' / '.join(p.questions)
+        else:
+            bot = '변경 없음'
+        status = _STATUS_LABEL.get(p.status) or ('답변 대기' if p.questions and not p.changes else '반영 대기')
+        out.append(f'{p.created_at:%m-%d %H:%M} {p.requested_by}: "{_clip(p.request_text, 200)}" / 봇: {bot} / 결과: {status}')
+    return out
+
+
+def cancel_open_patches(draft):
+    return PendingPatch.objects.filter(draft=draft, status=PendingPatch.PROPOSED).update(status=PendingPatch.CANCELLED)
+
+
 def propose_patch(draft, request_text, actor, client):
+    """반환하는 PendingPatch 에는 저장되지 않는 속성 reply_message·cancelled_previous 가 붙는다(봇 응답용)."""
     snap = book_snapshot(draft.book)
-    reply = complete_json(client, PATCH_SYSTEM, build_patch_user(snap, draft.source_text, request_text))
-    changes = [c for c in reply.get('changes') or []
-               if isinstance(c, dict) and c.get('field') in PATCHABLE and c.get('new_value') != snap.get(c.get('field'))]
-    questions = [str(q) for q in reply.get('questions') or []][:3]
-    return PendingPatch.objects.create(draft=draft, base_version=draft.version, changes=changes, questions=questions,
-                                       request_text=request_text, requested_by=actor)
+    history = conversation_history(draft)
+    reply = complete_json(client, PATCH_SYSTEM, build_patch_user(snap, draft.source_text, request_text, history))
+    cancel = bool(reply.get('cancel_previous'))
+    changes = [] if cancel else [
+        c for c in reply.get('changes') or []
+        if isinstance(c, dict) and c.get('field') in PATCHABLE and c.get('new_value') != snap.get(c.get('field'))]
+    questions = [] if cancel else [str(q) for q in reply.get('questions') or []][:3]
+    if cancel:   # 대기 중인 제안을 닫아야 예전 [반영] 버튼이 뒤늦게 적용되지 않는다
+        cancel_open_patches(draft)
+    else:        # 봇이 되물었던 질문은 이번 메시지로 답을 받았으니 닫는다
+        answered = [p.pk for p in PendingPatch.objects.filter(draft=draft, status=PendingPatch.PROPOSED) if p.questions]
+        PendingPatch.objects.filter(pk__in=answered).update(status=PendingPatch.CANCELLED)
+    patch = PendingPatch.objects.create(
+        draft=draft, base_version=draft.version, changes=changes, questions=questions, request_text=request_text,
+        requested_by=actor, status=PendingPatch.CANCELLED if cancel else PendingPatch.PROPOSED)
+    patch.reply_message = str(reply.get('message') or '').strip()[:500]
+    patch.cancelled_previous = cancel
+    return patch
 
 
 def lock_current(draft_id, base_version):

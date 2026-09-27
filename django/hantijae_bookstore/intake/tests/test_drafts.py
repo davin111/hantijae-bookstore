@@ -3,6 +3,7 @@ import os
 import tempfile
 
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from PIL import Image
 
 from books.models import Book, BookAuthor, Category, Series
@@ -131,3 +132,38 @@ class DraftsTest(TestCase):
         draft, _ = drafts.apply_patch(p.id, '엄마')
         self.assertFalse([w for w in draft.warnings if w['blocking']])
 
+
+
+class CapturingLLM:
+    def __init__(self, reply):
+        self.reply, self.users = reply, []
+
+    def complete(self, system, user, attachments=()):
+        self.users.append(user)
+        return json.dumps(self.reply, ensure_ascii=False)
+
+
+@override_settings(INTAKE={'WORK_DIR': WORK})
+class ConversationContextTest(TestCase):
+    setUp = DraftsTest.setUp
+    result = DraftsTest.result
+
+    def test_follow_up_answer_carries_the_whole_draft_conversation(self):
+        draft = drafts.create_draft(self.source, self.result())
+        old = drafts.propose_patch(draft, '가격은 22000원', '아빠',
+                                   FakeLLM({'changes': [{'field': 'full_price', 'new_value': 22000}], 'questions': []}))
+        PendingPatch.objects.filter(pk=old.pk).update(created_at=timezone.now() - timezone.timedelta(hours=5))
+        first = drafts.propose_patch(draft, '추천 문구 아래에 구분 줄을 넣어줘', '엄마',
+                                     FakeLLM({'changes': [], 'questions': ['구분 줄을 어떤 모양으로 넣을까요?']}))
+        llm = CapturingLLM({'changes': [{'field': 'subtitle', 'new_value': 'x'}], 'questions': []})
+        drafts.propose_patch(draft, '* * * 모양으로 넣어줘', '엄마', llm)
+        self.assertIn('추천 문구 아래에 구분 줄을 넣어줘', llm.users[0])
+        self.assertIn('구분 줄을 어떤 모양으로 넣을까요?', llm.users[0])
+        self.assertIn('가격은 22000원', llm.users[0])          # 30분 제한 없이 같은 초안의 대화 전부
+        self.assertEqual(PendingPatch.objects.get(pk=first.pk).status, PendingPatch.CANCELLED)
+
+    def test_cancel_open_patches(self):
+        draft = drafts.create_draft(self.source, self.result())
+        p = drafts.propose_patch(draft, 'x', '엄마', FakeLLM({'changes': [], 'questions': ['어디에요?']}))
+        self.assertEqual(drafts.cancel_open_patches(draft), 1)
+        self.assertEqual(PendingPatch.objects.get(pk=p.pk).status, PendingPatch.CANCELLED)

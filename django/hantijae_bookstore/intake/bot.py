@@ -245,8 +245,11 @@ class Bot:
             self.notify_admin(f'⚠️ 수정 요청 처리 실패 (초안 #{draft.id}): {e}')
             return self.tg.send_message(chat_id, '지금은 수정 요청을 처리하지 못했어요. 잠시 후 다시 답장해 주세요.',
                                         reply_to=msg['message_id'])
+        if patch.cancelled_previous:
+            return self.tg.send_message(chat_id, patch.reply_message or '알겠어요. 진행 중이던 수정 요청을 취소했어요.',
+                                        reply_to=msg['message_id'])
         if not patch.changes and not patch.questions:
-            return self.tg.send_message(chat_id, '바꿀 내용을 찾지 못했어요. 조금 더 구체적으로 적어 주세요.',
+            return self.tg.send_message(chat_id, patch.reply_message or '바꿀 내용을 찾지 못했어요. 조금 더 구체적으로 적어 주세요.',
                                         reply_to=msg['message_id'])
         sent = self.tg.send_message(chat_id, messages.patch_text(drafts.book_snapshot(draft.book), patch.changes,
                                                                  patch.questions),

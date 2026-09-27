@@ -110,3 +110,21 @@ class TransparencyTest(SimpleTestCase):
         Image.new('RGBA', (50, 50), (0, 0, 0, 0)).save(path)
         out = Image.open(BytesIO(to_jpeg(path, 100)))
         self.assertGreater(min(out.getpixel((10, 10))), 240)
+
+
+class PatchPromptRulesTest(SimpleTestCase):
+    def test_patch_prompt_knows_site_rendering_and_defaults(self):
+        from intake.prompts import PATCH_SYSTEM, build_patch_user
+        for phrase in ('**', '* * *', '스스로 찾', 'description', 'cancel_previous', 'message'):
+            self.assertIn(phrase, PATCH_SYSTEM)
+        user = build_patch_user({'title': 't'}, '원문', '* * * 모양으로', history=['요청: 구분 줄 넣어줘 / 봇 질문: 어떤 모양? / 결과: 답변 대기'])
+        self.assertIn('구분 줄 넣어줘', user)
+        self.assertIn('어떤 모양?', user)
+
+    def test_patch_prompt_fits_sidecar_limit_with_50_history_lines(self):
+        from intake.prompts import MAX_USER_CHARS, build_patch_user
+        history = ['요청: "' + '가' * 200 + '" / 봇: 제안 description→' + '나' * 60 + ' / 결과: 반영됨'] * 50
+        user = build_patch_user({'description': '다' * 3000}, '원문' * 30000, '마지막 요청', history=history)
+        self.assertLessEqual(len(user), MAX_USER_CHARS)
+        self.assertIn('마지막 요청', user)
+        self.assertEqual(user.count('반영됨'), 50)          # 대화 기록은 자르지 않는다
