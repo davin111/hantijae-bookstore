@@ -157,6 +157,34 @@ class ScanTest(TestCase):
         self.assertEqual((new, unreadable), ([], 1))
         self.assertFalse(FundingCampaign.objects.filter(external_id='9002').exists())
 
+    def _tumblbug_page(self, projects):
+        return json.dumps({'status': '200 OK', 'body': {'result': {'projects': projects}}}, ensure_ascii=False)
+
+    def test_tumblbug_unparsable_end_date_is_not_recorded_and_counted(self):
+        # 마감일을 못 읽으면 진행 중인지 알 수 없다 — 기록하지 않고 다음 확인 때 다시 보되, 개수는 센다.
+        page = self._tumblbug_page([
+            {'permalink': 'badend', 'title': '마감일이 깨진 프로젝트', 'fundingStartDate': '2026-09-20T10:00:00',
+             'endDate': 'bad', 'isEnded': False},
+            {'permalink': 'emptyend', 'title': '마감일이 없는 프로젝트', 'fundingStartDate': '2026-09-20T10:00:00',
+             'endDate': '', 'isEnded': False},
+            {'permalink': 'newbook', 'title': '새 책 펀딩', 'fundingStartDate': '2026-09-20T10:00:00',
+             'endDate': '2026-10-20T23:59:59', 'isEnded': False},
+        ])
+        get = FakeGet({funding.TUMBLBUG_LIST_URL: page})
+        new, unreadable = funding._scan_tumblbug(get, NOW)
+        self.assertEqual(unreadable, 2)
+        self.assertEqual([c.external_id for c in new], ['newbook'])
+        self.assertFalse(FundingCampaign.objects.filter(external_id__in=['badend', 'emptyend']).exists())
+
+    def test_scan_reports_tumblbug_unreadable_end_date(self):
+        page = self._tumblbug_page([
+            {'permalink': 'badend', 'title': '마감일이 깨진 프로젝트', 'fundingStartDate': '2026-09-20T10:00:00',
+             'endDate': 'bad', 'isEnded': False},
+        ])
+        pages = dict(PAGES, **{funding.TUMBLBUG_LIST_URL: page})
+        result = funding.scan(get=FakeGet(pages), now=NOW, sleep=lambda s: None)
+        self.assertIn('텀블벅: 마감일을 읽지 못한 프로젝트 1건', result.errors)
+
 
 @override_settings(INTAKE=CONFIG)
 class FundBotTest(TestCase):

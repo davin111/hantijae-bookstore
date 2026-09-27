@@ -138,15 +138,21 @@ def _scan_aladin(get, now, sleep) -> Tuple[List[FundingCampaign], int]:
     return new, unreadable
 
 
-def _scan_tumblbug(get, now) -> List[FundingCampaign]:
-    new = []
+def _scan_tumblbug(get, now) -> Tuple[List[FundingCampaign], int]:
+    new, unreadable = [], 0
     for found in parse_tumblbug(get(TUMBLBUG_LIST_URL)):
         if _seen(FundingCampaign.TUMBLBUG, found.external_id) or (found.starts_at and found.starts_at > now):
             continue   # 공개 예정 프로젝트는 시작한 뒤에 다시 본다
+        if found.ends_at is None:
+            # 마감일을 못 읽으면 진행 중인지 알 수 없다 — '아님'으로 기록하지 않고 다음 확인 때 다시 보되,
+            # 계속 못 읽으면 관리자에게 알려야 하므로 개수를 센다(알라딘 펴낸곳 폴백과 같은 방식).
+            log.warning('tumblbug %s unreadable (no endDate)', found.external_id)
+            unreadable += 1
+            continue
         camp = _record(found)
         if is_live(found, now):
             new.append(camp)
-    return new
+    return new, unreadable
 
 
 def scan(get: Callable[[str], str] = http_get, now=None, sleep=None) -> ScanResult:
@@ -163,7 +169,10 @@ def scan(get: Callable[[str], str] = http_get, now=None, sleep=None) -> ScanResu
         log.warning('알라딘 북펀드 scan failed', exc_info=True)
         result.errors.append(f'알라딘 북펀드: {type(e).__name__}')
     try:
-        result.new += _scan_tumblbug(get, now)
+        new, unreadable = _scan_tumblbug(get, now)
+        result.new += new
+        if unreadable:
+            result.errors.append(f'텀블벅: 마감일을 읽지 못한 프로젝트 {unreadable}건')
     except Exception as e:
         log.warning('텀블벅 scan failed', exc_info=True)
         result.errors.append(f'텀블벅: {type(e).__name__}')
