@@ -16,11 +16,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sitemaps',
     'rest_framework',
     'books.apps.BooksConfig',
     'core.apps.CoreConfig',
     'accounts.apps.AccountsConfig',
     'intake.apps.IntakeConfig',
+    'web.apps.WebConfig',
 ]
 
 MIDDLEWARE = [
@@ -61,10 +63,10 @@ if ENV_MODE == 'test':
     SECRET_KEY = 'test-only-secret-key'
     AWS_STORAGE_BUCKET_NAME = 'hantijae-assets-test'
     DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
-    if 'test' in sys.argv:
+    if 'test' in sys.argv or 'testserver' in sys.argv:
         # accounts/0001이 0002에서야 생기는 커스텀 User를 참조해 빈 DB에선 마이그레이션이 깨진다(운영 DB는 이미 적용 완료).
         # 테스트 DB는 현재 모델로 바로 만든다. 모델↔마이그레이션 일치는 `makemigrations --check`로 따로 확인.
-        MIGRATION_MODULES = {app: None for app in ('accounts', 'books', 'core', 'intake')}
+        MIGRATION_MODULES = {app: None for app in ('accounts', 'books', 'core', 'intake', 'web')}
 elif ENV_MODE == 'prod':
     secrets_manager = boto3.client("secretsmanager", region_name="ap-northeast-2")
     credential = secrets_manager.get_secret_value(SecretId="prod/hantijae-bookstore")
@@ -173,7 +175,8 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 if ENV_MODE == 'test':
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     MEDIA_ROOT = os.path.join(tempfile.gettempdir(), 'hantijae-test-media')
-    MEDIA_URL = '/media/'
+    # 화면 검증(testserver)에서 실제 S3 표지를 보려면 TEST_MEDIA_URL=https://hantijae-assets.s3.amazonaws.com/
+    MEDIA_URL = os.getenv('TEST_MEDIA_URL', '/media/')
 else:
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 AWS_DEFAULT_ACL = 'public-read'
