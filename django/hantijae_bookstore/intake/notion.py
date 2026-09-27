@@ -26,6 +26,9 @@ class NotionClient:
         schema = self._call('GET', f'/data_sources/{data_source_id}').get('properties', {})
         return [o['name'] for o in schema.get(prop, {}).get('select', {}).get('options', [])]
 
+    def get_page(self, page_id):
+        return self._call('GET', f'/pages/{page_id}')
+
     def update_page(self, page_id, properties):
         self._call('PATCH', f'/pages/{page_id}', json={'properties': properties})
 

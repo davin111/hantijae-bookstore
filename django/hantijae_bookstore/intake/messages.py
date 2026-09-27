@@ -85,3 +85,30 @@ def undo_buttons(revision_id):
 def parse_callback(data):
     action, *rest = (data or '').split(':')
     return action, [int(x) for x in rest if x.isdigit()]
+
+
+def _val(v):
+    return '(빈 칸)' if v is None else str(v)
+
+
+def review_text(item, total):
+    lines = [f'🔎 확인 부탁 {item.seq}/{total}', item.title]
+    if item.body:
+        lines += ['', item.body]
+    label = item.options[item.chosen]['label'] if item.chosen is not None and item.chosen < len(item.options) else ''
+    if item.status == 'applied':
+        lines += ['', f'✅ {item.decided_by}: {label}'] + [f'• {side} {f} {_val(old)} → {_val(new)}'
+                                                         for side, f, old, new in item.changed]
+    elif item.status == 'kept':
+        lines += ['', f'👌 {item.decided_by}: {label}']
+    elif item.status == 'stale':
+        lines += ['', '⏸ 그사이 값이 바뀌어서 멈췄어요. 확인해서 다시 여쭐게요.']
+    return '\n'.join(lines)
+
+
+def review_buttons(item):
+    if item.status == 'pending':
+        return keyboard([[(o['label'], f'rv:{item.id}:{i}')] for i, o in enumerate(item.options)])
+    if item.status in ('applied', 'kept'):
+        return keyboard([[('↩️ 다시 고르기', f'rvu:{item.id}')]])
+    return None

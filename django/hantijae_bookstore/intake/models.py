@@ -73,6 +73,28 @@ class PendingPatch(BaseModel):
     message_id = models.BigIntegerField(null=True, blank=True)
 
 
+class ReviewItem(BaseModel):
+    """가족 '확인 부탁' 한 건. 노션·사이트 값이 다를 때 어느 값으로 맞출지 가족이 버튼으로 고른다."""
+    PENDING, APPLIED, KEPT, STALE = 'pending', 'applied', 'kept', 'stale'
+    STATUS_CHOICES = ((PENDING, '대기'), (APPLIED, '반영'), (KEPT, '그대로'), (STALE, '값이 바뀌어 중단'))
+
+    batch = models.CharField(max_length=100, help_text="한 번에 보낸 묶음 이름")
+    seq = models.PositiveSmallIntegerField(default=1)
+    title = models.CharField(max_length=300)
+    body = models.TextField(blank=True, help_text="근거 (노션·사이트·서점 값)")
+    book = models.ForeignKey('books.Book', related_name='+', null=True, blank=True, on_delete=models.SET_NULL)
+    notion_page_id = models.CharField(max_length=100, blank=True)
+    options = models.JSONField(default=list, help_text="[{label, set: {항목: 값}}] — set 이 비면 '그대로 두기'")
+    before = models.JSONField(default=dict, help_text="게시 시점 값 {항목: {notion, site}} — 덮어쓰기 방지 기준")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    chosen = models.SmallIntegerField(null=True, blank=True)
+    changed = models.JSONField(default=list, blank=True, help_text="실제로 바꾼 값 [[곳, 항목, 전, 후]]")
+    decided_by = models.CharField(max_length=200, blank=True)
+    chat_id = models.BigIntegerField(null=True, blank=True)
+    message_id = models.BigIntegerField(null=True, blank=True)
+    note = models.TextField(blank=True, help_text="가족이 답장으로 남긴 메모")
+
+
 class TelegramChat(BaseModel):
     """권한은 대화방 단위다. 등록된 가족 그룹과 관리자 1:1 방만 봇이 응답한다."""
     FAMILY, ADMIN = 'family', 'admin'

@@ -8,9 +8,9 @@ from typing import Protocol
 from django.conf import settings
 
 from books.preview import preview_url
-from intake import drafts, messages
+from intake import drafts, messages, review
 from intake.llm import LLMError
-from intake.models import BookDraft, IntakeSource, PendingPatch, TelegramChat, WorkerState
+from intake.models import BookDraft, IntakeSource, PendingPatch, ReviewItem, TelegramChat, WorkerState
 from intake.notion import fill_notion_row
 from intake.publish import PublishBlocked, publish
 
@@ -134,6 +134,9 @@ class Bot:
             src = IntakeSource.objects.filter(path=f"tg:{chat_id}:{reply['message_id']}", status=IntakeSource.SEEN).first()
             if src:
                 return self.collect_newbook(src, msg, text)
+            item = ReviewItem.objects.filter(chat_id=chat_id, message_id=reply['message_id']).first()
+            if item and text:
+                return self.on_review_reply(item, msg, text, actor)
             draft = BookDraft.objects.filter(chat_id=chat_id, message_id=reply['message_id']).select_related('book').first()
             if draft is None:
                 patch = PendingPatch.objects.filter(message_id=reply['message_id'], draft__chat_id=chat_id) \
@@ -159,10 +162,11 @@ class Bot:
     def admin_command(self, chat_id, cmd, arg):
         if cmd == '/status':
             queued = IntakeSource.objects.filter(status=IntakeSource.QUEUED).count()
-            review = BookDraft.objects.filter(state=BookDraft.REVIEW).count()
+            in_review = BookDraft.objects.filter(state=BookDraft.REVIEW).count()
+            asks = ReviewItem.objects.filter(status=ReviewItem.PENDING).count()
             text = (f"mode={WorkerState.get('mode', 'admin_only')} drive={WorkerState.get('drive_autoscan', False)} "
-                    f"notion={WorkerState.get('notion_write', False)}\n대기 {queued}건 · 검수 중 {review}건 · "
-                    f"마지막 드라이브 확인 {WorkerState.get('last_drive_scan', '-')}")
+                    f"notion={WorkerState.get('notion_write', False)}\n대기 {queued}건 · 검수 중 {in_review}건 · "
+                    f"확인 부탁 {asks}건 · 마지막 드라이브 확인 {WorkerState.get('last_drive_scan', '-')}")
         elif cmd == '/mode' and arg in ('live', 'admin_only'):
             WorkerState.put('mode', arg)
             text = f'mode={arg}'
@@ -266,7 +270,7 @@ class Bot:
         action, args = messages.parse_callback(cq.get('data'))
         try:
             text = self.dispatch_callback(action, args, chat_id, cq, cq.get('from', {}).get('first_name', '')) or ''
-        except (drafts.StaleError, drafts.PatchError) as e:
+        except (drafts.StaleError, drafts.PatchError, review.ReviewError) as e:
             text = str(e)
         except PublishBlocked as e:
             text = ('공개를 막는 항목이 있어요: ' + ', '.join(w['message'] for w in e.warnings)) if e.warnings else '공개할 수 없는 상태예요'
@@ -312,7 +316,42 @@ class Bot:
             draft, _ = drafts.revert_revision(args[0], actor)
             self.refresh_draft_message(draft)
             return '되돌렸어요'
+        if action == 'rv':
+            return self.choose_review(args[0], args[1], actor)
+        if action == 'rvu':
+            self.refresh_review_message(review.undo(args[0], actor, self.notion))
+            return '다시 고를 수 있어요'
         return ''
+
+    # ---- 확인 부탁 ----
+    def refresh_review_message(self, item):
+        if item.message_id:
+            total = ReviewItem.objects.filter(batch=item.batch).count()
+            self.tg.edit_text(item.chat_id, item.message_id, messages.review_text(item, total),
+                              messages.review_buttons(item))
+
+    def choose_review(self, item_id, index, actor):
+        try:
+            item, _ = review.choose(item_id, index, actor, self.notion)
+        except review.ReviewError as e:
+            if e.stale:
+                item = ReviewItem.objects.get(pk=item_id)
+                self.refresh_review_message(item)
+                self.notify_admin(f'⏸ 확인 부탁 {item.seq} {item.title}: 게시 뒤 값이 바뀌어 반영하지 않았어요 (#{item.id})')
+            raise
+        self.refresh_review_message(item)
+        if not ReviewItem.objects.filter(batch=item.batch, status=ReviewItem.PENDING).exists():
+            done = ReviewItem.objects.filter(batch=item.batch)
+            self.notify_admin(f"확인 부탁 '{item.batch}' 모두 끝났어요: 반영 {done.filter(status=ReviewItem.APPLIED).count()} · "
+                              f"그대로 {done.filter(status=ReviewItem.KEPT).count()} · "
+                              f"중단 {done.filter(status=ReviewItem.STALE).count()}")
+        return '반영했어요' if item.status == ReviewItem.APPLIED else '그대로 두었어요'
+
+    def on_review_reply(self, item, msg, text, actor):
+        item.note = f'{item.note}\n{actor}: {text}'.strip()
+        item.save(update_fields=['note', 'updated_at'])
+        self.notify_admin(f'📝 확인 부탁 {item.seq} {item.title}\n{actor}: {text}')
+        self.tg.send_message(msg['chat']['id'], '메모 남겼어요. 확인해서 반영할게요.', reply_to=msg['message_id'])
 
     def _fill_notion(self, draft):
         if not (self.notion and WorkerState.get('notion_write', False)):
