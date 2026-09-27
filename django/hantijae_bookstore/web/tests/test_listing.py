@@ -2,7 +2,9 @@ from datetime import date
 from unittest import mock
 from urllib.parse import quote
 
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from web.tests import factories as f
 
@@ -35,6 +37,17 @@ class ListingTest(TestCase):
         self.assertEqual(len(r.context['books']), 9)
         self.assertIn(f'series={self.series.id}?page=2">', r.content.decode())
 
+    def test_series_page_runs_public_series_query_once(self):
+        """series_page picks the series from the same public_series() call used for nav —
+        it must not query the public-series aggregate a second time for the header nav."""
+        with CaptureQueriesContext(connection) as ctx:
+            r = self.client.get(f'/series={self.series.id}')
+        self.assertEqual(r.status_code, 200)
+        count_queries = [q for q in ctx.captured_queries if 'COUNT(' in q['sql']]
+        # one COUNT( comes from the public_series() annotate query (series list + nav, shared),
+        # the other from Paginator.count() on series_books — never two public_series() calls.
+        self.assertLessEqual(len(count_queries), 2, count_queries)
+
     def test_series_bad_page_is_404(self):
         for q in ('abc', '0', '3', '-1'):
             self.assertEqual(self.client.get(f'/series={self.series.id}?page={q}').status_code, 404, q)
@@ -63,3 +76,14 @@ class ListingTest(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn('‘없는 말’에 맞는 책을 찾지 못했습니다', r.content.decode())
         self.assertEqual(len(r.context['suggestions']), 6)
+
+    def test_search_second_page_canonical_includes_page_number(self):
+        word = '겨울책'
+        for i in range(25):
+            f.book(f'{word} {i:02d}', date(2022, 3, 1 + i))
+        q = quote(word)
+        r = self.client.get(f'/search={q}?page=2')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.context['books']), 1)
+        self.assertIn(f'<link rel="canonical" href="https://hantijae-bookstore.com/search={q}?page=2">',
+                      r.content.decode())

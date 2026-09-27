@@ -56,7 +56,8 @@ def home(request):
 
 
 def series_page(request, series_id):
-    series = catalog.get_public_series(int(series_id))
+    nav = catalog.public_series()
+    series = next((s for s in nav if s.id == int(series_id)), None)
     if series is None:
         raise Http404
     page = catalog.paginate(catalog.series_books(series), request.GET.get('page'))
@@ -68,7 +69,8 @@ def series_page(request, series_id):
     meta = page_meta(path, title=series.name, description=f'{series.name} {series.book_count}권 — 도서출판 한티재',
                      image=presenters.cover_3d_url(books[0]) if books else None)
     return render_page(request, 'web/series.html', {'series': series, 'page': page, 'books': books,
-                                                    'base_path': base_path}, meta=meta, nav_active=series.id)
+                                                    'base_path': base_path}, meta=meta, nav_active=series.id,
+                       nav_series=nav)
 
 
 def search_redirect(request):
@@ -82,7 +84,8 @@ def search_page(request, q):
     if page is None:
         raise Http404
     base_path = '/search=' + quote(q, safe='')
+    path = base_path + (f'?page={page.number}' if page.number > 1 else '')
     return render_page(request, 'web/search.html', {
         'query': q, 'page': page, 'books': list(page.object_list), 'base_path': base_path,
         'suggestions': catalog.recent_books(6) if not page.paginator.count else [],
-    }, meta=page_meta(base_path, title=f'‘{q}’ 검색', noindex=True), search_query=q)
+    }, meta=page_meta(path, title=f'‘{q}’ 검색', noindex=True), search_query=q)
