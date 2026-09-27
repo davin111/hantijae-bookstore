@@ -8,7 +8,8 @@ from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 
 from books.models import Book
-from web import blog, catalog, presenters
+from books.preview import is_valid_preview_token
+from web import blog, catalog, presenters, site_info
 from web.models import StoreClick, current_notice
 from web.pages import page_meta, render_page
 
@@ -71,6 +72,38 @@ def series_page(request, series_id):
     return render_page(request, 'web/series.html', {'series': series, 'page': page, 'books': books,
                                                     'base_path': base_path}, meta=meta, nav_active=series.id,
                        nav_series=nav)
+
+
+def book_detail(request, book_id):
+    book = catalog.book_with_details(int(book_id))
+    if book is None:
+        raise Http404
+    preview = not book.is_published
+    if preview and not is_valid_preview_token(book.id, request.GET.get('preview', '')):
+        raise Http404
+    series = catalog.book_series(book)
+    sections = presenters.parse_description(book.description)
+    authors = presenters.authors_of(book)
+    spec = [(label, value) for label, value in (
+        ('가격', presenters.format_price(book.full_price)),
+        ('펴낸 날', presenters.format_date_ko(book.published_date)),
+        ('쪽수', f'{book.page_count}쪽' if book.page_count else ''),
+        ('판형', presenters.format_size(book.size)),
+        ('ISBN', presenters.format_isbn(book.isbn)),
+    ) if value]
+    code = presenters.isbn13(book.isbn)
+    extra = ([('book:isbn', code)] if code else []) + [('book:release_date', book.published_date.isoformat())]
+    extra += [('book:author', name) for name, _ in authors]
+    meta = page_meta(f'/book={book.id}', title=book.title,
+                     description=presenters.short_text(book.short_description or book.description, 150),
+                     image=presenters.cover_3d_url(book), og_type='book', noindex=preview, extra=extra)
+    return render_page(request, 'web/book_detail.html', {
+        'book': book, 'series': series, 'credit': presenters.credit_line(authors), 'spec': spec,
+        'links': presenters.store_links(book), 'preview': preview, 'sections': sections,
+        'section_nav': sections if len(sections) > 1 else [],
+        'video_url': site_info.AUTHOR_VIDEOS.get(book.id),
+        'same_series': catalog.same_series_books(book, series),
+    }, meta=meta, nav_active=series.id if series else None)
 
 
 def search_redirect(request):

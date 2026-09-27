@@ -1,0 +1,43 @@
+{% extends 'web/base.html' %}{% load web_tags %}
+{% block content %}
+{% if preview %}<div class="preview-banner">검수용 미리보기 — 아직 사이트에 공개되지 않은 책입니다</div>{% endif %}
+<article>
+  <div class="wrap detail-top">
+    <div class="cover-3d">{% with src=book|cover_3d_url %}{% if src %}<img src="{{ src }}" alt="{{ book.title }} 표지" fetchpriority="high">{% endif %}{% endwith %}</div>
+    <div class="detail-info">
+      {% if series %}<p class="crumb"><a href="/series={{ series.id }}">{{ series.name }}</a></p>{% endif %}
+      <h1 class="detail-title serif">{{ book.title }}</h1>
+      {% if book.subtitle %}<p class="detail-sub">{{ book.subtitle }}</p>{% endif %}
+      {% if credit %}<p class="detail-credit">{{ credit }}</p>{% endif %}
+      {% if spec %}<dl class="spec">{% for label, value in spec %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
+      <div class="buy">
+        {% if book.visible and links %}<p class="buy-label">서점에서 만나기</p>{% endif %}
+        {% include 'web/_store_buttons.html' with direct=preview first_fill=True %}
+      </div>
+    </div>
+  </div>
+  <div class="wrap">
+    {% if video_url %}<section class="video" aria-labelledby="video-title"><h2 class="block-title serif" id="video-title">저자 인터뷰</h2><div class="video-frame"><iframe src="{{ video_url }}" title="저자 인터뷰 영상" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div></section>{% endif %}
+    {% if section_nav %}<nav class="section-links" aria-label="책 소개 구획">{% for s in section_nav %}<a href="#{{ s.anchor }}">{{ s.title }}</a>{% endfor %}</nav>{% endif %}
+    <div class="reading">
+      {% for s in sections %}
+        {% if s.collapsible %}
+          <h2 id="{{ s.anchor }}">{{ s.title }}</h2>
+          <details><summary>펼쳐 보기</summary>{% for p in s.paragraphs %}<p>{{ p }}</p>{% endfor %}</details>
+        {% else %}
+          {% if s.title %}<h2 id="{{ s.anchor }}">{{ s.title }}</h2>{% endif %}
+          {% if s.lead %}<p class="lead"{% if not s.title %} id="{{ s.anchor }}"{% endif %}>{{ s.lead }}</p>{% endif %}
+          {% for p in s.paragraphs %}<p>{{ p }}</p>{% endfor %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% if same_series %}
+  <section class="wrap block" aria-labelledby="same-title">
+    <h2 class="block-title serif" id="same-title">{{ series.name }}의 다른 책</h2>
+    {% include 'web/_book_grid.html' with books=same_series %}
+    <p class="more"><a href="/series={{ series.id }}">{{ series.name }} 모두 보기 →</a></p>
+  </section>
+  {% endif %}
+</article>
+{% endblock %}
