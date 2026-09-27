@@ -1,0 +1,18 @@
+{% extends "admin/change_list.html" %}
+{% block result_list %}
+{% if by_store %}
+<div style="display:flex;gap:40px;flex-wrap:wrap;margin:0 0 24px">
+  <table>
+    <caption>서점별</caption>
+    <thead><tr><th>서점</th><th>클릭</th></tr></thead>
+    <tbody>{% for row in by_store %}<tr><td>{{ row.label }}</td><td>{{ row.n }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <table>
+    <caption>책별 (상위 20)</caption>
+    <thead><tr><th>책</th><th>클릭</th></tr></thead>
+    <tbody>{% for row in by_book %}<tr><td>{{ row.book__title }}</td><td>{{ row.n }}</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endif %}
+{{ block.super }}
+{% endblock %}

@@ -40,3 +40,17 @@ class Notice(BaseModel):
 
 def current_notice(now=None):
     return Notice.objects.active(now).first()
+
+
+class StoreClick(models.Model):
+    """서점 버튼 클릭 기록 — 어떤 책을 어느 서점으로 보냈는지. IP·쿠키·세션은 저장하지 않는다."""
+    STORE_CHOICES = (('aladin', '알라딘'), ('yes24', 'YES24'), ('kyobo', '교보문고'))
+
+    book = models.ForeignKey('books.Book', related_name='store_clicks', on_delete=models.CASCADE)
+    store = models.CharField(max_length=10, choices=STORE_CHOICES)
+    referrer_host = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ('-id',)
+        verbose_name = verbose_name_plural = '서점 클릭'
