@@ -36,6 +36,7 @@ class Found:
     starts_at: Optional[datetime]
     ends_at: Optional[datetime]
     is_ours: bool
+    mentions_publisher: bool = False   # 펴낸곳류 라벨이 없을 때, 본문에 한티재가 언급되는지 (알라딘 전용 폴백)
 
 
 @dataclass
@@ -60,14 +61,15 @@ def _text(html: str) -> str:
 
 def parse_aladin_view(pid: str, html: str) -> Found:
     text = _text(html)
-    pub = re.search(r'펴낸곳\s*:\s*(.+?)\s+(?:판형|정가|출간일|※)', text)
+    # 실제 페이지는 '펴낸곳:', '펴낸 곳:'(띄어 씀), '출판사:', '발행처:' 를 섞어 쓴다 — 다 받아야 한다(2026-09-28 실사 확인).
+    pub = re.search(r'(?:펴낸\s*곳|출판사|발행처)\s*:\s*(.+?)\s+(?:-\s|판형|정가|출간|※)', text)
     publisher = pub.group(1).strip() if pub else ''
     title_m = re.search(r'<meta property="og:title" content="([^"]*)"', html)
     title = unescape(title_m.group(1)).strip() if title_m else ''
     end_m = re.search(r'마감\s*(\d{4}-\d{2}-\d{2})', text)
     ends_at = kst_midnight(date.fromisoformat(end_m.group(1)) + timedelta(days=1)) if end_m else None
     return Found(FundingCampaign.ALADIN, pid, ALADIN_VIEW_URL.format(pid=pid), title, publisher, None, ends_at,
-                 PUBLISHER in publisher)
+                 PUBLISHER in publisher, PUBLISHER in text)
 
 
 def _kst(value) -> Optional[datetime]:
@@ -120,8 +122,13 @@ def _scan_aladin(get, now, sleep) -> Tuple[List[FundingCampaign], int]:
             log.warning('aladin fund %s unreadable (page fetch/parse failed)', pid, exc_info=True)
             continue   # 기록하지 않아 다음 확인 때 다시 본다
         if not found.publisher:
-            # 펴낸곳을 못 읽으면 우리 펀딩인지 알 수 없다 — '아님'으로 영구 기록하지 않고 다음 확인 때 다시 본다.
-            # 마크업이 바뀌어 계속 못 읽으면 관리자에게 알려야 하므로 개수를 센다.
+            if not found.mentions_publisher:
+                # 펴낸곳류 라벨도 없고 본문에 한티재 언급도 없으면 남의 펀딩이 거의 확실하다 — '아님'으로 기록해
+                # 매번 다시 열어보지 않게 한다.
+                _record(found)
+                continue
+            # 펴낸곳류 라벨을 못 읽었지만 본문에 한티재가 언급되면 우리 펀딩인지 알 수 없다 — '아님'으로 영구
+            # 기록하지 않고 다음 확인 때 다시 본다. 마크업이 바뀌어 계속 못 읽으면 관리자에게 알려야 하므로 개수를 센다.
             log.warning('aladin fund %s unreadable (no 펴낸곳)', pid)
             unreadable += 1
             continue

@@ -17,10 +17,10 @@ ALADIN_LIST = ('<li><a href="/m/bookfund/view.aspx?pid=3013"><img></a></li>'
                '<li><a href="/m/bookfund/view.aspx?pid=3012">다른 책</a></li><a href="/m/bookfund/view.aspx?pid=3013">중복</a>')
 
 
-def aladin_view(publisher='한티재', title='농부, 짠한 형 - 두물머리 농사꾼의 농업 비평', end='2026-10-11'):
+def aladin_view(publisher='한티재', title='농부, 짠한 형 - 두물머리 농사꾼의 농업 비평', end='2026-10-11', label='펴낸곳'):
     return (f'<meta property="og:title" content="{title}" />'
             f'<div class="fd_dday"><span class="dday_t2">펀딩 중</span> (마감 {end}, 출간예정 2026-10-19)</div>'
-            f'<ul><li>도서명: &lt;농부, 짠한 형&gt;</li><li>펴낸곳: {publisher}</li><li>판형: 127*200mm / 216쪽</li></ul>')
+            f'<ul><li>도서명: &lt;농부, 짠한 형&gt;</li><li>{label}: {publisher}</li><li>판형: 127*200mm / 216쪽</li></ul>')
 
 
 TUMBLBUG = json.dumps({'status': '200 OK', 'body': {'result': {'projects': [
@@ -58,6 +58,26 @@ class ParseTest(TestCase):
         self.assertFalse(funding.parse_aladin_view('3012', aladin_view(publisher='다른출판사')).is_ours)
         broken = funding.parse_aladin_view('1', '<html></html>')
         self.assertEqual((broken.publisher, broken.is_ours, broken.ends_at), ('', False, None))
+        self.assertFalse(broken.mentions_publisher)
+
+    def test_parse_aladin_view_accepts_label_variants(self):
+        # 실제 알라딘 페이지는 '펴낸곳:', '펴낸 곳:'(띄어씀), '출판사:' 를 섞어 쓴다 — 셋 다 읽어야 한다.
+        space_label = funding.parse_aladin_view('1', aladin_view(publisher='북극곰', label='펴낸 곳'))
+        self.assertEqual(space_label.publisher, '북극곰')
+        self.assertFalse(space_label.is_ours)
+        publisher_label = funding.parse_aladin_view('1', aladin_view(publisher='다산어린이', label='출판사'))
+        self.assertEqual(publisher_label.publisher, '다산어린이')
+        ours_with_space_label = funding.parse_aladin_view('1', aladin_view(publisher='한티재', label='펴낸 곳'))
+        self.assertTrue(ours_with_space_label.is_ours)
+
+    def test_parse_aladin_view_mentions_publisher_without_label(self):
+        # 펴낸곳/출판사 라벨이 없어도 본문에 한티재가 언급되면 표시해 둔다 — 우리 것 아님으로 바로 단정하지 않기 위해서다.
+        mentioned = funding.parse_aladin_view('1', '<meta property="og:title" content="새 책" />한티재의 새 책입니다, 펴낸곳 표시가 없는 페이지')
+        self.assertEqual(mentioned.publisher, '')
+        self.assertTrue(mentioned.mentions_publisher)
+        not_mentioned = funding.parse_aladin_view('1', '<meta property="og:title" content="이벤트 공지" />별다른 정보 없음')
+        self.assertEqual(not_mentioned.publisher, '')
+        self.assertFalse(not_mentioned.mentions_publisher)
 
     def test_parse_tumblbug_and_liveness(self):
         found = {f.external_id: f for f in funding.parse_tumblbug(TUMBLBUG)}
@@ -109,12 +129,33 @@ class ScanTest(TestCase):
         self.assertFalse(FundingCampaign.objects.filter(external_id='3013').exists())
 
     def test_unreadable_publisher_is_reported_and_retried(self):
-        # 마크업이 바뀌어 '펴낸곳'을 못 읽으면 '우리 것 아님'으로 영구 기록하지 않고, 관리자에게 알려야 한다.
-        pages = dict(PAGES, **{funding.ALADIN_VIEW_URL.format(pid=3013): '<html></html>'})
+        # 마크업이 바뀌어 '펴낸곳'류 라벨을 못 읽었지만, 본문에 한티재가 언급돼 있으면 우리 펀딩인지 알 수 없다 —
+        # '우리 것 아님'으로 영구 기록하지 않고, 관리자에게 알려야 한다.
+        pages = dict(PAGES, **{funding.ALADIN_VIEW_URL.format(pid=3013):
+                               '<meta property="og:title" content="새 책" />한티재의 새 책입니다, 펴낸곳 표시가 없는 페이지'})
         result = funding.scan(get=FakeGet(pages), now=NOW, sleep=lambda s: None)
         self.assertFalse(FundingCampaign.objects.filter(external_id='3013').exists())
         self.assertEqual([c.platform for c in result.new], ['tumblbug'])
         self.assertIn('알라딘 북펀드: 펴낸곳을 읽지 못한 펀딩 1건', result.errors)
+
+    def test_no_label_and_no_mention_is_recorded_not_ours_without_error(self):
+        # 라벨도 없고 한티재 언급도 없으면 남의 펀딩이 거의 확실하다 — 매번 다시 열어보지 않도록 '아님'으로 기록한다.
+        list_html = '<a href="/m/bookfund/view.aspx?pid=9001">x</a>'
+        page = '<meta property="og:title" content="이벤트 공지" />별다른 정보 없음'
+        get = FakeGet({funding.ALADIN_LIST_URL: list_html, funding.ALADIN_VIEW_URL.format(pid=9001): page})
+        new, unreadable = funding._scan_aladin(get, NOW, lambda s: None)
+        self.assertEqual((new, unreadable), ([], 0))
+        camp = FundingCampaign.objects.get(external_id='9001')
+        self.assertFalse(camp.is_ours)
+
+    def test_no_label_but_mentions_publisher_is_unreadable(self):
+        # 라벨은 없지만 한티재가 언급되면 우리 펀딩일 수 있다 — 기록하지 않고 다음 확인 때 다시 보며, 개수를 센다.
+        list_html = '<a href="/m/bookfund/view.aspx?pid=9002">x</a>'
+        page = '<meta property="og:title" content="신간" />한티재의 신간입니다, 펴낸곳 표시가 없는 페이지'
+        get = FakeGet({funding.ALADIN_LIST_URL: list_html, funding.ALADIN_VIEW_URL.format(pid=9002): page})
+        new, unreadable = funding._scan_aladin(get, NOW, lambda s: None)
+        self.assertEqual((new, unreadable), ([], 1))
+        self.assertFalse(FundingCampaign.objects.filter(external_id='9002').exists())
 
 
 @override_settings(INTAKE=CONFIG)
