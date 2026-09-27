@@ -350,7 +350,8 @@ class MyPage extends Component<Props> {
       );
     }
 
-    const isMember = !(this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true);
+    const { getMeStatus, me } = this.props;
+    const isMember = !(getMeStatus === userStatus.FAILURE || me.anonymous === true);
     let username = '';
     let email = '';
     let name = '';

@@ -2,14 +2,51 @@ import React, { Component } from 'react';
 
 const KEY = 'hantijae:leave-spa';
 const RETRY_WINDOW_MS = 10000;
+const WINDOW_NAME_PREFIX = 'hantijae:leave-spa:';
 
 interface State {
   stuck: boolean;
 }
 
+interface Mark {
+  target: string;
+  at: number;
+}
+
+// sessionStorage를 못 쓰는 환경(프라이빗 모드 등)에서는 window.name으로 대신 기억한다 —
+// window.name은 같은 탭에서 페이지를 새로 불러와도(전체 페이지 이동) 유지된다.
+function readMark(): Mark | null {
+  try {
+    return JSON.parse(window.sessionStorage.getItem(KEY) || 'null');
+  } catch (e) {
+    try {
+      if (window.name.startsWith(WINDOW_NAME_PREFIX)) {
+        return JSON.parse(window.name.slice(WINDOW_NAME_PREFIX.length));
+      }
+    } catch (e2) {
+      return null;
+    }
+    return null;
+  }
+}
+
+function writeMark(target: string): void {
+  const mark: Mark = { target, at: Date.now() };
+  try {
+    window.sessionStorage.setItem(KEY, JSON.stringify(mark));
+  } catch (e) {
+    try {
+      window.name = WINDOW_NAME_PREFIX + JSON.stringify(mark);
+    } catch (e2) {
+      // 저장할 방법이 없으면 반복 방지는 포기한다 — 화면 자체는 정상 동작한다.
+    }
+  }
+}
+
 // 공개 화면(첫 화면·시리즈·책·검색·소개)은 서버(Django)가 그린다. React 라우터가 회원 화면 밖의 주소에 오면
 // 전체 페이지 이동으로 넘긴다 — 로그인 후 history.push('/') 같은 기존 호출을 하나하나 고치지 않아도 된다.
 // nginx 전환 전처럼 같은 주소가 10초 안에 다시 React로 돌아오면 반복하지 않고 안내만 보여 준다.
+// 읽기·쓰기를 따로 두는 이유: 저장이 실패해도 이미 읽어 둔 recent 값을 덮어쓰지 않기 위해서다.
 class LeaveSpa extends Component<{}, State> {
   constructor(props: {}) {
     super(props);
@@ -18,14 +55,10 @@ class LeaveSpa extends Component<{}, State> {
 
   componentDidMount() {
     const target = window.location.pathname + window.location.search;
-    let recent = false;
-    try {
-      const saved = JSON.parse(window.sessionStorage.getItem(KEY) || 'null');
-      recent = Boolean(saved && saved.target === target && Date.now() - saved.at < RETRY_WINDOW_MS);
-      window.sessionStorage.setItem(KEY, JSON.stringify({ target, at: Date.now() }));
-    } catch (e) {
-      recent = false;
-    }
+    const saved = readMark();
+    const isRecent = saved && saved.target === target && Date.now() - saved.at < RETRY_WINDOW_MS;
+    const recent = Boolean(isRecent);
+    writeMark(target);
     if (recent) {
       this.setState({ stuck: true });
     } else {
