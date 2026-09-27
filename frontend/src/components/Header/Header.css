@@ -1,28 +1,16 @@
-header {
-    background-color: #FAFAFA;
-    height: 14vh;
-    width: 100%;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
+.SpaHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid #E1DACC;
 }
-@media all and (max-width:768px) {
-    header {
-        display: inline;
-        height: 10vh;
-    }
-}
-
-.Title {
-    background-color: #FAFAFA;
-    height: inherit;
-    flex: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 40px;
-    color: black;
-    font-weight: bold;
-    cursor: pointer;
-    margin-bottom: 1%;
+.SpaHeaderBrand img { height: 30px; width: auto; display: block; }
+.SpaHeaderBack { color: #6E675D; font-size: 14px; text-decoration: none; white-space: nowrap; }
+@media all and (max-width: 640px) {
+  .SpaHeader { padding: 14px 16px 10px; }
+  .SpaHeaderBrand img { height: 22px; }
 }

@@ -1,65 +1,13 @@
-.WholeFooter {
-    margin-top: 5%;
-    width: 90%;
-    margin-left: auto;
-    margin-right: auto;
+.SpaFooter {
+  max-width: 1200px;
+  margin: 48px auto 0;
+  padding: 32px 24px 40px;
+  border-top: 1px solid #E1DACC;
+  color: #6E675D;
+  font-size: 13.5px;
+  text-align: left;
 }
-
-.FooterLine {
-    width: 90%;
-}
-
-footer {
-    background-color: #FAFAFA;
-    height: 20vh;
-    width: 100%;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    padding-top: 1%;
-    padding-bottom: 2%;
-}
-@media all and (max-width:768px) {
-    footer {
-        height: 30vh;
-    }
-}
-
-.FooterInfo {
-    display: flex;
-    width: 100%;
-}
-
-.FooterButtons {
-    margin-left: 15%;
-    display: flex;
-    flex-direction: column;
-    width: 50%;
-}
-@media all and (max-width:768px) {
-    .FooterButtons {
-        margin-top: 8%;
-        margin-left: 5%;
-        margin-right: auto;
-        margin-bottom: -5%;
-    }
-}
-
-
-.FooterDetailInfo {
-    text-align: right;
-    padding-right: 15%;
-    line-height: 2em;
-    font-size: 1em;
-}
-@media all and (max-width:768px) {
-    .FooterDetailInfo {
-        line-height: 1.5em;
-        font-size: 0.8em;
-        padding-right: 5%;
-    }
-}
-
-.ButtonGap {
-    margin-top: 3%;
-}
+.SpaFooterName { color: #22201C; font-weight: 600; margin: 0 0 8px; }
+.SpaFooter address { font-style: normal; line-height: 1.8; margin: 0 0 14px; }
+.SpaFooter a { color: inherit; }
+.SpaFooterChannels { display: flex; flex-wrap: wrap; gap: 6px 16px; }

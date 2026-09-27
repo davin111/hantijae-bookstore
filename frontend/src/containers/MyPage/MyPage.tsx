@@ -7,6 +7,7 @@ import ListItem from '@material-ui/core/ListItem';
 import ListItemText from '@material-ui/core/ListItemText';
 import Grid from '@material-ui/core/Grid';
 import Container from '@material-ui/core/Container';
+import Button from '@material-ui/core/Button';
 
 import { userStatus } from '../../constants/constants';
 import { userActions } from '../../store/actions';
@@ -29,6 +30,7 @@ interface Props {
   orders: any;
   onGetMe: () => any;
   onGetOrders: () => any;
+  onLogout: () => any;
   classes: any;
   getMeStatus: string;
 }
@@ -39,6 +41,11 @@ class MyPage extends Component<Props> {
       .then(() => {
         this.props.onGetOrders();
       });
+  }
+
+  clickLogoutHandler() {
+    this.props.onLogout()
+      .then(() => window.location.assign('/'));
   }
 
   makeBookList(books: any) {
@@ -343,10 +350,11 @@ class MyPage extends Component<Props> {
       );
     }
 
+    const isMember = !(this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true);
     let username = '';
     let email = '';
     let name = '';
-    if (this.props.getMeStatus === userStatus.FAILURE || this.props.me.anonymous === true) {
+    if (!isMember) {
       username = '비회원';
       email = '비회원';
       name = '비회원';
@@ -383,6 +391,11 @@ class MyPage extends Component<Props> {
               </Typography>
             </ListItem>
           </div>
+          {isMember && (
+            <Button type="button" variant="outlined" size="small" onClick={() => this.clickLogoutHandler()}>
+              로그아웃
+            </Button>
+          )}
           <Typography variant="h6" gutterBottom>
             주문 내역
           </Typography>
@@ -404,6 +417,7 @@ const mapStateToProps = (state: any) => ({
 const mapDispatchToProps = (dispatch: Dispatch<any>) => ({
   onGetMe: () => dispatch(userActions.getMe()),
   onGetOrders: () => dispatch(userActions.getOrders()),
+  onLogout: () => dispatch(userActions.logout()),
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(withStyles(styles)(MyPage));

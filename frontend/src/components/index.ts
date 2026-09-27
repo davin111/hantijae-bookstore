@@ -11,6 +11,7 @@ import BooksInBasket from './Books/BooksInBasket/BooksInBasket';
 import BookCountWithCart from './BookCountWithCart/BookCountWithCart';
 import EventModal from './Modal/EventModal/EventModal';
 import Footer from './Footer/Footer';
+import LeaveSpa from './LeaveSpa/LeaveSpa';
 
 export {
   Books,
@@ -25,4 +26,5 @@ export {
   BookCountWithCart,
   EventModal,
   Footer,
+  LeaveSpa,
 };

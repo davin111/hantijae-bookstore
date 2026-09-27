@@ -1,28 +1,20 @@
 import React, { Component } from 'react';
 
-import Title from './Title/Title';
-import User from './User/User';
-import NavigationPanel from '../Nav/NavigationPanel/NavigationPanel';
-
 import './Header.css';
 
-interface Props {
-  history: any;
-}
+const TITLE_IMAGE = 'https://hantijae-assets.s3.ap-northeast-2.amazonaws.com/misc/hantijae-bookstore-title.png';
 
+// 회원 화면 머리글. 공개 화면으로는 일반 링크(전체 페이지 이동)로 넘어간다.
 // eslint-disable-next-line react/prefer-stateless-function
-class Header extends Component<Props> {
+class Header extends Component {
   render() {
     return (
-      <div>
-        <header>
-          <Title history={this.props.history} />
-          <User history={this.props.history} />
-        </header>
-        <NavigationPanel
-          history={this.props.history}
-        />
-      </div>
+      <header className="SpaHeader">
+        <a href="/" className="SpaHeaderBrand">
+          <img src={TITLE_IMAGE} alt="한티재 온라인 책창고" />
+        </a>
+        <a href="/" className="SpaHeaderBack">← 한티재 책 목록</a>
+      </header>
     );
   }
 }

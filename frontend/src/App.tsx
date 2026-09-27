@@ -1,10 +1,12 @@
 import React from 'react';
-import { Route, Switch, Redirect } from 'react-router-dom';
+import { Route, Switch } from 'react-router-dom';
 import { ConnectedRouter } from 'connected-react-router';
 
-import { Header, Auth, Footer } from './components';
 import {
-  Main, BookDetail, LoginPage, SignupPage, BookBasket, SearchResult, MyPage, HantijaePage,
+  Header, Auth, Footer, LeaveSpa,
+} from './components';
+import {
+  LoginPage, SignupPage, BookBasket, MyPage,
 } from './containers';
 
 import './App.css';
@@ -13,26 +15,21 @@ interface Props {
   history: any;
 }
 
+// 공개 화면은 Django(web 앱)가 서버에서 그린다. React는 회원 화면 네 개만 맡는다(nginx가 이 네 경로만 보냄).
 function App(props: Props): JSX.Element {
   return (
     <div className="App">
       <ConnectedRouter history={props.history}>
         <Auth history={props.history} />
-        <Header history={props.history} />
+        <Header />
         <Switch>
           <Route path="/login" exact component={LoginPage} history={props.history} />
           <Route path="/signup" exact component={SignupPage} history={props.history} />
-          <Route path="/" exact component={Main} history={props.history} />
-          <Route path="/series=:series_id" exact component={Main} history={props.history} />
-          <Route path="/book=:book_id" exact component={BookDetail} history={props.history} />
           <Route path="/bookbasket" exact component={BookBasket} history={props.history} />
-          {/* <Route path="/order" exact component={Order} history={props.history} /> */}
-          <Route path="/search=:search" exact component={SearchResult} history={props.history} />
           <Route path="/mypage" exact component={MyPage} history={props.history} />
-          <Route path="/hantijae" exact component={HantijaePage} history={props.history} />
-          <Redirect exact to="/" />
+          <Route component={LeaveSpa} />
         </Switch>
-        <Footer history={props.history} />
+        <Footer />
       </ConnectedRouter>
     </div>
   );
