@@ -30,9 +30,11 @@ def refresh_cover_thumbnail(book) -> bool:
         with book.cover_image.open('rb') as fh:
             data = make_thumbnail_bytes(fh)
         book.cover_thumbnail.save('thumb.jpg', ContentFile(data), save=False)
+        # save()를 다시 부르면 표지 변경 감지가 또 돈다 → 필드만 직접 갱신(updated_at도 건드리지 않음)
+        # DB 오류(예: 락, 커넥션 끊김)도 여기서 잡아야 한다 — Book.save()는 transaction.atomic() 안에서
+        # 호출될 수 있어서, 여기서 예외가 새어 나가면 책 저장 자체가 롤백된다.
+        type(book).objects.filter(pk=book.pk).update(cover_thumbnail=book.cover_thumbnail.name)
     except Exception:
         log.exception('cover thumbnail failed for book %s', book.pk)
         return False
-    # save()를 다시 부르면 표지 변경 감지가 또 돈다 → 필드만 직접 갱신(updated_at도 건드리지 않음)
-    type(book).objects.filter(pk=book.pk).update(cover_thumbnail=book.cover_thumbnail.name)
     return True

@@ -4,11 +4,12 @@ from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.db import DatabaseError
 from django.test import TestCase
 from PIL import Image
 
 from books.models import Book, Category
-from books.thumbnails import THUMB_MAX_SIDE
+from books.thumbnails import THUMB_MAX_SIDE, refresh_cover_thumbnail
 
 
 def png(w=1000, h=1500, mode='RGBA'):
@@ -60,6 +61,27 @@ class ThumbnailTest(TestCase):
         self.make(cover_image=png())
         with self.assertNumQueries(1):
             list(Book.objects.only('id', 'updated_at'))
+
+    def test_save_with_only_and_update_fields_does_not_touch_cover(self):
+        b = self.make(cover_image=png())
+        thumb_before = Book.objects.get(pk=b.pk).cover_thumbnail.name
+        obj = Book.objects.only('id', 'title', 'updated_at').get(pk=b.pk)
+        obj.title = '제목만 바꿈 (only)'
+        with self.assertNumQueries(1):
+            obj.save(update_fields=['title', 'updated_at'])
+        self.assertEqual(Book.objects.get(pk=b.pk).cover_thumbnail.name, thumb_before)
+
+    def test_db_error_on_thumbnail_update_does_not_raise(self):
+        b = self.make(cover_image=png())
+        b = Book.objects.get(pk=b.pk)
+        with mock.patch.object(Book.objects, 'filter', side_effect=DatabaseError('boom')):
+            # 직접 호출: 예외를 삼키고 False 를 돌려준다
+            self.assertFalse(refresh_cover_thumbnail(b))
+            # book.save() 경유: intake 쪽은 이 save() 를 transaction.atomic() 안에서 부른다 —
+            # 썸네일 갱신이 실패해도 책 저장 자체가 예외로 굴러떨어지면 안 된다
+            b.cover_image = png(600, 900, 'RGB')
+            b.save()
+        self.assertTrue(Book.objects.get(pk=b.pk).pk)
 
     def test_command_fills_missing_only_unless_force(self):
         b = self.make(cover_image=png())

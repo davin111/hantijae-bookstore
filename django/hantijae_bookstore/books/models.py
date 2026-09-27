@@ -87,6 +87,10 @@ class Book(BaseModel):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
+        if 'cover_image' not in self.__dict__:
+            # .only()로 표지 필드가 빠진 인스턴스 — self.cover_image 로 읽으면 지연 로딩 쿼리가 나가고,
+            # 바뀌지도 않은 표지를 "바뀜"으로 오판해 썸네일을 다시 만들게 된다. 아예 건드리지 않는다.
+            return
         cover = self.cover_image.name if self.cover_image else ''
         if cover and (cover != self._cover_name_at_load or not self.cover_thumbnail):
             from books.thumbnails import refresh_cover_thumbnail  # 모델 로딩 순서 때문에 지연 import
