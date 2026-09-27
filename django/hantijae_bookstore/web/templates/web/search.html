@@ -1,0 +1,16 @@
+{% extends 'web/base.html' %}
+{% block content %}
+<div class="wrap">
+  <header class="page-head">
+    <h1 class="page-title serif">‘{{ query }}’ 검색 결과</h1>
+    <p class="page-sub">{{ page.paginator.count }}권</p>
+  </header>
+  {% if page.paginator.count %}
+    {% include 'web/_book_grid.html' with books=books %}
+    {% include 'web/_pagination.html' %}
+  {% else %}
+    <p class="empty">‘{{ query }}’에 맞는 책을 찾지 못했습니다. 최근에 펴낸 책을 둘러보세요.</p>
+    {% include 'web/_book_grid.html' with books=suggestions %}
+  {% endif %}
+</div>
+{% endblock %}

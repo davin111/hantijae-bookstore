@@ -1,11 +1,11 @@
 import logging
 import re
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from django.conf import settings
 from django.db import DatabaseError
 from django.http import Http404, HttpResponseRedirect
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 
 from books.models import Book
 from web import blog, catalog, presenters
@@ -53,3 +53,36 @@ def home(request):
         'notice': current_notice(),
         'blog_posts': blog.latest_posts(),
     }, meta=page_meta('/'), nav_active='home', nav_series=series)
+
+
+def series_page(request, series_id):
+    series = catalog.get_public_series(int(series_id))
+    if series is None:
+        raise Http404
+    page = catalog.paginate(catalog.series_books(series), request.GET.get('page'))
+    if page is None:
+        raise Http404
+    books = list(page.object_list)
+    base_path = f'/series={series.id}'
+    path = base_path + (f'?page={page.number}' if page.number > 1 else '')
+    meta = page_meta(path, title=series.name, description=f'{series.name} {series.book_count}권 — 도서출판 한티재',
+                     image=presenters.cover_3d_url(books[0]) if books else None)
+    return render_page(request, 'web/series.html', {'series': series, 'page': page, 'books': books,
+                                                    'base_path': base_path}, meta=meta, nav_active=series.id)
+
+
+def search_redirect(request):
+    q = (request.GET.get('q') or '').strip()
+    return redirect('/search=' + quote(q, safe='')) if q else redirect('/')
+
+
+def search_page(request, q):
+    q = q.strip()
+    page = catalog.paginate(catalog.search_books(q), request.GET.get('page'))
+    if page is None:
+        raise Http404
+    base_path = '/search=' + quote(q, safe='')
+    return render_page(request, 'web/search.html', {
+        'query': q, 'page': page, 'books': list(page.object_list), 'base_path': base_path,
+        'suggestions': catalog.recent_books(6) if not page.paginator.count else [],
+    }, meta=page_meta(base_path, title=f'‘{q}’ 검색', noindex=True), search_query=q)

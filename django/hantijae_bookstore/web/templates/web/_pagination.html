@@ -1,0 +1,7 @@
+{% if page.paginator.num_pages > 1 %}
+<nav class="pagination" aria-label="쪽 이동">
+  {% if page.has_previous %}<a href="{{ base_path }}{% if page.previous_page_number > 1 %}?page={{ page.previous_page_number }}{% endif %}">← 이전</a>{% endif %}
+  {% for n in page.paginator.page_range %}{% if n == page.number %}<span aria-current="page">{{ n }}</span>{% else %}<a href="{{ base_path }}{% if n > 1 %}?page={{ n }}{% endif %}">{{ n }}</a>{% endif %}{% endfor %}
+  {% if page.has_next %}<a href="{{ base_path }}?page={{ page.next_page_number }}">다음 →</a>{% endif %}
+</nav>
+{% endif %}
