@@ -74,6 +74,12 @@ class ApplyFieldsTest(TestCase):
         self.assertEqual(n.link_url, '')
         self.assertEqual(len(warnings), 2)
 
+    def test_overlong_url_is_dropped_instead_of_failing_save(self):
+        n = self.notice()
+        warnings = notices.apply_fields(n, dict(DATA, link_url='https://example.com/' + 'a' * 600), NOW)
+        self.assertEqual(n.link_url, '')
+        self.assertIn('연결 주소가 너무 길어 빼 두었어요.', warnings)
+
     def test_empty_message_raises(self):
         with self.assertRaises(notices.NoticeError):
             notices.apply_fields(self.notice(), {'message': '  '}, NOW)

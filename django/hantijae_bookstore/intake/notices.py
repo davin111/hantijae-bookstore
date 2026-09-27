@@ -66,6 +66,9 @@ def apply_fields(notice: Notice, data: dict, now=None) -> List[str]:
     if url and not URL_RE.match(url):
         warnings.append('연결 주소가 http:// 나 https:// 로 시작하지 않아 빼 두었어요.')
         url = ''
+    elif url and len(url) > 500:
+        warnings.append('연결 주소가 너무 길어 빼 두었어요.')
+        url = ''
     raw_start, raw_end = data.get('start_date'), data.get('end_date')
     start_d, end_d = _date(raw_start), _date(raw_end)
     if (raw_start and not start_d) or (raw_end and not end_d):
