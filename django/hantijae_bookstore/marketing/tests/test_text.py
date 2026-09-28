@@ -30,9 +30,10 @@ class TextTest(SimpleTestCase):
 
     def test_unverified_quotes_ignores_whitespace_differences(self):
         source = '몸을 통과한 흙과 풀의 이야기가 시가 될 때 나는 큰 위로를 받는다.'
-        text = '"몸을 통과한 흙과 풀의 이야기가  시가 될 때" 그리고 "지어낸 문장이 여기 들어 있다"'
+        text = '”몸을 통과한 흙과 풀의 이야기가  시가 될 때” 그리고 “지어낸 문장이 여기 들어 있다”'
         self.assertEqual(unverified_quotes(text, source), ['지어낸 문장이 여기 들어 있다'])
-        self.assertEqual(unverified_quotes('"지어낸 문장이 여기 들어 있다"', source), ['지어낸 문장이 여기 들어 있다'])
+        self.assertEqual(unverified_quotes('“지어낸 문장이 여기 들어 있다”', source), ['지어낸 문장이 여기 들어 있다'])
+
 
     def test_foreign_numbers_checks_three_digit_numbers_only(self):
         allowed = ['376권 펀딩, 6,768,000원', '2026-10-11']
