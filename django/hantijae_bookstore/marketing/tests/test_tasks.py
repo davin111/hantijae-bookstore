@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone as dt_tz
+from types import SimpleNamespace
 from unittest import mock
 
 from django.test import TestCase
@@ -43,7 +44,8 @@ class Deps:
 
 
 @mock.patch('marketing.tasks.kit.build_pending', return_value=[])
-@mock.patch('marketing.tasks.briefing.build_weekly')
+@mock.patch('marketing.tasks.briefing.build_weekly',
+            return_value=(mock.Mock(**{'items.exists.return_value': True}), []))
 @mock.patch('marketing.tasks.news.collect_news', return_value=[])
 @mock.patch('marketing.tasks.funding.collect_funding', return_value=0)
 @mock.patch('marketing.tasks.sales.collect_sales', return_value=(0, []))
@@ -92,6 +94,35 @@ class RunDueTest(TestCase):
         tasks.run_due(deps, datetime(2026, 9, 28, 22, 5, tzinfo=KST))
         self.assertEqual(len([n for n in deps.bot.notes if '브리핑' in n]), 1)
         self.assertEqual(deps.bot.marketing.briefs_sent, [])
+
+    def test_empty_scheduled_briefing_notifies_admin_with_reasons(self, sales_, fund_, news_, brief_, kit_):
+        deps = Deps()
+        brief_.return_value = (Briefing.objects.create(week_start=date(2026, 9, 28)), ['blog:1: 빈 항목', '없는 후보: x'])
+        tasks.run_due(deps, datetime(2026, 9, 28, 7, 0, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 28, 8, 0, tzinfo=KST))
+        self.assertEqual([n for n in deps.bot.notes if '후보가 없거나' in n],
+                         ['⏭️ 이번 주 브리핑 후보가 없거나 모두 걸렀어요\n버린 항목: blog:1: 빈 항목; 없는 후보: x'])
+
+    def test_lost_briefing_build_notifies_once_at_give_up_time(self, *_):
+        deps = Deps()
+        WorkerState.put('marketing_last_brief_week', '2026-09-28')  # 만들다가 워커가 멈춰 Briefing이 없다
+        tasks.run_due(deps, datetime(2026, 9, 28, 20, 59, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 28, 21, 5, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 28, 22, 5, tzinfo=KST))
+        self.assertEqual(len([n for n in deps.bot.notes if '보내지 못했어요' in n]), 1)
+
+    def test_sensitive_news_listed_in_one_admin_message(self, sales_, fund_, news_, brief_, kit_):
+        book = SimpleNamespace(title='무지개를 변호하다')
+        news_.return_value = [SimpleNamespace(sensitive=True, book=book, title='부고 기사'),
+                              SimpleNamespace(sensitive=False, book=book, title='칼럼'),
+                              SimpleNamespace(sensitive=True, book=book, title='재판 기사')]
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 28, 6, 30, tzinfo=KST))
+        notes = [n for n in deps.bot.notes if '민감' in n]
+        self.assertEqual(len(notes), 1)
+        self.assertIn('부고 기사', notes[0])
+        self.assertIn('재판 기사', notes[0])
+        self.assertNotIn('칼럼', notes[0])
 
     @mock.patch('marketing.tasks.kit.buildable_books', return_value=['책'])
     def test_kit_check_every_ten_minutes_and_error_notified_once(self, buildable_, sales_, fund_, news_, brief_, kit_):

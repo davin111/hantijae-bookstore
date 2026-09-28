@@ -1,3 +1,4 @@
+import urllib.parse
 from datetime import date
 
 from django.test import TestCase
@@ -57,7 +58,26 @@ class CollectTest(TestCase):
         self.assertEqual(again, [])
         self.assertEqual(len(llm.calls), 1)
 
-    def test_collect_survives_fetch_error(self):
+    def test_collect_survives_one_failing_query(self):
+        WatchQuery.objects.create(query='정은정')
+
+        def get(url):
+            if urllib.parse.quote('"정은정"') in url:
+                raise ConnectionError('down')
+            return RSS
+        made = collect_news(date(2026, 9, 28), FakeLLM({'items': []}), get=get, sleep=lambda s: None)
+        self.assertEqual(len(made), 2)
+
+    def test_collect_raises_when_every_query_fails(self):
         def boom(url):
             raise ConnectionError('down')
-        self.assertEqual(collect_news(date(2026, 9, 28), FakeLLM({'items': []}), get=boom, sleep=lambda s: None), [])
+        with self.assertRaisesMessage(RuntimeError, '구글 뉴스 질의 1개가 모두 실패했어요'):
+            collect_news(date(2026, 9, 28), FakeLLM({'items': []}), get=boom, sleep=lambda s: None)
+
+    def test_sensitive_only_when_it_is_the_same_person(self):
+        llm = FakeLLM({'items': [
+            {'id': 0, 'same_person': True, 'relevant': False, 'sensitive': True, 'summary': '부고'},
+            {'id': 1, 'same_person': False, 'relevant': False, 'sensitive': True, 'summary': '사고'}]})
+        collect_news(date(2026, 9, 28), llm, get=lambda url: RSS, sleep=lambda s: None)
+        self.assertTrue(Signal.objects.get(title='(10) 학교에서 혐오를 없애려면').sensitive)
+        self.assertFalse(Signal.objects.get(title='동명이인 소식').sensitive)

@@ -40,6 +40,10 @@ class HookTest(TestCase):
         hook, missing = add_hook(10, 9, '한글날 특집', ['글쓰기의 태도', '없는 책'])
         self.assertEqual((hook.books.count(), missing), (1, ['없는 책']))
 
+    def test_add_hook_clips_long_name(self):
+        hook, _ = add_hook(10, 9, '가' * 150, [])
+        self.assertEqual(len(hook.name), 100)
+
     def test_seed_command_prints_counts(self):
         call_command('marketing_seed_hooks', stdout=io.StringIO())
         self.assertEqual(HookDate.objects.count(), len(SEED))

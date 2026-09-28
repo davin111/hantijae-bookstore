@@ -7,12 +7,15 @@ from django.utils import timezone
 
 from intake.models import WorkerState
 from marketing import briefing, funding, kit, news, sales
+from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
+from marketing.text import clip
 from marketing.timeutil import kst_now, week_start
 
 log = logging.getLogger('intake')
 KIT_CHECK_SECONDS = 600
 SALES_AT, NEWS_AT, BRIEF_BUILD_AT, BRIEF_SEND_AT, BRIEF_GIVE_UP_AT = (6, 0), (6, 30), (7, 0), (9, 30), (21, 0)
+MISSED_NOTE = '⏭️ 이번 주 브리핑을 보내지 못했어요(항목 없음·모드·시간). /mk 로 확인하세요'
 
 
 def _hm(local):
@@ -32,10 +35,13 @@ def _guard(deps, name, now, fn):
 
 
 def _notify_sensitive(deps, signals):
-    for s in signals or []:
-        if s.sensitive and s.book:
-            deps.bot.notify_admin(f'🔕 민감한 소식 — 『{s.book.title}』: {s.title}\n'
-                                  f'홍보를 쉬려면: /quiet {s.book.title[:12]} YYYY-MM-DD 이유')
+    """민감한 소식은 한 메시지로 모아 알린다(없으면 보내지 않는다)."""
+    hits = [s for s in signals or [] if s.sensitive and s.book]
+    if not hits:
+        return
+    lines = [f'🔕 민감한 소식 {len(hits)}건 — 홍보를 쉬려면 아래 /quiet 줄의 날짜·이유를 채워 보내세요']
+    lines += [f'· 『{s.book.title}』: {s.title}\n  /quiet {s.book.title[:12]} YYYY-MM-DD 이유' for s in hits]
+    deps.bot.notify_admin(clip('\n'.join(lines), TEXT_LIMIT))
 
 
 def _sales_block(deps, today, now):
@@ -52,6 +58,27 @@ def _sales_block(deps, today, now):
         if streak == 3:
             deps.bot.notify_admin(f'⚠️ 알라딘 판매 지수를 3일째 읽지 못했어요 (실패 {len(failed)}권). '
                                   f'알라딘 페이지 형식이 바뀌었는지 확인해 주세요')
+
+
+def _build_brief(deps, m, today, now):
+    """비었으면 21시까지 기다리지 않고 바로, 버린 까닭과 함께 알린다."""
+    b, dropped = briefing.build_weekly(deps.llm, today, now, m.blog_posts())
+    if not b.items.exists():
+        deps.bot.notify_admin('⏭️ 이번 주 브리핑 후보가 없거나 모두 걸렀어요'
+                              + (f'\n버린 항목: {"; ".join(dropped)}' if dropped else ''))
+    return b
+
+
+def _brief_send(deps, m, local, now, wk):
+    b = Briefing.objects.filter(week_start=week_start(local.date())).first()
+    unsent = b is not None and b.sent_at is None
+    if unsent and BRIEF_SEND_AT <= _hm(local) < BRIEF_GIVE_UP_AT:
+        _guard(deps, 'brief_send', now, lambda: m.send_briefing(b, now))
+    elif _hm(local) >= BRIEF_GIVE_UP_AT and WorkerState.get('marketing_brief_missed') != wk:
+        lost = b is None and WorkerState.get('marketing_last_brief_week') == wk  # 만들다가 워커가 멈춘 경우
+        if unsent or lost:
+            WorkerState.put('marketing_brief_missed', wk)
+            deps.bot.notify_admin(MISSED_NOTE)
 
 
 def _build_kits(deps, m, today):
@@ -80,15 +107,9 @@ def _run_due(deps, now):
     wk = week_start(today).isoformat()
     if monday and _hm(local) >= BRIEF_BUILD_AT and WorkerState.get('marketing_last_brief_week') != wk:
         WorkerState.put('marketing_last_brief_week', wk)
-        _guard(deps, 'brief', now, lambda: briefing.build_weekly(deps.llm, today, now, m.blog_posts()))
-
-    pending = Briefing.objects.filter(week_start=week_start(today), sent_at__isnull=True).first()
-    if pending and monday:
-        if BRIEF_SEND_AT <= _hm(local) < BRIEF_GIVE_UP_AT:
-            _guard(deps, 'brief_send', now, lambda: m.send_briefing(pending, now))
-        elif _hm(local) >= BRIEF_GIVE_UP_AT and WorkerState.get('marketing_brief_missed') != wk:
-            WorkerState.put('marketing_brief_missed', wk)
-            deps.bot.notify_admin('⏭️ 이번 주 브리핑을 보내지 못했어요(항목 없음·모드·시간). /mk 로 확인하세요')
+        _guard(deps, 'brief', now, lambda: _build_brief(deps, m, today, now))
+    if monday:
+        _brief_send(deps, m, local, now, wk)
 
     last = WorkerState.get('marketing_last_kit_check')
     if not last or (now - datetime.fromisoformat(last)).total_seconds() >= KIT_CHECK_SECONDS:

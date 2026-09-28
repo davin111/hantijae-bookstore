@@ -24,6 +24,7 @@ log = logging.getLogger('intake')
 COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch')
 MODES = ('off', 'admin_only', 'live')
 KIT_DAILY_CAP = 2
+BUILDING = '만들고 있어요. 몇 분 걸려요.'
 USAGE = ('사용법: /mk off|admin_only|live · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
          '/hook <MM-DD> <이름> | <책1>, <책2> · /hook list · /quiet <제목 일부> <YYYY-MM-DD> [이유] · /quiet list · '
          '/watch <이름> · /watch list · /watch off <번호>')
@@ -146,7 +147,8 @@ class Marketing:
 
     def send_briefing(self, briefing, now, chat=None, record=True):
         chat = chat or self.target_chat()
-        if chat is None or (record and (briefing.sent_at or in_quiet_hours(now))):
+        already = briefing.sent_at and briefing.chat_id == chat  # 관리자 방에만 나간 것은 검수 방으로 또 보낼 수 있다
+        if chat is None or (record and (already or in_quiet_hours(now))):
             return False
         items = list(briefing.items.order_by('rank'))
         if not items:
@@ -243,7 +245,7 @@ class Marketing:
             self.tg.send_message(chat_id, '지금은 고치지 못했어요. 잠시 뒤에 다시 적어 주세요.', reply_to=msg['message_id'])
             return
         new = Draft.objects.create(proposal=draft.proposal, channel=draft.channel,
-                                   title=fix_title_marks(str(out.get('title') or '').strip()),
+                                   title=fix_title_marks(str(out.get('title') or '').strip())[:300],
                                    body=fix_title_marks(str(out.get('body') or '').strip()) or draft.body,
                                    version=draft.version + 1, parent=draft)
         self._send_draft(new, chat_id, reply_to=msg['message_id'], note=str(out.get('note') or '').strip())
@@ -269,13 +271,17 @@ class Marketing:
 
     def _brief(self, chat_id, arg, now, today):
         b = Briefing.objects.filter(week_start=week_start(today)).first()
-        if arg == 'send':
-            review = self.host.review_chat_id()
-            if not b or b.sent_at or not review:
+        review = self.host.review_chat_id()
+        in_review = bool(b and b.sent_at and b.chat_id == review)
+        if arg == 'send':  # admin_only 에서 관리자 방에만 나간 브리핑도 검수 방으로 보낸다
+            if not b or not review:
                 return '보낼 브리핑이 없어요 (/brief 로 먼저 만들기)'
+            if in_review:
+                return '이미 검수 방에 보낸 브리핑이에요'
             return '검수 방에 보냈어요' if self.send_briefing(b, now, chat=review) else '보내지 못했어요 (항목 없음 또는 조용한 시간)'
-        if b and b.sent_at:
+        if in_review:
             return '이번 주 브리핑은 이미 보냈어요'
+        self.tg.send_message(chat_id, BUILDING)
         b, dropped = briefing_mod.build_weekly(self.llm, today, now, self.blog_posts())
         note = f'\n버린 항목: {"; ".join(dropped)}' if dropped else ''
         if not self.send_briefing(b, now, chat=chat_id, record=False):
@@ -305,6 +311,7 @@ class Marketing:
         books = find_books(arg)
         if len(books) != 1:
             return _narrow(books)
+        self.tg.send_message(chat_id, BUILDING)
         p = kit_mod.build_kit(books[0], self.llm, self.blog_posts(), today)
         p.status = Proposal.SHOWN  # 미리보기로 만든 묶음은 자동 발송하지 않는다
         p.save(update_fields=['status', 'updated_at'])

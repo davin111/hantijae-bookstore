@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from types import SimpleNamespace
+from unittest import mock
 
 from django.test import TestCase, override_settings
 
@@ -90,6 +91,17 @@ class KitTest(TestCase):
         self.assertEqual(list(pending_books(self.today)), [])
         self.assertNotIn(old, pending_books(self.today))
         self.assertNotIn(draft, pending_books(self.today))
+
+    def test_build_kit_clips_long_titles(self):
+        book = make_book(title='가' * 400, isbn='979-11-00000-06-1', author=None)
+        p = build_kit(book, FakeLLM(dict(REPLY, blog_title='나' * 400)), posts=[], today=self.today)
+        self.assertEqual((len(p.headline), len(p.drafts.get(channel=Draft.BLOG).title)), (300, 300))
+
+    def test_failed_kit_save_leaves_nothing_half_saved(self):
+        with mock.patch('marketing.kit.links_text', side_effect=RuntimeError('boom')):
+            with self.assertRaises(RuntimeError):
+                build_kit(self.book, FakeLLM(REPLY), posts=[], today=self.today)
+        self.assertFalse(Proposal.objects.exists())
 
     def test_quiet_book_gets_no_kit_until_quiet_ends(self):
         BookProfile.objects.create(book=self.book, quiet_until=self.today)

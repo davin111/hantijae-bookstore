@@ -1,6 +1,7 @@
 """주간 브리핑: 후보를 LLM에 한 번 보내 최대 3개를 고르게 하고, 코드로 다시 검증한다."""
 from datetime import datetime, timedelta
 
+from django.db import transaction
 from django.utils import timezone
 
 from intake.llm import complete_json
@@ -41,7 +42,7 @@ def compose(llm, cands, today):
         if bad:
             dropped.append(f'{cand.id}: 자료에 없는 숫자 {", ".join(bad)}')
             continue
-        if cand.memorial and any(w in body for w in SALES_WORDS):
+        if cand.memorial and any(w in ' '.join([headline, reason, body]) for w in SALES_WORDS):
             dropped.append(f'{cand.id}: 추모 성격의 날에 판매 권유')
             continue
         ids = {b.id for b in cand.books}
@@ -58,17 +59,18 @@ def compose(llm, cands, today):
 
 
 def save_briefing(items, today):
-    briefing, _ = Briefing.objects.get_or_create(week_start=week_start(today))
-    # 관리자가 /brief 로 다시 만들면 새 항목으로 바꾼다. 옛 항목이 쓴 저자 소식은 다시 후보가 되게 풀어 준다
-    Signal.objects.filter(proposal__briefing=briefing).update(used_at=None)
-    briefing.items.all().delete()
-    for rank, (cand, headline, reason, d) in enumerate(items, 1):
-        p = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=cand.books[0] if cand.books else None,
-                                    signal=cand.signal, briefing=briefing, candidate_key=cand.id,
-                                    headline=headline, reason=reason, rank=rank)
-        Draft.objects.create(proposal=p, channel=d['channel'], title=d['title'], body=d['body'])
-        if cand.signal:
-            Signal.objects.filter(pk=cand.signal.pk).update(used_at=timezone.now())
+    with transaction.atomic():  # 도중에 실패하면 옛 항목이 그대로 남는다(반쯤 만든 브리핑이 나가지 않게)
+        briefing, _ = Briefing.objects.get_or_create(week_start=week_start(today))
+        # 관리자가 /brief 로 다시 만들면 새 항목으로 바꾼다. 옛 항목이 쓴 저자 소식은 다시 후보가 되게 풀어 준다
+        Signal.objects.filter(proposal__briefing=briefing).update(used_at=None)
+        briefing.items.all().delete()
+        for rank, (cand, headline, reason, d) in enumerate(items, 1):
+            p = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=cand.books[0] if cand.books else None,
+                                        signal=cand.signal, briefing=briefing, candidate_key=cand.id,
+                                        headline=headline[:300], reason=reason, rank=rank)
+            Draft.objects.create(proposal=p, channel=d['channel'], title=d['title'][:300], body=d['body'])
+            if cand.signal:
+                Signal.objects.filter(pk=cand.signal.pk).update(used_at=timezone.now())
     return briefing
 
 
@@ -101,6 +103,6 @@ def measure_line(today):
 def build_weekly(llm, today, now, posts):
     items, dropped = compose(llm, candidates.gather(today, now, posts), today)
     briefing = save_briefing(items, today)
-    briefing.measure = measure_line(today)
+    briefing.measure = measure_line(today)[:300]
     briefing.save(update_fields=['measure'])
     return briefing, dropped

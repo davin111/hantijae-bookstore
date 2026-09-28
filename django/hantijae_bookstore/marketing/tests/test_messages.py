@@ -23,12 +23,17 @@ class MessagesTest(SimpleTestCase):
         book = SimpleNamespace(title='나는 산속으로 더 깊이 들어간다', published_date=date(2026, 8, 21))
         ds = [draft(1, Draft.BLOG), draft(2, Draft.INSTAGRAM), draft(3, Draft.LINKS), draft(4, Draft.SHORT),
               draft(5, Draft.LETTER)]
-        text = messages.kit_caption(book, ds, ['교보문고', '예스24'], blog_exists=False)
+        text = messages.kit_caption(book, ds, ['교보문고', '예스24'], blog_exists=False, today=date(2026, 9, 28))
         self.assertTrue(text.startswith('『나는 산속으로 더 깊이 들어간다』 홍보 자료를 만들어 두었어요.'))
-        self.assertIn('8월 21일에 나온 책이에요. 아직 블로그 글이 없어요.', text)
+        self.assertIn('\n8월 21일에 나온 책이에요. 아직 블로그 글이 없어요.', text)
         self.assertIn('· 짧은 소개 (한 줄 3가지, 200자)', text)
         self.assertIn('사이트에 교보문고·예스24 상품 링크가 비어 있어요.', text)
         self.assertLessEqual(tg_len(text), 1024)
+
+    def test_kit_caption_adds_year_for_books_from_another_year(self):
+        book = SimpleNamespace(title='밥은 먹고 다니냐는 말', published_date=date(2025, 11, 3))
+        text = messages.kit_caption(book, [], [], blog_exists=True, today=date(2026, 9, 28))
+        self.assertIn('\n2025년 11월 3일에 나온 책이에요.', text)
 
     def test_kit_buttons_without_blog(self):
         p = SimpleNamespace(id=7)

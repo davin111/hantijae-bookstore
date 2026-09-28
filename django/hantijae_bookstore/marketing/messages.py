@@ -1,10 +1,13 @@
 """마케팅 비서 텔레그램 문구·버튼 (순수 함수). 콜백은 'mk:<동작>:<번호>' (64바이트 제한 안)."""
 from datetime import timedelta
 
+from django.utils import timezone
+
 from intake.messages import CAPTION_LIMIT
 from intake.telegram_api import keyboard
 from marketing.models import Draft
 from marketing.text import clip
+from marketing.timeutil import kst_today
 
 TEXT_LIMIT = 4096
 KIT_BULLET = {Draft.BLOG: '블로그 글', Draft.INSTAGRAM: '인스타 글', Draft.LINKS: '서점 링크 공지',
@@ -25,10 +28,11 @@ def parse_cb(data):
     return parts[1], int(parts[2])
 
 
-def kit_caption(book, drafts, missing, blog_exists):
-    d = book.published_date
+def kit_caption(book, drafts, missing, blog_exists, today=None):
+    d, today = book.published_date, today or kst_today(timezone.now())
+    year = '' if d.year == today.year else f'{d.year}년 '  # 올해 책이 아니면 연도를 붙인다
     lines = [f'『{book.title}』 홍보 자료를 만들어 두었어요.',
-             f'{d.month}월 {d.day}일에 나온 책이에요.' + ('' if blog_exists else ' 아직 블로그 글이 없어요.'),
+             f'{year}{d.month}월 {d.day}일에 나온 책이에요.' + ('' if blog_exists else ' 아직 블로그 글이 없어요.'),
              '', '준비된 것', *[f'· {KIT_BULLET[x.channel]}' for x in drafts]]
     if missing:
         lines += ['', f'사이트에 {"·".join(missing)} 상품 링크가 비어 있어요.']

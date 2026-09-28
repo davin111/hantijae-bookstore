@@ -70,14 +70,16 @@ def _book_line(book):
 
 def collect_news(today, llm, get=http_get, sleep=time.sleep, spacing=2.0, days=14):
     ensure_watch_queries(today)
-    rows, seen = [], set()
-    for i, watch in enumerate(WatchQuery.objects.filter(active=True).select_related('book').order_by('id')):
+    rows, seen, failed = [], set(), 0
+    watches = list(WatchQuery.objects.filter(active=True).select_related('book').order_by('id'))
+    for i, watch in enumerate(watches):
         if i:
             sleep(spacing)
         q = urllib.parse.quote(f'"{watch.query}" when:{days}d')
         try:
             articles = [a for a in parse_rss(get(RSS_URL.format(q=q))) if is_news(a)]
         except Exception:  # 질의 하나 실패는 건너뛴다
+            failed += 1
             continue
         for a in articles[:PER_QUERY]:
             key = _key(a.link)
@@ -85,6 +87,8 @@ def collect_news(today, llm, get=http_get, sleep=time.sleep, spacing=2.0, days=1
                 continue
             seen.add(key)
             rows.append((watch, a))
+    if watches and failed == len(watches):  # 구글이 막았을 수 있다 → 스케줄러의 _guard가 하루 한 번 알린다
+        raise RuntimeError(f'구글 뉴스 질의 {failed}개가 모두 실패했어요')
     made = []
     for start in range(0, len(rows), PER_LLM_CALL):
         chunk = rows[start:start + PER_LLM_CALL]
@@ -93,10 +97,11 @@ def collect_news(today, llm, get=http_get, sleep=time.sleep, spacing=2.0, days=1
         by_id = {v.get('id'): v for v in verdicts.get('items', []) if isinstance(v, dict)}
         for i, (watch, a) in enumerate(chunk):
             v = by_id.get(i, {})
+            same_person = bool(v.get('same_person'))  # 동명이인의 부고로 관리자를 놀라게 하지 않는다
             made.append(Signal.objects.create(
                 kind=Signal.NEWS, key=_key(a.link), book=watch.book, title=a.title[:500], url=a.link[:1000],
                 happens_on=a.published,
                 detail={'source': a.source, 'query': watch.query, 'summary': v.get('summary', ''),
                         'evidence': v.get('evidence', '')},
-                relevant=bool(v.get('same_person') and v.get('relevant')), sensitive=bool(v.get('sensitive'))))
+                relevant=same_person and bool(v.get('relevant')), sensitive=same_person and bool(v.get('sensitive'))))
     return made

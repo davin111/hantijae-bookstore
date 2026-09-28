@@ -48,6 +48,14 @@ class ComposeTest(TestCase):
         self.assertEqual(items, [])
         self.assertIn('추모', dropped[0])
 
+    def test_compose_drops_sales_push_in_memorial_headline_or_reason(self):
+        llm = FakeLLM([{'items': [item('hook:1', headline='『시월, 곡비의 노래』 ― 서점에서 만나요', body='소개')]},
+                       {'items': [item('hook:1', reason='지금 할인 중이라 알리면 좋아요.', body='소개')]}])
+        for _ in range(2):
+            items, dropped = compose(llm, self.cands, TODAY)
+            self.assertEqual(items, [])
+            self.assertIn('추모', dropped[0])
+
     def test_compose_drops_same_book_twice_and_caps_three(self):
         llm = FakeLLM({'items': [item('noreview:3'), item('hook:4'), item('hook:1', body='소개'), item('fund:2'),
                                  item('blog:5')]})
@@ -66,6 +74,14 @@ class ComposeTest(TestCase):
         self.assertEqual(Briefing.objects.count(), 1)
         self.assertEqual(list(b.items.values_list('headline', flat=True)), ['h2'])
         self.assertEqual(Draft.objects.get(proposal__briefing=b).channel, Draft.LETTER)
+
+    def test_failed_save_keeps_the_previous_items(self):
+        cand = self.cands[2]
+        save_briefing([(cand, 'h1', 'r', {'channel': 'instagram', 'title': '', 'body': 'b'})], TODAY)
+        with self.assertRaises(KeyError):
+            save_briefing([(self.cands[4], 'h2', 'r', {'channel': 'instagram', 'title': '', 'body': 'b'}),
+                           (cand, 'h3', 'r', {'title': '', 'body': 'b'})], TODAY)
+        self.assertEqual(list(Proposal.objects.values_list('headline', flat=True)), ['h1'])
 
     def test_rebuild_frees_signal_of_dropped_item(self):
         s = Signal.objects.create(kind=Signal.NEWS, key='k', book=self.b, title='칼럼', relevant=True)
@@ -88,6 +104,16 @@ class MeasureTest(TestCase):
         SalesSnapshot.objects.create(book=book, date=date(2026, 9, 25), sales_point=520)
         self.assertEqual(measure_line(TODAY),
                          '지난번 올린 『나는 산속으로 더 깊이 들어간다』 인스타 글 ― 판매 지수 455 → 520 (2주 뒤)')
+
+    def test_build_weekly_clips_long_measure_line(self):
+        book = make_book(title='가' * 400)
+        p = Proposal.objects.create(kind=Proposal.KIT, book=book, headline='x')
+        Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='b', status=Draft.POSTED,
+                             posted_at=datetime(2026, 9, 10, 10, 0, tzinfo=KST))
+        SalesSnapshot.objects.create(book=book, date=date(2026, 9, 10), sales_point=455)
+        SalesSnapshot.objects.create(book=book, date=date(2026, 9, 25), sales_point=520)
+        b, _ = build_weekly(FakeLLM({'items': []}), TODAY, datetime(2026, 9, 28, 7, 0, tzinfo=KST), posts=[])
+        self.assertEqual(len(b.measure), 300)
 
     def test_measure_line_empty_before_two_weeks(self):
         book = make_book()
@@ -143,3 +169,12 @@ class BuildWeeklyTest(TestCase):
         self.assertEqual(len(llm.calls), 3)
         s.refresh_from_db()
         self.assertIsNotNone(s.used_at)
+
+    def test_overlong_llm_headline_and_title_are_saved_clipped(self):
+        book = make_book(title='무지개를 변호하다', published=date(2026, 6, 1), isbn='979-11-00000-14-1', author=None)
+        long = '가' * 400
+        llm = FakeLLM({'items': [{'candidate_id': f'blog:{book.id}', 'headline': long, 'reason': '이유',
+                                  'draft': {'channel': 'blog', 'title': long, 'body': '글'}}]})
+        b, _ = build_weekly(llm, TODAY, datetime(2026, 9, 28, 7, 0, tzinfo=KST), posts=[])
+        p = b.items.get()
+        self.assertEqual((len(p.headline), len(p.drafts.get().title)), (300, 300))

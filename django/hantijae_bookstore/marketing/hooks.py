@@ -52,7 +52,7 @@ def seed():
 
 
 def add_hook(month, day, name, titles):
-    hook, _ = HookDate.objects.get_or_create(name=name, month=month, day=day)
+    hook, _ = HookDate.objects.get_or_create(name=name[:100], month=month, day=day)
     return hook, _link(hook, titles, _books_by_key())
 
 

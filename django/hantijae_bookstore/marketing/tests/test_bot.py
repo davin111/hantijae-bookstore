@@ -157,6 +157,12 @@ class MarketingBotTest(TestCase):
         self.assertEqual(texts[0], '고치고 있어요. 2~3분쯤 걸려요.')
         self.assertIn('첫 줄을 줄였어요', texts[1])
 
+    def test_rewrite_title_is_clipped(self):
+        d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)
+        Draft.objects.filter(pk=d.pk).update(chat_id=GROUP, message_id=777)
+        self.m({'title': '가' * 400, 'body': '글', 'note': ''}).handle_reply(GROUP, 777, {'message_id': 9}, '제목', 'x')
+        self.assertEqual(len(Draft.objects.get(version=2).title), 300)
+
     def test_reply_to_earlier_copy_of_a_shown_draft_still_rewrites(self):
         d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)
         m = self.m({'title': '', 'body': '짧아진 인스타 글', 'note': '줄였어요'})
@@ -264,6 +270,51 @@ class AdminCommandTest(TestCase):
         p = Proposal.objects.get(kind=Proposal.KIT, book=self.book)
         text = self.run_cmd('/kit', f'send {p.id}')
         self.assertEqual(text, f'오늘은 검수 방에 묶음 카드를 이미 {KIT_DAILY_CAP}장 보냈어요. 내일 다시 보내 주세요')
+
+    def sent_briefing(self, chat):
+        b = Briefing.objects.create(week_start=date(2026, 9, 28), chat_id=chat, message_id=1, sent_at=DAY,
+                                    mode='admin_only')
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b, headline='『책』 ― 계기',
+                                reason='이유', rank=1, status=Proposal.SHOWN, chat_id=chat)
+        return b
+
+    def test_brief_send_forwards_admin_sent_briefing_to_review_room_once(self):
+        WorkerState.put('marketing_mode', 'admin_only')
+        b = self.sent_briefing(ADMIN)
+        later = DAY + timedelta(hours=1)
+        self.assertEqual(self.run_cmd('/brief', 'send', now=later), '검수 방에 보냈어요')
+        b.refresh_from_db()
+        self.assertEqual((b.chat_id, b.sent_at), (GROUP, later))
+        self.assertNotEqual(b.message_id, 1)
+        self.assertEqual(self.tg.sent('send')[-2]['chat'], GROUP)
+        self.assertEqual(self.run_cmd('/brief', 'send'), '이미 검수 방에 보낸 브리핑이에요')
+
+    def test_brief_send_forward_respects_quiet_hours(self):
+        b = self.sent_briefing(ADMIN)
+        text = self.run_cmd('/brief', 'send', now=datetime(2026, 9, 28, 22, 0, tzinfo=KST))
+        self.assertEqual(text, '보내지 못했어요 (항목 없음 또는 조용한 시간)')
+        b.refresh_from_db()
+        self.assertEqual(b.chat_id, ADMIN)
+
+    def test_brief_rebuild_allowed_after_admin_only_auto_send(self):
+        WorkerState.put('marketing_mode', 'admin_only')
+        b = self.sent_briefing(ADMIN)
+        reply = {'items': [{'candidate_id': f'blog:{self.book.id}', 'headline': '『나는 산속으로 더 깊이 들어간다』 ― 블로그 글',
+                            'reason': '아직 블로그 글이 없어요.', 'draft': {'channel': 'blog', 'title': '', 'body': '글'}}]}
+        self.assertIn('/brief send', self.run_cmd('/brief', '', reply))
+        self.assertEqual(list(b.items.values_list('candidate_key', flat=True)), [f'blog:{self.book.id}'])
+
+    def test_kit_and_brief_builds_say_they_are_working_first(self):
+        reply = {'blog_body': '', 'instagram': '인스타', 'one_liners': [], 'summary_200': '', 'outreach': [], 'caution': ''}
+        self.run_cmd('/kit', '산속으로', reply)
+        first = self.tg.sent('send')[0]
+        self.assertEqual((first['chat'], first['text']), (ADMIN, '만들고 있어요. 몇 분 걸려요.'))
+        self.tg.calls.clear()
+        self.run_cmd('/brief', '', {'items': []})
+        self.assertEqual(self.tg.sent('send')[0]['text'], '만들고 있어요. 몇 분 걸려요.')
+        self.tg.calls.clear()
+        self.run_cmd('/kit', '없는 책')
+        self.assertEqual(len(self.tg.sent('send')), 1)
 
     def test_brief_preview_does_not_record_then_send(self):
         reply = {'items': [{'candidate_id': f'blog:{self.book.id}', 'headline': '『나는 산속으로 더 깊이 들어간다』 ― 블로그 글',
