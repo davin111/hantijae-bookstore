@@ -44,7 +44,7 @@ class TelegramAPI:
 
     def get_updates(self, offset, timeout=50):
         return self.call('getUpdates', _http_timeout=timeout + 15, offset=offset, timeout=timeout,
-                         allowed_updates=['message', 'callback_query'])
+                         allowed_updates=['message', 'edited_message', 'callback_query'])
 
     def send_message(self, chat_id, text, reply_to=None, buttons=None):
         return self.call('sendMessage', chat_id=chat_id, text=text[:4096],

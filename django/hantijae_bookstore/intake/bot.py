@@ -9,6 +9,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from books.preview import preview_url
+from context import record as context_record, stats as context_stats
 from intake import drafts, funding, messages, notices, review
 from intake.llm import LLMError
 from intake.models import BookDraft, FundingCampaign, IntakeSource, PendingPatch, ReviewItem, TelegramChat, WorkerState
@@ -18,10 +19,14 @@ from web.models import Notice
 
 log = logging.getLogger('intake')
 FOLDER_RE = re.compile(r'drive\.google\.com/(?:drive/(?:u/\d+/)?folders/|open\?id=)([\w-]{10,})')
-ADMIN_COMMANDS = ('/status', '/mode', '/drive', '/notion', '/baseline', '/ingest', '/retry', '/fund')
+ADMIN_COMMANDS = ('/status', '/mode', '/drive', '/notion', '/baseline', '/ingest', '/retry', '/fund', '/ctx')
 DONE_WORDS = ('완료', '끝', '다 보냈어요', '다보냈어요')
 MAX_TG_FILE = 20 * 1024 * 1024
 REPLY_GUIDE = '이 메시지에는 답장으로 고칠 수 있는 게 없어요. 책 초안(📕)이나 알림 띠 메시지에 답장해 주세요.'
+FORGET_COMMANDS = ('/잊어', '/forget')
+CONTEXT_ANNOUNCE = ('이제부터 이 방 대화를 봇이 기록해요. 전화번호·계좌·비밀번호·주소는 가린 채 저장하고, 90일이 지나면 지워요. '
+                    '새 소식이나 행사를 놓치지 않고 홍보 초안에 반영하는 데만 써요. 기록에서 빼고 싶은 메시지가 있으면 '
+                    '그 메시지에 답장으로 /잊어 라고 적어 주시거나 개발자에게 말씀해 주세요.')
 
 
 def parse_folder_id(text):
@@ -111,10 +116,33 @@ class Bot:
             if 'callback_query' in update:
                 self.on_callback(update['callback_query'])
             elif 'message' in update:
+                self.record_context(update['message'])
                 self.on_message(update['message'])
+            elif 'edited_message' in update:
+                self.record_context(update['edited_message'], edited=True)
         except Exception as e:  # 한 업데이트의 실패가 워커를 멈추지 않게
             log.exception('update failed')
             self.notify_admin(f'⚠️ 업데이트 처리 오류: {type(e).__name__}: {e}')
+
+    def record_context(self, msg, edited=False):
+        """검수 방 대화를 가린 채 기록한다(켜져 있을 때만). 실패해도 원래 처리는 계속한다."""
+        try:
+            if not WorkerState.get('context_record', False):
+                return
+            if self.chat_kind(msg['chat']['id']) != TelegramChat.REVIEWERS:
+                return
+            if split_command((msg.get('text') or '').strip())[0] in FORGET_COMMANDS:
+                return
+            if edited:
+                context_record.apply_edit(msg)
+            else:
+                context_record.record_telegram(msg)
+        except Exception as e:  # 기록 때문에 초안 답장·명령이 막히면 안 된다
+            log.exception('context record failed')
+            today = timezone.now().astimezone(notices.KST).date().isoformat()
+            if WorkerState.get('context_error_notified') != today:
+                WorkerState.put('context_error_notified', today)
+                self.notify_admin(f'⚠️ 대화 기록 오류(오늘은 더 알리지 않아요): {type(e).__name__}: {e}')
 
     def on_message(self, msg):
         chat = msg['chat']
@@ -129,6 +157,8 @@ class Bot:
         kind = self.chat_kind(chat_id)
         if not kind:
             return
+        if kind == TelegramChat.REVIEWERS and cmd in FORGET_COMMANDS:
+            return self.forget_context(chat_id, msg)
         if kind == TelegramChat.ADMIN and cmd in ADMIN_COMMANDS:
             return self.admin_command(chat_id, cmd, arg)
         if cmd == '/notice':
@@ -160,6 +190,16 @@ class Bot:
             # 봇이 보낸 메시지에 단 답장에만 안내한다. privacy mode 를 끄면 사람끼리 주고받는 답장도 들어오는데, 거기엔 끼어들지 않는다.
             # 내린 알림 카드·지난 카드에 단 답장도 여기로 온다 → 책 초안에 한정하지 않는 문구
             return self.tg.send_message(chat_id, REPLY_GUIDE, reply_to=msg['message_id'])
+
+    def forget_context(self, chat_id, msg):
+        reply = msg.get('reply_to_message')
+        if not reply:
+            text = '지울 메시지에 답장으로 /잊어 라고 적어 주세요.'
+        elif context_record.forget(chat_id, reply['message_id']):
+            text = '기록에서 지웠어요. 텔레그램 메시지는 직접 지워 주세요.'
+        else:
+            text = '기록된 게 없어요.'
+        self.tg.send_message(chat_id, text, reply_to=msg['message_id'])
 
     def register(self, chat, kind, code):
         expected = self.config.get('TELEGRAM_INVITE_CODE')
@@ -207,9 +247,23 @@ class Bot:
                 head = (f"fund={'on' if WorkerState.get('fund_autoscan', True) else 'off'} "
                         f"mode={WorkerState.get('fund_mode', 'auto')} 마지막 확인 {WorkerState.get('last_fund_scan', '-')}")
                 text = '\n'.join([head] + [f'• {c.get_platform_display()} {c.title} {c.url}' for c in ours])
+        elif cmd == '/ctx':
+            if arg in ('on', 'off'):
+                WorkerState.put('context_record', arg == 'on')
+                text = f'ctx={arg}'
+            elif arg == 'announce':
+                group = self._chat(TelegramChat.REVIEWERS)
+                if group:
+                    self.tg.send_message(group, CONTEXT_ANNOUNCE)
+                    text = '검수 방에 안내를 보냈어요'
+                else:
+                    text = '검수 방이 등록돼 있지 않아요'
+            else:
+                state = 'on' if WorkerState.get('context_record', False) else 'off'
+                text = '\n'.join([f'ctx={state}'] + context_stats.summary_lines(timezone.now()))
         else:
             text = ('사용법: /status · /mode live|admin_only · /drive on|off · /notion on|off · /baseline · '
-                    '/ingest <폴더 링크> · /retry <번호> · /fund [on|off|auto|confirm|now]')
+                    '/ingest <폴더 링크> · /retry <번호> · /fund [on|off|auto|confirm|now] · /ctx [on|off|announce]')
         self.tg.send_message(chat_id, text)
 
     def ingest_folder(self, chat_id, folder_id):

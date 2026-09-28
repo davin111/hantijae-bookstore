@@ -1,7 +1,7 @@
 import json
 import os
 import tempfile
-from datetime import date
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from unittest import mock
 
 from django.test import TestCase, override_settings
@@ -130,3 +130,19 @@ class CrashResilienceTest(TestCase):
                                           status=IntakeSource.QUEUED)
         pipeline.process_source(src, Deps(tg=None, llm=FakeLLM(REPLY), bot=self.bot))
         self.assertEqual(IntakeSource.objects.get(pk=src.pk).attempts, 1)
+
+
+class ContextPurgeTest(TestCase):
+    def test_purge_runs_once_a_day_and_errors_do_not_stop_pending_work(self):
+        bot = mock.Mock()
+        deps = Deps(tg=mock.Mock(get_updates=mock.Mock(return_value=[])), llm=None, bot=bot)
+        WorkerState.put('fund_autoscan', False)
+        now = datetime(2026, 9, 29, 3, 0, tzinfo=dt_timezone.utc)
+        with mock.patch('intake.pipeline.purge_context', side_effect=RuntimeError('boom')) as purge, \
+                mock.patch('intake.pipeline.run_pending') as pending:
+            pipeline.run_iteration(deps, now=now, sleep=lambda s: None)
+            pipeline.run_iteration(deps, now=now + timedelta(hours=1), sleep=lambda s: None)
+        self.assertEqual(purge.call_count, 1)
+        self.assertEqual(pending.call_count, 2)
+        self.assertIn('대화 기록 정리', bot.notify_admin.call_args.args[0])
+        self.assertEqual(WorkerState.get('last_context_purge'), '2026-09-29')

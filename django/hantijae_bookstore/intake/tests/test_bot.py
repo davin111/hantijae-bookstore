@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from PIL import Image
 
 from books.models import Book, Category
+from context.models import ContextEntry
 from intake import drafts
 from intake.bot import Bot, parse_folder_id
 from intake.models import BookDraft, IntakeSource, PendingPatch, TelegramChat, WorkerState
@@ -254,3 +255,75 @@ class CancelFlowTest(TestCase):
         Bot(self.tg, FakeLLM(reply), config=CONFIG).handle_update(msg(GROUP, '취소', reply_to=777))
         self.assertEqual(set(PendingPatch.objects.values_list('status', flat=True)), {PendingPatch.CANCELLED})
         self.assertEqual(self.tg.texts()[-1], '알겠어요, 부제 변경은 취소할게요.')
+
+
+DATE = 1790000000
+
+
+@override_settings(INTAKE=CONFIG)
+class ContextRecordTest(TestCase):
+    setUp = BotTest.setUp
+    bot = BotTest.bot
+
+    def on(self):
+        WorkerState.put('context_record', True)
+
+    def test_group_message_is_recorded_only_when_on(self):
+        self.bot().handle_update(msg(GROUP, '연락처 010-1234-5678', date=DATE))
+        self.assertFalse(ContextEntry.objects.exists())
+        self.on()
+        self.bot().handle_update(msg(GROUP, '연락처 010-1234-5678', date=DATE))
+        self.assertEqual(ContextEntry.objects.get().text, '연락처 [전화]')
+
+    def test_admin_chat_is_not_recorded(self):
+        self.on()
+        self.bot().handle_update(msg(ADMIN, '/status', chat_type='private', date=DATE))
+        self.assertFalse(ContextEntry.objects.exists())
+
+    def test_record_failure_does_not_block_routing_and_alerts_admin_once(self):
+        self.on()
+        with mock.patch('context.record.record_telegram', side_effect=RuntimeError('db down')):
+            self.bot().handle_update(msg(GROUP, '이거요', reply_to=4242, date=DATE))
+            self.bot().handle_update(msg(GROUP, '이거요', reply_to=4242, date=DATE))
+        self.assertEqual(self.tg.texts().count(GUIDE), 2)
+        self.assertEqual(sum('대화 기록 오류' in t for t in self.tg.texts()), 1)
+
+    def test_edited_message_updates_record_without_routing(self):
+        self.on()
+        self.bot().handle_update(msg(GROUP, '처음 글', date=DATE))
+        edited = msg(GROUP, '고친 글 010-1234-5678', date=DATE, edit_date=DATE + 60)['message']
+        self.bot().handle_update({'update_id': 3, 'edited_message': edited})
+        self.assertEqual(ContextEntry.objects.get().text, '고친 글 [전화]')
+        self.assertEqual(self.tg.calls, [])
+
+    def test_forget_reply_deletes_record_and_is_not_itself_recorded(self):
+        self.on()
+        bot = self.bot()
+        bot.handle_update(msg(GROUP, '지울 글', date=DATE))
+        forget = msg(GROUP, '/잊어', reply_to=1, date=DATE)
+        forget['message']['message_id'] = 2
+        bot.handle_update(forget)
+        self.assertFalse(ContextEntry.objects.exists())
+        self.assertEqual(self.tg.texts()[-1], '기록에서 지웠어요. 텔레그램 메시지는 직접 지워 주세요.')
+
+    def test_forget_on_draft_card_is_not_an_edit_request(self):
+        bot = self.bot({'changes': [{'field': 'subtitle', 'new_value': 'x'}], 'questions': []})
+        bot.handle_update(msg(GROUP, '/잊어', reply_to=777))
+        self.assertFalse(PendingPatch.objects.exists())
+        self.assertEqual(self.tg.texts()[-1], '기록된 게 없어요.')
+
+    def test_forget_without_reply_explains(self):
+        self.bot().handle_update(msg(GROUP, '/forget'))
+        self.assertIn('답장으로 /잊어', self.tg.texts()[-1])
+
+    def test_ctx_admin_commands(self):
+        bot = self.bot()
+        bot.handle_update(msg(ADMIN, '/ctx on', chat_type='private'))
+        self.assertIs(WorkerState.get('context_record'), True)
+        bot.handle_update(msg(ADMIN, '/ctx', chat_type='private'))
+        self.assertIn('ctx=on', self.tg.texts()[-1])
+        self.assertIn('기록 0건', self.tg.texts()[-1])
+        bot.handle_update(msg(ADMIN, '/ctx announce', chat_type='private'))
+        self.assertTrue(any(c[1] == GROUP and '/잊어' in c[2] for c in self.tg.calls if c[0] == 'send'))
+        bot.handle_update(msg(ADMIN, '/ctx off', chat_type='private'))
+        self.assertIs(WorkerState.get('context_record'), False)

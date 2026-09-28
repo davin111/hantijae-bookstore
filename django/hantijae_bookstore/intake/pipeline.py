@@ -9,11 +9,13 @@ from django.db import close_old_connections
 from django.utils import timezone
 
 from books.models import Category, Series
+from context.retention import purge as purge_context
 from intake.drafts import create_draft
 from intake.drive import download_folder, scan
 from intake.extraction import AmbiguousPressRelease, NoPressRelease, run_extraction
 from intake.llm import LLMAuthError, LLMError
 from intake.models import IntakeSource, WorkerState
+from intake.notices import KST
 
 log = logging.getLogger('intake')
 
@@ -124,6 +126,15 @@ def run_iteration(deps, now=None, sleep=time.sleep):
             # 실패해도 다음 확인은 6시간 뒤 — 외부 사이트를 계속 두드리지 않게 먼저 기록한다
             WorkerState.put('last_fund_scan', now.isoformat())
             deps.bot.run_fund_scan(now)
+        today = now.astimezone(KST).date().isoformat()
+        if WorkerState.get('last_context_purge') != today:
+            # 실패해도 오늘은 다시 하지 않는다 — 먼저 적고, 새 책 처리가 밀리지 않게 따로 잡는다
+            WorkerState.put('last_context_purge', today)
+            try:
+                purge_context(now)
+            except Exception as e:
+                log.exception('context purge failed')
+                deps.bot.notify_admin(f'⚠️ 대화 기록 정리 오류: {type(e).__name__}: {e}')
         run_pending(deps)
     except Exception as e:
         log.exception('worker iteration failed')

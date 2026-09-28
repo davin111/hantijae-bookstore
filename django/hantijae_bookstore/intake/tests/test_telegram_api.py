@@ -27,3 +27,10 @@ class TelegramAPISecretTest(SimpleTestCase):
         session.post.return_value = mock.Mock(json=lambda: {'ok': True, 'result': True})
         TelegramAPI('T', session=session).edit_text(1, 2, '본문')
         self.assertTrue(session.post.call_args.args[0].endswith('/editMessageText'))
+
+    def test_get_updates_asks_for_edited_messages(self):
+        session = mock.Mock()
+        session.post.return_value = mock.Mock(json=lambda: {'ok': True, 'result': []})
+        TelegramAPI('T', session=session).get_updates(5)
+        self.assertEqual(session.post.call_args.kwargs['json']['allowed_updates'],
+                         ['message', 'edited_message', 'callback_query'])
