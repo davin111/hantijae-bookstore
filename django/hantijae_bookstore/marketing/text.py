@@ -5,7 +5,7 @@ from intake.extract import is_verbatim
 from intake.messages import tg_len
 
 _TITLE_WITH_SUB = re.compile(r'『([^』―]+?)\s*―\s*([^』]+)』')
-_QUOTE = re.compile(r'[""]([^""\n]{8,})[""]')
+_QUOTE = re.compile('[""]([^""\n]{8,})[""]')
 # 두 자리 이하 숫자(날짜·차례)는 보지 않는다. 금액·부수·연도처럼 지어내면 곤란한 숫자만 본다.
 _BIG_NUMBER = re.compile(r'\d{1,3}(?:,\d{3})+|\d{3,}')
 
