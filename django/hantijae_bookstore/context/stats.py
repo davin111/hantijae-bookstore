@@ -17,7 +17,7 @@ def _kst(dt):
 
 
 def summary_lines(now):
-    qs = ContextEntry.objects.all()
+    qs = ContextEntry.objects.filter(forgotten=False)
     total = qs.count()
     lines = [f"보관 {settings.CONTEXT['RETENTION_DAYS']}일 · 기록 {total:,}건"]
     if not total:

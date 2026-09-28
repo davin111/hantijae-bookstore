@@ -87,4 +87,4 @@ class Command(BaseCommand):
                 w(f'  [{LABELS[rule]}] …{line}…')
         w('이름별: ' + ', '.join(f'{name}({role}) {n}건' for (name, role), n in people.most_common()))
         if any(role == '참여자' for _, role in people):
-            w('역할 없는 이름은 관리자 화면 "대화 참여자 역할"에서 별칭으로 연결한 뒤 다시 돌리세요')
+            w('역할 없는 이름은 관리자 화면 "대화 참여자 역할"에서 별칭으로 연결하세요 — 이미 넣은 기록의 역할도 바로 바뀌어요')

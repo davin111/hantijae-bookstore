@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import unicodedata
+from datetime import datetime, timezone as dt_timezone
 from typing import Protocol
 
 from django.conf import settings
@@ -24,14 +25,19 @@ DONE_WORDS = ('완료', '끝', '다 보냈어요', '다보냈어요')
 MAX_TG_FILE = 20 * 1024 * 1024
 REPLY_GUIDE = '이 메시지에는 답장으로 고칠 수 있는 게 없어요. 책 초안(📕)이나 알림 띠 메시지에 답장해 주세요.'
 FORGET_COMMANDS = ('/잊어', '/forget')
+UNRECORDED_COMMANDS = FORGET_COMMANDS + ('/register', '/start')   # /register 에는 초대 코드가 붙는다
 CONTEXT_ANNOUNCE = ('이제부터 이 방 대화를 봇이 기록해요. 전화번호·계좌·비밀번호·주소는 가린 채 저장하고, 90일이 지나면 지워요. '
                     '새 소식이나 행사를 놓치지 않고 홍보 초안에 반영하는 데만 써요. 기록에서 빼고 싶은 메시지가 있으면 '
-                    '그 메시지에 답장으로 /잊어 라고 적어 주시거나 개발자에게 말씀해 주세요.')
+                    '텔레그램에서 지우기 전에 그 메시지에 답장으로 /잊어 라고 적어 주시거나 개발자에게 말씀해 주세요.')
 
 
 def parse_folder_id(text):
     m = FOLDER_RE.search(text or '')
     return m.group(1) if m else None
+
+
+def _sent_at(message):
+    return datetime.fromtimestamp(message['date'], tz=dt_timezone.utc) if message.get('date') else None
 
 
 def split_command(text):
@@ -131,7 +137,7 @@ class Bot:
                 return
             if self.chat_kind(msg['chat']['id']) != TelegramChat.REVIEWERS:
                 return
-            if split_command((msg.get('text') or '').strip())[0] in FORGET_COMMANDS:
+            if split_command((msg.get('text') or '').strip())[0] in UNRECORDED_COMMANDS:
                 return
             if edited:
                 context_record.apply_edit(msg)
@@ -194,11 +200,11 @@ class Bot:
     def forget_context(self, chat_id, msg):
         reply = msg.get('reply_to_message')
         if not reply:
-            text = '지울 메시지에 답장으로 /잊어 라고 적어 주세요.'
-        elif context_record.forget(chat_id, reply['message_id']):
+            text = '지울 메시지에 답장으로 /잊어 라고 적어 주세요. 잘 안 되면 개발자에게 말씀해 주세요.'
+        elif context_record.forget(chat_id, reply['message_id'], sent_at=_sent_at(reply)):
             text = '기록에서 지웠어요. 텔레그램 메시지는 직접 지워 주세요.'
         else:
-            text = '기록된 게 없어요.'
+            text = '찾지 못했어요. 예전 대화라면 개발자에게 말씀해 주세요.'
         self.tg.send_message(chat_id, text, reply_to=msg['message_id'])
 
     def register(self, chat, kind, code):

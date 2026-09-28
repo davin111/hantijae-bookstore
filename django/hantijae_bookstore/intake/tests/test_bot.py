@@ -303,14 +303,15 @@ class ContextRecordTest(TestCase):
         forget = msg(GROUP, '/잊어', reply_to=1, date=DATE)
         forget['message']['message_id'] = 2
         bot.handle_update(forget)
-        self.assertFalse(ContextEntry.objects.exists())
+        entry = ContextEntry.objects.get()          # /잊어 메시지 자체는 기록되지 않아 한 줄뿐
+        self.assertEqual((entry.message_id, entry.forgotten, entry.text), (1, True, ''))
         self.assertEqual(self.tg.texts()[-1], '기록에서 지웠어요. 텔레그램 메시지는 직접 지워 주세요.')
 
     def test_forget_on_draft_card_is_not_an_edit_request(self):
         bot = self.bot({'changes': [{'field': 'subtitle', 'new_value': 'x'}], 'questions': []})
         bot.handle_update(msg(GROUP, '/잊어', reply_to=777))
         self.assertFalse(PendingPatch.objects.exists())
-        self.assertEqual(self.tg.texts()[-1], '기록된 게 없어요.')
+        self.assertEqual(self.tg.texts()[-1], '찾지 못했어요. 예전 대화라면 개발자에게 말씀해 주세요.')
 
     def test_forget_without_reply_explains(self):
         self.bot().handle_update(msg(GROUP, '/forget'))
@@ -324,6 +325,22 @@ class ContextRecordTest(TestCase):
         self.assertIn('ctx=on', self.tg.texts()[-1])
         self.assertIn('기록 0건', self.tg.texts()[-1])
         bot.handle_update(msg(ADMIN, '/ctx announce', chat_type='private'))
-        self.assertTrue(any(c[1] == GROUP and '/잊어' in c[2] for c in self.tg.calls if c[0] == 'send'))
+        self.assertTrue(any(c[1] == GROUP and '지우기 전에' in c[2] and '/잊어' in c[2]
+                            for c in self.tg.calls if c[0] == 'send'))
         bot.handle_update(msg(ADMIN, '/ctx off', chat_type='private'))
         self.assertIs(WorkerState.get('context_record'), False)
+
+    def test_forget_reaches_imported_history_by_reply_time(self):
+        from datetime import datetime, timezone
+        ContextEntry.objects.create(key=f'tgx:{GROUP}:500', origin='export', chat_id=GROUP, text='옛 글',
+                                    at=datetime.fromtimestamp(DATE, tz=timezone.utc))
+        forget = msg(GROUP, '/잊어', reply_to=9)
+        forget['message']['reply_to_message']['date'] = DATE
+        self.bot().handle_update(forget)
+        self.assertEqual(ContextEntry.objects.get().text, '')
+        self.assertEqual(self.tg.texts()[-1], '기록에서 지웠어요. 텔레그램 메시지는 직접 지워 주세요.')
+
+    def test_register_command_is_not_recorded(self):
+        self.on()
+        self.bot().handle_update(msg(GROUP, '/register letmein', date=DATE))
+        self.assertFalse(ContextEntry.objects.exists())

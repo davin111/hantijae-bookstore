@@ -41,3 +41,7 @@ class SummaryTest(TestCase):
         self.assertIn('최근 7일 가림: 전화 3 · 계좌 1', text)
         self.assertIn('역할 없는 사람: 검수자A(77) 2건', text)
         self.assertNotIn('대표님', text)
+
+    def test_forgotten_rows_are_not_counted(self):
+        entry('tg:1:9', NOW - timedelta(hours=1), author_id=78, author_name='검수자B', forgotten=True)
+        self.assertEqual(summary_lines(NOW), ['보관 90일 · 기록 0건'])

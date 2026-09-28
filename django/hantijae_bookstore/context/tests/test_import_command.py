@@ -55,3 +55,12 @@ class ImportCommandTest(TestCase):
         self.assertEqual(keys, {f'tgx:{GROUP}:101'})     # 100은 하루보다 오래됨, 104는 실시간 기록 뒤
         self.assertIn('기간 밖 1', out)
         self.assertIn('실시간 기록 이후 1', out)
+
+    def test_reimport_does_not_restore_forgotten_rows(self):
+        from context.record import forget
+        self.run_cmd()
+        first = ContextEntry.objects.get(key=f'tgx:{GROUP}:100')
+        forget(GROUP, 0, sent_at=first.at)
+        out = self.run_cmd()
+        self.assertEqual(ContextEntry.objects.get(key=f'tgx:{GROUP}:100').text, '')
+        self.assertNotIn('다시 돌리세요', out)

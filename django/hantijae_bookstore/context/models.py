@@ -9,7 +9,11 @@ DEFAULT_ROLE = '참여자'
 
 
 class ContextEntry(BaseModel):
-    """기록 한 줄. 일반 그룹은 메시지 번호가 계정마다 따로라 실시간(tg:)과 내보내기(tgx:) 번호 공간을 나눈다."""
+    """기록 한 줄. 일반 그룹은 메시지 번호가 계정마다 따로라 실시간(tg:)과 내보내기(tgx:) 번호 공간을 나눈다.
+
+    /잊어 로 지운 기록은 내용만 비우고 키를 남긴다(forgotten) — 같은 업데이트를 다시 받거나 내보내기를 다시 넣어도
+    되살아나지 않게. 기록을 읽는 쪽은 forgotten=False 만 쓴다.
+    """
     TELEGRAM = 'telegram'
     SOURCE_CHOICES = ((TELEGRAM, '텔레그램'),)
     LIVE, EXPORT = 'live', 'export'
@@ -33,6 +37,7 @@ class ContextEntry(BaseModel):
     media_name = models.CharField(max_length=200, blank=True)
     file_id = models.CharField(max_length=200, blank=True)
     forwarded = models.BooleanField(default=False)
+    forgotten = models.BooleanField(default=False, help_text='운영진이 지워 달라고 한 기록(내용 비움)')
 
     class Meta:
         ordering = ['at']

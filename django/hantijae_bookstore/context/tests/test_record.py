@@ -72,8 +72,23 @@ class RecordTest(TestCase):
         self.assertIsNone(apply_edit(tg_msg(message_id=99, edit_date=DATE + 60)))
         self.assertFalse(ContextEntry.objects.exists())
 
-    def test_forget(self):
-        record_telegram(tg_msg())
+    def test_forget_blanks_the_record_and_keeps_a_tombstone(self):
+        record_telegram(tg_msg(text='비밀 이야기'))
         self.assertTrue(forget(GROUP, 10))
-        self.assertFalse(ContextEntry.objects.exists())
-        self.assertFalse(forget(GROUP, 10))
+        e = ContextEntry.objects.get()
+        self.assertEqual((e.forgotten, e.text, e.media_name, e.file_id, e.redactions), (True, '', '', '', {}))
+        self.assertFalse(forget(GROUP, 11))
+
+    def test_forgotten_record_is_not_restored_by_redelivery_or_edit(self):
+        record_telegram(tg_msg(text='비밀 이야기'))
+        forget(GROUP, 10)
+        record_telegram(tg_msg(text='비밀 이야기'))
+        apply_edit(tg_msg(text='고친 비밀 이야기', edit_date=DATE + 60))
+        e = ContextEntry.objects.get()
+        self.assertEqual((e.forgotten, e.text), (True, ''))
+
+    def test_forget_falls_back_to_imported_row_by_time(self):
+        ContextEntry.objects.create(key=f'tgx:{GROUP}:500', origin='export', chat_id=GROUP, text='옛 글',
+                                    at=datetime.fromtimestamp(DATE, tz=timezone.utc))
+        self.assertTrue(forget(GROUP, 77, sent_at=datetime.fromtimestamp(DATE, tz=timezone.utc)))
+        self.assertEqual(ContextEntry.objects.get(key=f'tgx:{GROUP}:500').text, '')
