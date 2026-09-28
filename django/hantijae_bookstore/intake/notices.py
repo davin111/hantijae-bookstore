@@ -2,9 +2,10 @@
 import json
 import re
 from datetime import date, datetime, time, timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
+from django.db import transaction
 from django.utils import timezone
 
 from intake.llm import complete_json
@@ -56,9 +57,8 @@ def current_fields(notice: Notice) -> dict:
     }
 
 
-def apply_fields(notice: Notice, data: dict, now=None) -> List[str]:
-    """LLM이 정리한 값을 검증해 반영한다. 돌려주는 목록은 카드에 붙일 경고 문구."""
-    now = now or timezone.now()
+def clean_fields(data: dict, now) -> Tuple[dict, List[str]]:
+    """LLM이 정리한 값을 검증해 Notice 칸 값으로 바꾼다. 돌려주는 목록은 카드에 붙일 경고 문구."""
     warnings = []
     message = ' '.join(str(data.get('message') or '').split())
     if not message:
@@ -81,13 +81,31 @@ def apply_fields(notice: Notice, data: dict, now=None) -> List[str]:
         ends_at = starts_at + timedelta(days=DEFAULT_DAYS)
     if len(message) > MAX_LEN:
         warnings.append(f'문구가 {MAX_LEN}자를 넘어 휴대폰에서 두 줄이 될 수 있어요.')
-    notice.message = message[:200]
-    notice.link_url = url
-    notice.link_label = (str(data.get('link_label') or '').strip() or '자세히 보기')[:30]
-    notice.starts_at, notice.ends_at = starts_at, ends_at
+    return {'message': message[:200], 'link_url': url,
+            'link_label': (str(data.get('link_label') or '').strip() or '자세히 보기')[:30],
+            'starts_at': starts_at, 'ends_at': ends_at}, warnings
+
+
+def apply_fields(notice: Notice, data: dict, now=None) -> List[str]:
+    """아직 첫 화면에 없는 알림(내용 기다리는 중·미리보기)을 그 자리에서 고친다."""
+    fields, warnings = clean_fields(data, now or timezone.now())
+    for name, value in fields.items():
+        setattr(notice, name, value)
     if notice.state == Notice.ASKING:
         notice.state = Notice.DRAFT
     notice.save()
+    return warnings
+
+
+def propose(notice: Notice, data: dict, now=None) -> List[str]:
+    """게시 중인 알림은 수정안으로만 담아 둔다. 첫 화면은 apply_pending 전까지 그대로다."""
+    now = now or timezone.now()
+    fields, warnings = clean_fields(data, now)
+    if fields['starts_at'] <= now:
+        # 이미 떠 있는 알림이라 시작일을 '지금'으로 당기지 않는다 (문구만 고쳐도 기간이 바뀐 것처럼 보이지 않게)
+        fields['starts_at'] = notice.starts_at
+    notice.pending = Notice(**fields).snapshot()
+    notice.save(update_fields=['pending', 'updated_at'])
     return warnings
 
 
@@ -95,10 +113,51 @@ def fill_from_text(notice: Notice, text: str, llm, now=None) -> List[str]:
     now = now or timezone.now()
     user = f'운영진이 적은 글:\n{text}'
     if notice.state != Notice.ASKING:
+        base = notice.proposal() if notice.pending else notice   # 수정안이 있으면 거기서 이어 고친다
         user += ('\n\n현재 알림(이 내용을 바탕으로 요청한 부분만 바꿔 주세요):\n'
-                 + json.dumps(current_fields(notice), ensure_ascii=False))
+                 + json.dumps(current_fields(base), ensure_ascii=False))
     data = complete_json(llm, notice_system(now.astimezone(KST).date()), user)
+    if notice.state == Notice.POSTED:
+        return propose(notice, data, now)
     return apply_fields(notice, data, now)
+
+
+def apply_pending(notice_id: int, now=None) -> Notice:
+    """수정안을 첫 화면에 반영한다. 버튼을 두 번 눌러도 한 번만 반영되게 행을 잠근다."""
+    now = now or timezone.now()
+    with transaction.atomic():
+        notice = Notice.objects.select_for_update().filter(pk=notice_id).first()
+        if notice is None or notice.state != Notice.POSTED or not notice.pending:
+            raise NoticeError('이미 처리된 알림이에요.')
+        # at 은 되돌리기 버튼에 싣는 표식 — 그 뒤에 또 반영하면 옛 버튼으로는 되돌리지 못한다
+        notice.previous = {'values': notice.snapshot(), 'at': int(now.timestamp() * 1000)}
+        notice.set_values(notice.pending)
+        notice.pending = None
+        notice.save()
+    return notice
+
+
+def discard_pending(notice_id: int) -> Notice:
+    notice = Notice.objects.filter(pk=notice_id).first()
+    if notice is None or not notice.pending:
+        raise NoticeError('이미 처리된 알림이에요.')
+    notice.pending = None
+    notice.save(update_fields=['pending', 'updated_at'])
+    return notice
+
+
+def undo(notice_id: int, at: Optional[int]) -> Notice:
+    with transaction.atomic():
+        notice = Notice.objects.select_for_update().filter(pk=notice_id).first()
+        previous = notice.previous if notice else None
+        if not previous:
+            raise NoticeError('이미 되돌렸어요.')
+        if previous['at'] != at:
+            raise NoticeError('그 뒤에 알림이 또 바뀌어서 이 버튼으로는 되돌릴 수 없어요.')
+        notice.set_values(previous['values'])
+        notice.previous = None
+        notice.save()
+    return notice
 
 
 def set_state(notice_id: int, state: str) -> Notice:
@@ -106,7 +165,9 @@ def set_state(notice_id: int, state: str) -> Notice:
     if notice is None or notice.state not in TRANSITIONS[state]:
         raise NoticeError('이미 처리된 알림이에요.')
     notice.state = state
-    notice.save(update_fields=['state', 'updated_at'])
+    if state == Notice.REMOVED:
+        notice.pending = None   # 내린 알림의 수정안은 버린다 (다시 띄우면 그때 값으로)
+    notice.save(update_fields=['state', 'pending', 'updated_at'])
     return notice
 
 

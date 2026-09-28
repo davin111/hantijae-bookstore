@@ -354,6 +354,18 @@ class Bot:
             notice = notices.set_state(args[0], Notice.REMOVED)
             self._refresh_notice(notice)
             return '취소했어요' if action == 'ntdel' else '내렸어요'
+        if action == 'ntok':
+            notice = notices.apply_pending(args[0])
+            self._refresh_notice(notice)
+            self.tg.send_message(chat_id, f'✅ 첫 화면 알림을 바꿨어요: {settings.SITE_URL}', reply_to=notice.message_id,
+                                 buttons=messages.notice_undo_buttons(notice))
+            return '반영했어요'
+        if action == 'ntno':
+            self._refresh_notice(notices.discard_pending(args[0]))
+            return '취소했어요'
+        if action == 'ntundo':
+            self._refresh_notice(notices.undo(args[0], args[1] if len(args) > 1 else None))
+            return '되돌렸어요'
         return ''
 
     # ---- 확인 부탁 ----

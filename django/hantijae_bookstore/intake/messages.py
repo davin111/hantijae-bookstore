@@ -131,23 +131,47 @@ def _kday(dt):
     return f'{d.month}월 {d.day}일'
 
 
-def notice_card(notice, warnings=(), head=None):
-    heads = {Notice.DRAFT: '📣 알림 띠 미리보기', Notice.POSTED: '📣 첫 화면에 떠 있는 알림', Notice.REMOVED: '🗑 내린 알림'}
-    lines = [head or heads.get(notice.state, '📣 알림 띠'),
-             f'{notice.message} · {notice.link_label} →' if notice.link_url else notice.message]
+def _notice_body(notice):
+    """[문구, 기간, 연결] 세 줄."""
     if notice.ends_at:
-        lines.append(f'기간: {_kday(notice.starts_at)} ~ {_kday(notice.ends_at - timedelta(seconds=1))}')
+        period = f'{_kday(notice.starts_at)} ~ {_kday(notice.ends_at - timedelta(seconds=1))}'
     else:
-        lines.append(f'기간: {_kday(notice.starts_at)}부터 내릴 때까지')
-    lines.append(f'연결: {notice.link_url}' if notice.link_url else '연결: 없음')
+        period = f'{_kday(notice.starts_at)}부터 내릴 때까지'
+    return [f'{notice.message} · {notice.link_label} →' if notice.link_url else notice.message,
+            f'기간: {period}', f'연결: {notice.link_url}' if notice.link_url else '연결: 없음']
+
+
+def notice_card(notice, warnings=(), head=None):
+    if notice.state == Notice.POSTED and notice.pending:
+        return _proposal_card(notice, warnings)
+    heads = {Notice.DRAFT: '📣 알림 띠 미리보기', Notice.POSTED: '📣 첫 화면에 떠 있는 알림', Notice.REMOVED: '🗑 내린 알림'}
+    lines = [head or heads.get(notice.state, '📣 알림 띠')] + _notice_body(notice)
     lines += [f'⚠️ {w}' for w in warnings]
     if notice.state != Notice.REMOVED:
         lines.append('고칠 내용은 이 메시지에 답장으로 적어 주세요.')
     return '\n'.join(lines)
 
 
+def _proposal_card(notice, warnings):
+    """게시 중 알림의 수정안. 바뀌는 줄만 '지금 첫 화면'으로 함께 보여 준다."""
+    new, live = _notice_body(notice.proposal()), _notice_body(notice)
+    lines = ['📣 이렇게 바꿀까요? [반영]을 누르기 전까지 첫 화면은 그대로예요.'] + new
+    lines += [f'⚠️ {w}' for w in warnings]
+    changed = [old for old, line in zip(live, new) if old != line]
+    if changed:
+        lines += ['', '지금 첫 화면:'] + changed
+    lines.append('더 고칠 내용은 이 메시지에 답장으로 적어 주세요.')
+    return '\n'.join(lines)
+
+
+def notice_undo_buttons(notice):
+    return keyboard([[('↩️ 되돌리기', f"ntundo:{notice.id}:{notice.previous['at']}")]])
+
+
 def notice_buttons(notice, now=None):
     now = now or timezone.now()
+    if notice.state == Notice.POSTED and notice.pending:
+        return keyboard([[('✅ 반영', f'ntok:{notice.id}'), ('취소', f'ntno:{notice.id}')]])
     if notice.state == Notice.DRAFT:
         return keyboard([[('✅ 게시', f'ntpub:{notice.id}'), ('취소', f'ntdel:{notice.id}')]])
     if notice.state == Notice.POSTED:

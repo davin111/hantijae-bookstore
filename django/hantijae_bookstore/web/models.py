@@ -1,6 +1,10 @@
+import copy
+from datetime import datetime
+
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from core.models import BaseModel
 
@@ -27,8 +31,13 @@ class Notice(BaseModel):
     chat_id = models.BigIntegerField(null=True, blank=True)
     message_id = models.BigIntegerField(null=True, blank=True, help_text='봇 대화에서 답장받을 메시지')
     created_by = models.CharField(max_length=100, blank=True)
+    # 게시 중인 알림을 봇에서 고치면 여기에 먼저 담고, [반영]을 눌러야 위 칸으로 옮긴다
+    pending = models.JSONField(null=True, blank=True, help_text='봇: 반영을 기다리는 수정안 (snapshot 형식)')
+    previous = models.JSONField(null=True, blank=True, help_text='봇: 마지막 반영 전 값 {values, at} — 되돌리기용')
 
     objects = NoticeQuerySet.as_manager()
+
+    VALUE_FIELDS = ('message', 'link_url', 'link_label', 'starts_at', 'ends_at')
 
     class Meta:
         ordering = ('-id',)
@@ -36,6 +45,22 @@ class Notice(BaseModel):
 
     def __str__(self):
         return self.message or f'알림 {self.pk}'
+
+    def snapshot(self):
+        """첫 화면에 보이는 값만 JSON으로 (수정안·되돌리기 저장용)."""
+        snap = {f: getattr(self, f) for f in self.VALUE_FIELDS}
+        return {f: (v.isoformat() if isinstance(v, datetime) else v) for f, v in snap.items()}
+
+    def set_values(self, snap):
+        for f in self.VALUE_FIELDS:
+            v = snap.get(f)
+            setattr(self, f, parse_datetime(v) if f.endswith('_at') and v else v)
+
+    def proposal(self):
+        """수정안을 입힌 사본 — 저장하지 않고 미리보기 카드에만 쓴다."""
+        view = copy.copy(self)
+        view.set_values(self.pending)
+        return view
 
 
 def current_notice(now=None):
