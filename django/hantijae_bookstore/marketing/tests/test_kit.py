@@ -3,6 +3,9 @@ from types import SimpleNamespace
 
 from django.test import TestCase, override_settings
 
+from intake.llm import LLMError
+from intake.models import WorkerState
+
 from marketing.hooks import seed
 from marketing.kit import blog_has, build_kit, build_pending, links_text, missing_stores, pending_books
 from marketing.models import BookProfile, Draft, Proposal
@@ -94,3 +97,41 @@ class KitTest(TestCase):
         self.assertEqual(build_pending(FakeLLM(REPLY), self.today, posts=[]), [])
         self.assertFalse(Proposal.objects.exists())
         self.assertEqual(list(pending_books(self.today + timedelta(days=1))), [self.book])
+
+
+@override_settings(SITE_URL='https://hantijae-bookstore.com')
+class KitFailureTest(TestCase):
+    """사이드카가 죽었을 때 같은 책을 10분마다 붙잡고 있지 않게 한다."""
+
+    def setUp(self):
+        self.book = make_book(description=DESC)
+        self.today = date(2026, 9, 28)
+
+    def test_failed_build_is_recorded_and_not_retried_the_same_day(self):
+        llm = FakeLLM('not json')
+        with self.assertRaises(LLMError):
+            build_pending(llm, self.today, posts=[])
+        self.assertEqual(WorkerState.get('marketing_kit_failures'),
+                         {str(self.book.id): {'day': '2026-09-28', 'count': 1}})
+        calls = len(llm.calls)
+        self.assertEqual(build_pending(llm, self.today, posts=[]), [])
+        self.assertEqual(len(llm.calls), calls)
+
+    def test_failed_build_retried_next_day_and_success_clears(self):
+        with self.assertRaises(LLMError):
+            build_pending(FakeLLM('not json'), self.today, posts=[])
+        [p] = build_pending(FakeLLM(REPLY), self.today + timedelta(days=1), posts=[])
+        self.assertEqual(p.book, self.book)
+        self.assertEqual(WorkerState.get('marketing_kit_failures'), {})
+
+    def test_third_failure_notifies_once_and_stops_retrying(self):
+        notes, llm = [], FakeLLM('not json')
+        for i in range(4):
+            try:
+                build_pending(llm, self.today + timedelta(days=i), posts=[], notify=notes.append)
+            except LLMError:
+                pass
+        self.assertEqual(WorkerState.get('marketing_kit_failures')[str(self.book.id)]['count'], 3)
+        self.assertEqual(notes, [f'⚠️ 『{self.book.title}』 홍보 묶음을 3번 만들지 못했어요. '
+                                 f'필요하면 /kit {self.book.title[:12]} 로 직접 만들어 주세요'])
+        self.assertEqual(len(llm.calls), 6)  # 3번 × (첫 호출 + JSON 다시 요청)

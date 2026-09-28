@@ -80,6 +80,23 @@ class MarketingBotTest(TestCase):
         quiet.refresh_from_db()
         self.assertIsNotNone(quiet.sent_at)
 
+    def test_one_failing_kit_send_does_not_block_the_next(self):
+        WorkerState.put('marketing_mode', 'live')
+        first, second = kit(self.book), kit(make_book(title='책0', isbn='979-11-00000-50-1', author=None))
+        send = self.tg.send_message
+
+        def flaky(chat, text, reply_to=None, buttons=None):
+            if self.book.title in text:
+                raise RuntimeError('telegram 400')
+            return send(chat, text, reply_to=reply_to, buttons=buttons)
+        self.tg.send_message = flaky
+        with self.assertLogs('intake', level='ERROR'):
+            self.assertEqual(self.m().send_pending_kits(DAY), 1)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual((first.sent_at, first.status), (None, Proposal.PROPOSED))
+        self.assertIsNotNone(second.sent_at)
+
     def test_kit_card_not_sent_in_quiet_hours(self):
         WorkerState.put('marketing_mode', 'live')
         kit(self.book)

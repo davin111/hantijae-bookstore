@@ -1,5 +1,6 @@
 """검수 방·관리자 방에서의 마케팅 비서. intake.Bot이 명령·콜백·답장을 이 객체로 넘긴다(host = intake.Bot)."""
 import io
+import logging
 import re
 from datetime import date, datetime
 
@@ -19,6 +20,7 @@ from marketing.text import fix_title_marks, title_key
 from marketing.timeutil import KST, in_quiet_hours, kst_today, week_start
 from web.blog import fetch_rss, parse_rss
 
+log = logging.getLogger('intake')
 COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch')
 MODES = ('off', 'admin_only', 'live')
 KIT_DAILY_CAP = 2
@@ -134,7 +136,11 @@ class Marketing:
                    .select_related('book').order_by('id')[:max(room, 0)])
         n = 0
         for p in pending:
-            self._mark_sent(p, chat, self.send_kit(p, chat), now)
+            try:
+                self._mark_sent(p, chat, self.send_kit(p, chat), now)
+            except Exception:  # 카드 하나가 실패해도 나머지는 보낸다. 실패한 것은 다음 바퀴에 다시 해 본다
+                log.exception('marketing kit %s send failed', p.id)
+                continue
             n += 1
         return n
 

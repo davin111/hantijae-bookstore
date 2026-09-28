@@ -54,6 +54,13 @@ def _sales_block(deps, today, now):
                                   f'알라딘 페이지 형식이 바뀌었는지 확인해 주세요')
 
 
+def _build_kits(deps, m, today):
+    """만들 책이 있을 때만 블로그 RSS를 읽는다."""
+    if not kit.buildable_books(today):
+        return []
+    return kit.build_pending(deps.llm, today, m.blog_posts(), notify=deps.bot.notify_admin)
+
+
 def _run_due(deps, now):
     m = deps.bot.marketing
     if m.mode() == 'off':
@@ -86,7 +93,7 @@ def _run_due(deps, now):
     last = WorkerState.get('marketing_last_kit_check')
     if not last or (now - datetime.fromisoformat(last)).total_seconds() >= KIT_CHECK_SECONDS:
         WorkerState.put('marketing_last_kit_check', now.isoformat())
-        _guard(deps, 'kit', now, lambda: kit.build_pending(deps.llm, today, m.blog_posts()))
+        _guard(deps, 'kit', now, lambda: _build_kits(deps, m, today))
     _guard(deps, 'kit_send', now, lambda: m.send_pending_kits(now))
 
 

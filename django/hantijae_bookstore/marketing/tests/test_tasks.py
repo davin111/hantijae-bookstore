@@ -11,12 +11,13 @@ from marketing.timeutil import KST
 
 class FakeMarketing:
     def __init__(self, mode):
-        self._mode, self.kits_sent, self.briefs_sent = mode, 0, []
+        self._mode, self.kits_sent, self.briefs_sent, self.blog_reads = mode, 0, [], 0
 
     def mode(self):
         return self._mode
 
     def blog_posts(self):
+        self.blog_reads += 1
         return []
 
     def send_pending_kits(self, now):
@@ -92,7 +93,8 @@ class RunDueTest(TestCase):
         self.assertEqual(len([n for n in deps.bot.notes if '브리핑' in n]), 1)
         self.assertEqual(deps.bot.marketing.briefs_sent, [])
 
-    def test_kit_check_every_ten_minutes_and_error_notified_once(self, sales_, fund_, news_, brief_, kit_):
+    @mock.patch('marketing.tasks.kit.buildable_books', return_value=['책'])
+    def test_kit_check_every_ten_minutes_and_error_notified_once(self, buildable_, sales_, fund_, news_, brief_, kit_):
         deps = Deps()
         kit_.side_effect = RuntimeError('sidecar down')
         t = datetime(2026, 9, 29, 12, 0, tzinfo=KST)
@@ -101,6 +103,17 @@ class RunDueTest(TestCase):
         self.assertEqual(kit_.call_count, 2)
         self.assertEqual(len([n for n in deps.bot.notes if '마케팅 kit 실패' in n]), 1)
         self.assertEqual(deps.bot.marketing.kits_sent, 3)
+
+    def test_kit_build_reads_blog_only_when_a_book_is_buildable(self, sales_, fund_, news_, brief_, kit_):
+        deps = Deps()
+        t = datetime(2026, 9, 29, 12, 0, tzinfo=KST)
+        tasks.run_due(deps, t)
+        self.assertEqual(deps.bot.marketing.blog_reads, 0)
+        kit_.assert_not_called()
+        with mock.patch('marketing.tasks.kit.buildable_books', return_value=['책']):
+            tasks.run_due(deps, t.replace(minute=10))
+        self.assertEqual(deps.bot.marketing.blog_reads, 1)
+        self.assertEqual(kit_.call_args.kwargs['notify'], deps.bot.notify_admin)
 
     def test_run_due_never_raises_and_reports_once(self, sales_, fund_, news_, brief_, kit_):
         deps = Deps()

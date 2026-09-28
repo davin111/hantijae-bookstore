@@ -5,6 +5,7 @@ from django.conf import settings
 
 from books.models import Book
 from intake.llm import complete_json
+from intake.models import WorkerState
 from marketing.hooks import upcoming
 from marketing.models import BookProfile, Draft, Proposal
 from marketing.prompts import KIT_SYSTEM, build_kit_user
@@ -12,6 +13,7 @@ from marketing.text import fix_title_marks, foreign_numbers, title_key, unverifi
 from web.presenters import UNTRUSTED_SHORTLINK, authors_of, credit_line, store_links
 
 NEW_BOOK_DAYS = 60
+FAILURES_KEY, MAX_FAILURES = 'marketing_kit_failures', 3  # {"<책 번호>": {"day": KST 날짜, "count": 실패 횟수}}
 LINK_ORDER = (('kyobo', '교보문고'), ('aladin', '알라딘'), ('yes24', '예스24'))
 
 
@@ -103,6 +105,42 @@ def build_kit(book, llm, posts, today):
     return p
 
 
-def build_pending(llm, today, posts, limit=1):
-    """LLM 호출이 몇 분 걸리므로 한 번에 limit권만 만든다(그동안 워커가 텔레그램을 못 본다)."""
-    return [build_kit(book, llm, posts, today) for book in pending_books(today)[:limit]]
+def buildable_books(today):
+    """만들 차례인 책. 오늘 이미 실패했거나 3번 실패한 책은 빼서, 사이드카가 죽어도 10분마다 몇 분씩 묶이지 않게 한다."""
+    failures = WorkerState.get(FAILURES_KEY) or {}
+    out = []
+    for book in pending_books(today):
+        f = failures.get(str(book.id))
+        if f and (f['day'] == today.isoformat() or f['count'] >= MAX_FAILURES):
+            continue
+        out.append(book)
+    return out
+
+
+def _record_failure(book, today, notify):
+    failures = WorkerState.get(FAILURES_KEY) or {}
+    count = failures.get(str(book.id), {}).get('count', 0) + 1
+    failures[str(book.id)] = {'day': today.isoformat(), 'count': count}
+    WorkerState.put(FAILURES_KEY, failures)
+    if count == MAX_FAILURES:
+        notify(f'⚠️ 『{book.title}』 홍보 묶음을 3번 만들지 못했어요. 필요하면 /kit {book.title[:12]} 로 직접 만들어 주세요')
+
+
+def _clear_failure(book):
+    failures = WorkerState.get(FAILURES_KEY) or {}
+    if failures.pop(str(book.id), None) is not None:
+        WorkerState.put(FAILURES_KEY, failures)
+
+
+def build_pending(llm, today, posts, limit=1, notify=lambda text: None):
+    """LLM 호출이 몇 분 걸리므로 한 번에 limit권만 만든다(그동안 워커가 텔레그램을 못 본다).
+    실패는 책마다 적어 두고 다시 올린다(_guard가 하루 한 번 알린다)."""
+    made = []
+    for book in buildable_books(today)[:limit]:
+        try:
+            made.append(build_kit(book, llm, posts, today))
+        except Exception:
+            _record_failure(book, today, notify)
+            raise
+        _clear_failure(book)
+    return made
