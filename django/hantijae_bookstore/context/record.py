@@ -1,0 +1,76 @@
+"""텔레그램 메시지(Bot API 형태)를 가린 기록으로 남긴다. 켜짐 여부와 검수 방인지는 부르는 쪽(intake 봇)이 판단한다."""
+from collections import Counter
+from datetime import datetime, timezone
+
+from context.models import DEFAULT_ROLE, ContextEntry
+from context.redact import redact
+from context.roles import resolve_role
+
+# animation 메시지에는 document 도 같이 오고, venue 메시지에는 location 도 같이 온다 → 순서대로 먼저 맞는 것
+MEDIA_ORDER = ('animation', 'photo', 'video', 'video_note', 'voice', 'audio', 'document', 'sticker', 'contact',
+               'venue', 'location', 'poll')
+FILE_KINDS = ('animation', 'video', 'video_note', 'voice', 'audio', 'document')
+FORWARD_KEYS = ('forward_origin', 'forward_from', 'forward_from_chat', 'forward_sender_name')
+
+
+def _key(chat_id, message_id):
+    return f'tg:{chat_id}:{message_id}'
+
+
+def _ts(seconds):
+    return datetime.fromtimestamp(seconds, tz=timezone.utc)
+
+
+def _author(msg):
+    user = msg.get('from')
+    if user:
+        name = ' '.join(p for p in (user.get('first_name', ''), user.get('last_name', '')) if p)
+        return user.get('id'), name, '봇' if user.get('is_bot') else resolve_role(user.get('id'), name)
+    return None, (msg.get('sender_chat') or {}).get('title', ''), DEFAULT_ROLE
+
+
+def _content(msg):
+    """본문·첨부 칸. 새로 기록할 때와 수정을 반영할 때 같이 쓴다. 연락처 번호는 어디에도 남기지 않는다."""
+    kind = next((k for k in MEDIA_ORDER if k in msg), '')
+    text = msg['poll'].get('question', '') if kind == 'poll' else (msg.get('text') or msg.get('caption') or '')
+    text, counts = redact(text)
+    name, file_id = '', ''
+    if kind == 'photo':
+        file_id = msg['photo'][-1].get('file_id', '')
+    elif kind in FILE_KINDS:
+        file_id = msg[kind].get('file_id', '')
+        name, name_counts = redact(msg[kind].get('file_name', ''))
+        counts = dict(Counter(counts) + Counter(name_counts))
+    return {'text': text, 'redactions': counts, 'media': 'location' if kind == 'venue' else kind,
+            'media_name': name[:200], 'file_id': file_id[:200]}
+
+
+def record_telegram(msg):
+    """새 메시지를 기록한다. 워커가 같은 업데이트를 다시 받아도 한 줄만 남는다."""
+    chat_id, message_id = msg['chat']['id'], msg['message_id']
+    author_id, name, role = _author(msg)
+    reply = msg.get('reply_to_message') or {}
+    entry, _ = ContextEntry.objects.get_or_create(key=_key(chat_id, message_id), defaults=dict(
+        source=ContextEntry.TELEGRAM, origin=ContextEntry.LIVE, chat_id=chat_id, message_id=message_id,
+        reply_to_id=reply.get('message_id'), reply_to_bot=bool((reply.get('from') or {}).get('is_bot')),
+        at=_ts(msg['date']), author_id=author_id, author_name=name[:100], role=role,
+        forwarded=any(k in msg for k in FORWARD_KEYS), **_content(msg)))
+    return entry
+
+
+def apply_edit(msg):
+    """수정된 메시지를 반영한다. 기록에 없던 메시지(기록을 켜기 전 등)는 무시한다."""
+    entry = ContextEntry.objects.filter(key=_key(msg['chat']['id'], msg['message_id'])).first()
+    if entry is None:
+        return None
+    for field, value in _content(msg).items():
+        setattr(entry, field, value)
+    entry.edited_at = _ts(msg.get('edit_date') or msg['date'])
+    entry.save()
+    return entry
+
+
+def forget(chat_id, message_id):
+    """운영진이 /잊어 로 부탁한 메시지의 기록을 지운다. 지운 게 있으면 True."""
+    deleted, _ = ContextEntry.objects.filter(key=_key(chat_id, message_id)).delete()
+    return deleted > 0
