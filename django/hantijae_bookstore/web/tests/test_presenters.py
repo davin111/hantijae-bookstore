@@ -65,6 +65,20 @@ class StoreLinkTest(SimpleTestCase):
         b = book(isbn='9791190178600', yes24_url='https://url.kr/abcd12')
         self.assertEqual(p.store_url(b, 'yes24'), 'https://www.yes24.com/product/search?domain=ALL&query=9791190178600')
 
+    def test_store_links_ignore_third_party_shortlinks(self):
+        # bit.ly 는 브라우저에 7초 미리보기 페이지를, kyobo.link 는 도메인이 없어 열리지 않는다(2026-09-29 확인)
+        b = book(isbn='9791190178600', aladin_url='https://bit.ly/3ed373l', kyobo_url='http://kyobo.link/g2h0',
+                 yes24_url='https://BIT.LY/abc')
+        self.assertEqual(p.store_url(b, 'aladin'),
+                         'https://www.aladin.co.kr/search/wsearchresult.aspx?SearchTarget=Book&SearchWord=9791190178600')
+        self.assertEqual(p.store_url(b, 'kyobo'),
+                         'https://search.kyobobook.co.kr/search?keyword=9791190178600&gbCode=TOT&target=total')
+        self.assertEqual(p.store_url(b, 'yes24'), 'https://www.yes24.com/product/search?domain=ALL&query=9791190178600')
+
+    def test_store_links_keep_store_owned_shortlinks(self):
+        # aladin.kr 은 알라딘이 직접 운영하는 단축 주소라 바로 상품 페이지로 간다
+        self.assertEqual(p.store_url(book(aladin_url='http://aladin.kr/p/Pybh6'), 'aladin'), 'http://aladin.kr/p/Pybh6')
+
     def test_store_links_without_isbn_or_saved_urls_is_empty(self):
         self.assertEqual(p.store_links(book()), [])
         self.assertEqual([l.store for l in p.store_links(book(aladin_url='https://aladin.kr/p/X'))], ['aladin'])

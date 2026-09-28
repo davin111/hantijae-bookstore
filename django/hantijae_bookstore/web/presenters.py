@@ -19,8 +19,10 @@ STORE_SEARCH_URL = {
     'yes24': 'https://www.yes24.com/product/search?domain=ALL&query={isbn}',
     'kyobo': 'https://search.kyobobook.co.kr/search?keyword={isbn}&gbCode=TOT&target=total',
 }
-# 저장된 링크 중 URL.KR 단축 링크는 만료된 것이 있어 믿지 않는다
-EXPIRED_SHORTLINK = re.compile(r'^https?://(www\.)?url\.kr/', re.I)
+# 제3자 단축 링크는 믿지 않는다(2026-09-29 확인): bit.ly 는 브라우저에 7초 미리보기 페이지를 끼우고,
+# url.kr 은 만료됐고, kyobo.link 는 도메인이 없어졌다. 서점이 직접 운영하는 aladin.kr 은 바로 상품 페이지로 가므로 허용.
+UNTRUSTED_SHORTLINK = re.compile(
+    r'^https?://(www\.)?(bit\.ly|url\.kr|kyobo\.link|han\.gl|me2\.do|vo\.la|tinyurl\.com|goo\.gl)/', re.I)
 
 Credit = Sequence[Tuple[str, int]]
 
@@ -84,7 +86,7 @@ class StoreLink:
 
 def store_url(book, store: str) -> Optional[str]:
     saved = (getattr(book, f'{store}_url', '') or '').strip()
-    if saved and not EXPIRED_SHORTLINK.match(saved):
+    if saved and not UNTRUSTED_SHORTLINK.match(saved):
         return saved
     code = isbn13(book.isbn)
     return STORE_SEARCH_URL[store].format(isbn=code) if code else None
