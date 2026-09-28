@@ -16,6 +16,7 @@ from intake.extraction import AmbiguousPressRelease, NoPressRelease, run_extract
 from intake.llm import LLMAuthError, LLMError
 from intake.models import IntakeSource, WorkerState
 from intake.notices import KST
+from marketing import tasks as marketing_tasks
 
 log = logging.getLogger('intake')
 
@@ -135,6 +136,7 @@ def run_iteration(deps, now=None, sleep=time.sleep):
             except Exception as e:
                 log.exception('context purge failed')
                 deps.bot.notify_admin(f'⚠️ 대화 기록 정리 오류: {type(e).__name__}: {e}')
+        marketing_tasks.run_due(deps, now)
         run_pending(deps)
     except Exception as e:
         log.exception('worker iteration failed')

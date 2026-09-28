@@ -16,6 +16,7 @@ from intake.llm import LLMError
 from intake.models import BookDraft, FundingCampaign, IntakeSource, PendingPatch, ReviewItem, TelegramChat, WorkerState
 from intake.notion import fill_notion_row
 from intake.publish import PublishBlocked, publish
+from marketing.bot import COMMANDS as MARKETING_COMMANDS, Marketing
 from web.models import Notice
 
 log = logging.getLogger('intake')
@@ -23,7 +24,7 @@ FOLDER_RE = re.compile(r'drive\.google\.com/(?:drive/(?:u/\d+/)?folders/|open\?i
 ADMIN_COMMANDS = ('/status', '/mode', '/drive', '/notion', '/baseline', '/ingest', '/retry', '/fund', '/ctx')
 DONE_WORDS = ('완료', '끝', '다 보냈어요', '다보냈어요')
 MAX_TG_FILE = 20 * 1024 * 1024
-REPLY_GUIDE = '이 메시지에는 답장으로 고칠 수 있는 게 없어요. 책 초안(📕)이나 알림 띠 메시지에 답장해 주세요.'
+REPLY_GUIDE = '이 메시지에는 답장으로 고칠 수 있는 게 없어요. 책 초안(📕), 알림 띠, 홍보 초안 메시지에 답장해 주세요.'
 FORGET_COMMANDS = ('/잊어', '/forget')
 UNRECORDED_COMMANDS = FORGET_COMMANDS + ('/register', '/start')   # /register 에는 초대 코드가 붙는다
 CONTEXT_ANNOUNCE = ('이제부터 이 방 대화를 봇이 기록해요. 전화번호·계좌·비밀번호·주소는 가린 채 저장하고, 90일이 지나면 지워요. '
@@ -57,6 +58,7 @@ class Bot:
         self.tg, self.llm, self.notion, self.drive_ops = tg, llm, notion, drive_ops
         self.config = config or settings.INTAKE
         self.fund_get = fund_get   # 테스트에서 가짜 페이지를 넣는다. 기본은 funding.http_get
+        self.marketing = Marketing(tg, llm, self)
 
     # ---- 방 ----
     def chat_kind(self, chat_id):
@@ -167,6 +169,8 @@ class Bot:
             return self.forget_context(chat_id, msg)
         if kind == TelegramChat.ADMIN and cmd in ADMIN_COMMANDS:
             return self.admin_command(chat_id, cmd, arg)
+        if kind == TelegramChat.ADMIN and cmd in MARKETING_COMMANDS:
+            return self.marketing.admin_command(chat_id, cmd, arg)
         if cmd == '/notice':
             return self.start_notice(chat_id, msg['message_id'], actor)
         if cmd == '/newbook':
@@ -183,6 +187,8 @@ class Bot:
                 .exclude(state=Notice.REMOVED).first()
             if notice and text:
                 return self.on_notice_reply(notice, msg, text, actor)
+            if self.marketing.owns_message(chat_id, reply['message_id']):
+                return self.marketing.handle_reply(chat_id, reply['message_id'], msg, text, actor)
             draft = BookDraft.objects.filter(chat_id=chat_id, message_id=reply['message_id']).select_related('book').first()
             if draft is None:
                 patch = PendingPatch.objects.filter(message_id=reply['message_id'], draft__chat_id=chat_id) \
@@ -352,6 +358,9 @@ class Bot:
         chat_id = cq['message']['chat']['id']
         if not self.chat_kind(chat_id):
             return self.tg.answer_callback(cq['id'])
+        if (cq.get('data') or '').startswith('mk:'):
+            actor = cq.get('from', {}).get('first_name', '')
+            return self.tg.answer_callback(cq['id'], self.marketing.handle_callback(cq['data'], chat_id, cq, actor) or '')
         action, args = messages.parse_callback(cq.get('data'))
         try:
             text = self.dispatch_callback(action, args, chat_id, cq, cq.get('from', {}).get('first_name', '')) or ''

@@ -16,7 +16,7 @@ from intake.models import BookDraft, IntakeSource, PendingPatch, TelegramChat, W
 WORK = tempfile.mkdtemp()
 CONFIG = {'TELEGRAM_INVITE_CODE': 'letmein', 'WORK_DIR': WORK, 'NOTION_DATA_SOURCE_ID': 'ds'}
 ADMIN, GROUP = 100, -200
-GUIDE = '이 메시지에는 답장으로 고칠 수 있는 게 없어요. 책 초안(📕)이나 알림 띠 메시지에 답장해 주세요.'
+GUIDE = '이 메시지에는 답장으로 고칠 수 있는 게 없어요. 책 초안(📕), 알림 띠, 홍보 초안 메시지에 답장해 주세요.'
 
 
 class FakeTG:
@@ -158,6 +158,24 @@ class BotTest(TestCase):
         self.bot(drive_ops=ops).handle_update(
             msg(ADMIN, 'https://drive.google.com/drive/folders/1AbCdEfGhIjK', chat_type='private'))
         ops.ingest.assert_called_once_with('1AbCdEfGhIjK')
+
+    def test_marketing_admin_command_is_routed(self):
+        self.bot().handle_update(msg(ADMIN, '/mk admin_only', chat_type='private'))
+        self.assertEqual(WorkerState.get('marketing_mode'), 'admin_only')
+
+    def test_mk_callback_is_delegated(self):
+        from marketing.models import Draft, Proposal
+        p = Proposal.objects.create(kind=Proposal.KIT, book=self.draft.book, headline='h')
+        d = Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='인스타 본문')
+        self.bot().handle_update(cb(GROUP, f'mk:v:{d.id}'))
+        self.assertIn('인스타 본문', self.tg.texts()[0])
+
+    def test_reply_to_marketing_draft_routes_to_rewrite(self):
+        from marketing.models import Draft, Proposal
+        p = Proposal.objects.create(kind=Proposal.KIT, book=self.draft.book, headline='h')
+        Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='원래 글', chat_id=GROUP, message_id=4343)
+        self.bot({'title': '', 'body': '고친 글', 'note': '고쳤어요'}).handle_update(msg(GROUP, '짧게요', reply_to=4343))
+        self.assertTrue(Draft.objects.filter(body='고친 글', version=2).exists())
 
 
 class StrictFakeTG(FakeTG):

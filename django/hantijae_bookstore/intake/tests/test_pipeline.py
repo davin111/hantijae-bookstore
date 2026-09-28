@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta, timezone as dt_timezone
 from unittest import mock
 
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from PIL import Image
 
 from books.models import Book, Category, Series
@@ -146,3 +147,12 @@ class ContextPurgeTest(TestCase):
         self.assertEqual(pending.call_count, 2)
         self.assertIn('대화 기록 정리', bot.notify_admin.call_args.args[0])
         self.assertEqual(WorkerState.get('last_context_purge'), '2026-09-29')
+
+
+class MarketingHookTest(TestCase):
+    def test_run_iteration_calls_marketing_run_due(self):
+        deps = Deps(tg=mock.Mock(get_updates=mock.Mock(return_value=[])), llm=None, bot=mock.Mock())
+        now = timezone.now()
+        with mock.patch('intake.pipeline.marketing_tasks.run_due') as run_due:
+            pipeline.run_iteration(deps, now=now, sleep=lambda s: None)
+        run_due.assert_called_once_with(deps, now)
