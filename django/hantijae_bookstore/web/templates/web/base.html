@@ -42,8 +42,9 @@
       <div class="wrap nav-row">
         <nav class="section-nav" aria-label="책 둘러보기">
           <a href="/"{% if nav_active == 'home' %} aria-current="page"{% endif %}>신간</a>
+          <a href="/books"{% if nav_active == 'all' %} aria-current="page"{% endif %}>전체 보기</a>
           {% for s in nav_series %}<a href="/series={{ s.id }}"{% if nav_active == s.id %} aria-current="page"{% endif %}>{{ s.name }}</a>
-          {% endfor %}<a href="/hantijae"{% if nav_active == 'about' %} aria-current="page"{% endif %}>한티재</a>
+          {% endfor %}<a href="/hantijae"{% if nav_active == 'about' %} aria-current="page"{% endif %}>한티재 소개</a>
         </nav>
         <form class="search" action="/search" method="get" role="search">
           <input type="search" name="q" value="{{ search_query }}" placeholder="책 제목, 지은이" aria-label="책 검색">

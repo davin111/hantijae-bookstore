@@ -20,7 +20,7 @@ class AboutAnd404Test(TestCase):
         body = r.content.decode()
         self.assertIn('작고 약한 것들을 사랑한 선생님의 정신을 따라', body)
         self.assertIn('2010년 대구에서 문을 열어 지금까지 2종의 책을 펴냈습니다.', body)
-        self.assertIn('<a href="/hantijae" aria-current="page">한티재</a>', body)
+        self.assertIn('<a href="/hantijae" aria-current="page">한티재 소개</a>', body)
         self.assertIn('misc/kiki.jpeg', body)
         self.assertIn('<title>한티재 소개 — 도서출판 한티재</title>', body)
         self.assertNotIn('지난 10년', body)

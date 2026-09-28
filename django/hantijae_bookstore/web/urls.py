@@ -8,6 +8,7 @@ app_name = 'web'
 
 urlpatterns = [
     re_path(r'^$', views.home, name='home'),
+    re_path(r'^books$', views.all_books, name='all_books'),
     re_path(r'^series=(?P<series_id>\d+)$', views.series_page, name='series'),
     re_path(r'^book=(?P<book_id>\d+)$', views.book_detail, name='book'),
     re_path(r'^search$', views.search_redirect, name='search_redirect'),

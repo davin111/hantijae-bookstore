@@ -54,6 +54,28 @@ class ListingTest(TestCase):
         self.assertEqual(self.client.get('/series=999999').status_code, 404)
         self.assertEqual(self.client.get(f'/series={f.series("기타").id}').status_code, 404)
 
+    def test_all_books_lists_every_series_newest_first(self):
+        poem = f.book('출렁이는 본심', date(2023, 3, 13), in_series='시의숲')
+        f.book('비공개 초안', date(2026, 9, 1), is_published=False)
+        r = self.client.get('/books')
+        self.assertEqual(r.status_code, 200)
+        body = r.content.decode()
+        self.assertEqual(r.context['books'][:2], [poem, self.weather])
+        self.assertEqual(len(r.context['books']), 24)
+        self.assertNotIn('비공개 초안', body)
+        self.assertIn('<h1 class="page-title serif">전체 보기</h1>', body)
+        self.assertIn('34권 · 최신순', body)
+        self.assertIn('<a href="/books" aria-current="page">전체 보기</a>', body)
+        self.assertIn('href="/books?page=2"', body)
+        self.assertIn('<link rel="canonical" href="https://hantijae-bookstore.com/books">', body)
+
+    def test_all_books_second_page_and_bad_page(self):
+        r = self.client.get('/books?page=2')
+        self.assertEqual(len(r.context['books']), 9)
+        self.assertIn('<link rel="canonical" href="https://hantijae-bookstore.com/books?page=2">', r.content.decode())
+        for q in ('abc', '0', '3'):
+            self.assertEqual(self.client.get(f'/books?page={q}').status_code, 404, q)
+
     def test_search_redirect_roundtrip_special_characters(self):
         for q, title in (('내일 날씨', '내일 날씨, 어떻습니까?'), ('a/b', 'a/b 실험'), ('100%', '100% 이야기')):
             r = self.client.get('/search', {'q': f'  {q} '})

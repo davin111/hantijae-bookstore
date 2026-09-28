@@ -9,7 +9,7 @@ class StaticSitemap(Sitemap):
     changefreq = 'weekly'
 
     def items(self):
-        return ['/', '/hantijae']
+        return ['/', '/books', '/hantijae']
 
     def location(self, item):
         return item

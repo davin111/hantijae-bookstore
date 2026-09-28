@@ -18,7 +18,8 @@ class SeoTest(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r['Content-Type'].startswith('application/xml'))
         body = r.content.decode()
-        for loc in ('https://testserver/', 'https://testserver/hantijae', f'https://testserver/series={self.series.id}',
+        for loc in ('https://testserver/', 'https://testserver/books', 'https://testserver/hantijae',
+                    f'https://testserver/series={self.series.id}',
                     f'https://testserver/book={self.pub.id}'):
             self.assertIn(f'<loc>{loc}</loc>', body)
         self.assertNotIn(f'/book={self.hidden.id}<', body)

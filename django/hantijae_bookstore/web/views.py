@@ -56,6 +56,17 @@ def home(request):
     }, meta=page_meta('/'), nav_active='home', nav_series=series)
 
 
+def render_listing(request, page, *, heading, count, base_path, description, nav_active, nav_series=None):
+    """표지 격자 + 쪽 이동 목록(시리즈·전체 보기). 2쪽부터는 canonical에 쪽 번호를 붙인다."""
+    books = list(page.object_list)
+    path = base_path + (f'?page={page.number}' if page.number > 1 else '')
+    meta = page_meta(path, title=heading, description=description,
+                     image=presenters.cover_3d_url(books[0]) if books else None)
+    return render_page(request, 'web/listing.html', {
+        'heading': heading, 'count': count, 'page': page, 'books': books, 'base_path': base_path,
+    }, meta=meta, nav_active=nav_active, nav_series=nav_series)
+
+
 def series_page(request, series_id):
     nav = catalog.public_series()
     series = next((s for s in nav if s.id == int(series_id)), None)
@@ -64,14 +75,19 @@ def series_page(request, series_id):
     page = catalog.paginate(catalog.series_books(series), request.GET.get('page'))
     if page is None:
         raise Http404
-    books = list(page.object_list)
-    base_path = f'/series={series.id}'
-    path = base_path + (f'?page={page.number}' if page.number > 1 else '')
-    meta = page_meta(path, title=series.name, description=f'{series.name} {series.book_count}권 — 도서출판 한티재',
-                     image=presenters.cover_3d_url(books[0]) if books else None)
-    return render_page(request, 'web/series.html', {'series': series, 'page': page, 'books': books,
-                                                    'base_path': base_path}, meta=meta, nav_active=series.id,
-                       nav_series=nav)
+    return render_listing(request, page, heading=series.name, count=series.book_count,
+                          base_path=f'/series={series.id}',
+                          description=f'{series.name} {series.book_count}권 — 도서출판 한티재',
+                          nav_active=series.id, nav_series=nav)
+
+
+def all_books(request):
+    page = catalog.paginate(catalog.all_books(), request.GET.get('page'))
+    if page is None:
+        raise Http404
+    count = page.paginator.count
+    return render_listing(request, page, heading='전체 보기', count=count, base_path='/books',
+                          description=f'도서출판 한티재가 펴낸 책 {count}권 — 최신순', nav_active='all')
 
 
 def book_detail(request, book_id):

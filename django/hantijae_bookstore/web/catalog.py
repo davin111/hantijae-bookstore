@@ -33,8 +33,12 @@ def get_public_series(series_id: int) -> Optional[Series]:
     return next((s for s in public_series() if s.id == series_id), None)
 
 
+def all_books():
+    return newest_first(published_books())
+
+
 def recent_books(limit: int, offset: int = 0) -> List[Book]:
-    return list(newest_first(published_books())[offset:offset + limit])
+    return list(all_books()[offset:offset + limit])
 
 
 def series_books(series):
