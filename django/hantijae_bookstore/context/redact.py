@@ -15,15 +15,20 @@ _CARD = re.compile(r'(?<!\d)\d{4}([- ])\d{4}\1\d{4}\1\d{4}(?!\d)')
 _BANK = ('은행|농협|신한|국민|우리|하나|기업|카카오뱅크|카뱅|케이뱅크|토스|새마을|신협|우체국|수협|씨티|SC제일|'
          '부산|대구|경남|광주|전북|제주|계좌|입금')
 _ACCOUNT_A = re.compile(rf'(?:{_BANK})[^\d\n\[]{{0,20}}?(?<![\d-])(\d+(?:-\d+){{1,4}}|\d+(?: \d+){{1,4}}|\d{{10,14}})(?![\d-])')
-_PHONE = re.compile(r'(?<![\d-])(?:\+82[-. ]?(?:\(0\))?|0)(?:1[016789]|2|[3-6]\d|70)[-. )]?\d{3,4}[-. ]?\d{4}(?![\d-])')
+_PHONE = re.compile(r'(?<![\d-])(?:\+82[-. ]?(?:\(0\))?|0)(?:1[016789]|2|[3-6]\d|70|80|50\d?)[-. )]?\d{3,4}[-. ]?\d{4}(?![\d-])')
 _ACCOUNT_B = re.compile(r'(?<![\d-])\d{2,6}(?:-\d{2,6}){2,4}(?![\d-])')
 _EMAIL = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+')
+# 계정을 알려 주는 메시지에서는 '아이디(이메일) 비밀번호' 순서로 적기도 한다 → 이메일 바로 뒤 영문·숫자 토큰
+_LOGIN_WORDS = re.compile(r'(?i)비번|비밀번호|패스워드|암호|password|(?<![A-Za-z])pw(?![A-Za-z])|로그인|계정')
+_AFTER_EMAIL = re.compile(r'(\[이메일\][ \t]*(?:[/,|][ \t]*)?\n?[ \t]*)([^\s가-힣\[\]]{4,})')
+_HANGUL_WORD = re.compile(r'[가-힣]+[.,!?~…]*')
 _CITY = (r'(?:[가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도)|'
          r'서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)')
 # 시·구·군 → 로·길·동 + 번지, 그 뒤 동·호·층·건물 이름·괄호까지. 줄 끝까지 먹지 않는다(뒤따르는 날짜를 살리려고).
 _ADDRESS = re.compile(
-    rf'(?:{_CITY}\s*)?(?:[가-힣]+(?:시|군|구)\s+){{1,2}}[가-힣0-9]+(?:로|길|동|읍|면|리|가)\s*\d+(?:-\d+)?(?:번지)?'
-    r'(?:\s*,?\s*(?:\d+\s*(?:동|호|층)|[가-힣A-Za-z0-9]+(?:아파트|빌딩|빌라|맨션|오피스텔|타워|하우스)))*'
+    rf'(?:\(\d{{5}}\)\s*)?(?:{_CITY}\s*)?(?:[가-힣]+(?:시|군|구)\s+){{1,2}}[가-힣0-9]+(?:로|길|동|읍|면|리|가)\s*\d+(?:-\d+)?(?:번지)?'
+    r'(?:\s*,?\s*(?:[가-힣A-Za-z]+\s*)?(?:[A-Za-z]|[A-Za-z]?\d+(?:-\d+)?[A-Za-z]?)\s*(?:동|호실|호|층)'
+    r'|\s*,?\s*[가-힣A-Za-z0-9]+(?:아파트|빌딩|빌라|맨션|오피스텔|타워|하우스))*'
     r'(?:\s*\([^)\n]{0,30}\))?')
 
 
@@ -33,6 +38,16 @@ def _digits(s):
 
 def _isbn_like(text, start, number):
     return number.replace('-', '').replace(' ', '')[:3] in ('978', '979') or 'ISBN' in text[max(0, start - 8):start].upper()
+
+
+def _password(m):
+    if _HANGUL_WORD.fullmatch(m.group(3)):
+        return m.group(0)     # '비밀번호 찾기'처럼 비밀번호를 이야기하는 문장. 실제 비밀번호는 영문·숫자로 친다
+    return m.group(1) + m.group(2) + '[비밀번호]'
+
+
+def _after_email(m):
+    return m.group(1) + '[비밀번호]' if _LOGIN_WORDS.search(m.string) else m.group(0)
 
 
 def _account_a(m):
@@ -50,13 +65,14 @@ def _account_b(m):
 
 
 RULES = (
-    ('password', _PASSWORD, lambda m: m.group(1) + m.group(2) + '[비밀번호]'),
+    ('password', _PASSWORD, _password),
     ('rrn', _RRN, lambda m: '[주민번호]'),
     ('card', _CARD, lambda m: '[카드]'),
     ('account', _ACCOUNT_A, _account_a),
     ('phone', _PHONE, lambda m: '[전화]'),
     ('account', _ACCOUNT_B, _account_b),
     ('email', _EMAIL, lambda m: '[이메일]'),
+    ('password', _AFTER_EMAIL, _after_email),
     ('address', _ADDRESS, lambda m: '[주소]'),
 )
 
