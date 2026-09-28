@@ -6,7 +6,7 @@ from django.test import TestCase
 from intake.models import FundingCampaign
 from marketing import candidates as C
 from marketing.hooks import seed
-from marketing.models import BookProfile, FundingSnapshot, Proposal, SalesSnapshot, Signal
+from marketing.models import BookProfile, Briefing, FundingSnapshot, Proposal, SalesSnapshot, Signal
 from marketing.tests.fakes import make_book
 from marketing.timeutil import KST
 
@@ -59,11 +59,21 @@ class CandidateTest(TestCase):
 
     def test_select_drops_quiet_books_and_recently_proposed(self):
         BookProfile.objects.create(book=self.sibwol, quiet_until=date(2026, 10, 31))
-        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.naeran, headline='x')
+        last_week = Briefing.objects.create(week_start=date(2026, 9, 21), sent_at=NOW - timedelta(days=7))
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.naeran, briefing=last_week, headline='x')
         cands = [C.Candidate(id='blog:1', kind='blog', books=[self.sibwol], summary='', facts={}, urgency=1),
                  C.Candidate(id='noreview:2', kind='noreview', books=[self.naeran], summary='', facts={}, urgency=1),
                  C.Candidate(id='hook:3', kind='hook', books=[self.naeran], summary='', facts={}, urgency=3)]
         self.assertEqual([c.id for c in C.select(cands, TODAY, NOW)], ['hook:3'])
+
+    def test_select_rest_ignores_unsent_and_this_weeks_briefings(self):
+        unsent = Briefing.objects.create(week_start=date(2026, 9, 21))
+        this_week = Briefing.objects.create(week_start=date(2026, 9, 28), sent_at=NOW)
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.naeran, briefing=unsent, headline='x')
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.sibwol, briefing=this_week, headline='x')
+        cands = [C.Candidate(id='blog:1', kind='blog', books=[self.sibwol], summary='', facts={}, urgency=1),
+                 C.Candidate(id='noreview:2', kind='noreview', books=[self.naeran], summary='', facts={}, urgency=1)]
+        self.assertEqual([c.id for c in C.select(cands, TODAY, NOW)], ['blog:1', 'noreview:2'])
 
     def test_allowed_texts_include_book_description(self):
         c = C.Candidate(id='x', kind='hook', books=[self.sibwol], summary='10월 1일', facts={'n': 376}, urgency=1)

@@ -59,7 +59,9 @@ def compose(llm, cands, today):
 
 def save_briefing(items, today):
     briefing, _ = Briefing.objects.get_or_create(week_start=week_start(today))
-    briefing.items.all().delete()  # 관리자가 /brief 로 다시 만들면 새 항목으로 바꾼다
+    # 관리자가 /brief 로 다시 만들면 새 항목으로 바꾼다. 옛 항목이 쓴 저자 소식은 다시 후보가 되게 풀어 준다
+    Signal.objects.filter(proposal__briefing=briefing).update(used_at=None)
+    briefing.items.all().delete()
     for rank, (cand, headline, reason, d) in enumerate(items, 1):
         p = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=cand.books[0] if cand.books else None,
                                     signal=cand.signal, briefing=briefing, candidate_key=cand.id,

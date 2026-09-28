@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
-from django.db.models import Max
+from django.db.models import Max, Q
 
 from books.models import Book
 from marketing.funding import ends_on, is_stalled, live_campaigns
@@ -13,6 +13,7 @@ from marketing.kit import blog_has
 from marketing.models import BookProfile, Proposal, SalesSnapshot, Signal
 from marketing.sales import latest
 from marketing.text import title_key, won_display
+from marketing.timeutil import kst_today, week_start
 
 KIND_LABEL = {'hook': '기념일', 'fund': '진행 중 펀딩', 'news': '저자 소식', 'surge': '판매 지수 급등',
               'blog': '블로그 글 없음', 'noreview': '리뷰 없음'}
@@ -92,8 +93,11 @@ def funding_candidates(today, now):
 
 def news_candidates(now, days=14):
     out = []
-    qs = Signal.objects.filter(kind=Signal.NEWS, relevant=True, sensitive=False, used_at__isnull=True,
-                               found_at__gte=now - timedelta(days=days), book__isnull=False).select_related('book')
+    # 이번 주 브리핑이 이미 쓴 소식은 다시 만들 때 또 후보가 된다(save_briefing이 옛 항목을 지우며 풀어 준다)
+    unused = Q(used_at__isnull=True) | Q(proposal__briefing__week_start=week_start(kst_today(now)))
+    qs = (Signal.objects.filter(unused, kind=Signal.NEWS, relevant=True, sensitive=False,
+                                found_at__gte=now - timedelta(days=days), book__isnull=False)
+          .select_related('book').distinct())
     for s in qs:
         d = s.happens_on
         when = f'{d.month}월 {d.day}일 ' if d else ''
@@ -143,10 +147,16 @@ def noreview_candidates(today):
     return out
 
 
+def _recently_proposed(today, now):
+    """3주 쉬기에 세는 책: 실제로 보낸 지난 브리핑의 항목만. 이번 주 브리핑은 다시 만들 때 자기 항목에 걸리지 않게 뺀다."""
+    return set(Proposal.objects.filter(kind=Proposal.BRIEF_ITEM, created_at__gte=now - timedelta(days=21),
+                                       briefing__sent_at__isnull=False)
+               .exclude(briefing__week_start=week_start(today)).values_list('book_id', flat=True))
+
+
 def select(cands, today, now, limit=12):
     quiet = set(BookProfile.objects.filter(quiet_until__gte=today).values_list('book_id', flat=True))
-    recent = set(Proposal.objects.filter(kind=Proposal.BRIEF_ITEM, created_at__gte=now - timedelta(days=21))
-                 .values_list('book_id', flat=True))
+    recent = _recently_proposed(today, now)
     out = []
     for c in cands:
         c.books = [b for b in c.books if b.id not in quiet]

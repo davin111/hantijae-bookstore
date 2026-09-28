@@ -67,6 +67,16 @@ class ComposeTest(TestCase):
         self.assertEqual(list(b.items.values_list('headline', flat=True)), ['h2'])
         self.assertEqual(Draft.objects.get(proposal__briefing=b).channel, Draft.LETTER)
 
+    def test_rebuild_frees_signal_of_dropped_item(self):
+        s = Signal.objects.create(kind=Signal.NEWS, key='k', book=self.b, title='칼럼', relevant=True)
+        news = Candidate(id=f'news:{s.id}', kind='news', books=[self.b], summary='', facts={}, urgency=2, signal=s)
+        save_briefing([(news, 'h1', 'r', {'channel': 'instagram', 'title': '', 'body': 'b'})], TODAY)
+        s.refresh_from_db()
+        self.assertIsNotNone(s.used_at)
+        save_briefing([(self.cands[4], 'h2', 'r', {'channel': 'instagram', 'title': '', 'body': 'b'})], TODAY)
+        s.refresh_from_db()
+        self.assertIsNone(s.used_at)
+
 
 class MeasureTest(TestCase):
     def test_measure_line_compares_posting_day_and_two_weeks_later(self):
@@ -113,5 +123,23 @@ class BuildWeeklyTest(TestCase):
         llm = FakeLLM({'items': [item(f'news:{s.id}', headline='『무지개를 변호하다』 ― 칼럼')]})
         b, dropped = build_weekly(llm, TODAY, now, posts=[])
         self.assertEqual(b.items.count(), 1)
+        s.refresh_from_db()
+        self.assertIsNotNone(s.used_at)
+
+    def test_rebuilding_same_week_keeps_the_same_items(self):
+        blog_book = make_book(title='시월, 곡비의 노래', published=date(2026, 9, 1), isbn='979-11-00000-15-1', author=None)
+        news_book = make_book(title='무지개를 변호하다', published=date(2026, 6, 1), isbn='979-11-00000-14-1', author=None)
+        s = Signal.objects.create(kind=Signal.NEWS, key='k', book=news_book, title='칼럼', relevant=True, happens_on=TODAY,
+                                  detail={'source': '법률신문', 'summary': '칼럼'})
+        now = datetime(2026, 9, 28, 7, 0, tzinfo=KST)
+        llm = FakeLLM({'items': [item(f'blog:{blog_book.id}', headline='『시월, 곡비의 노래』 ― 블로그 글'),
+                                 item(f'news:{s.id}', headline='『무지개를 변호하다』 ― 칼럼')]})
+        keys = []
+        for _ in range(3):  # 예전에는 두 번째에 비고 세 번째에 다시 찼다
+            b, _ = build_weekly(llm, TODAY, now, posts=[])
+            keys.append(list(b.items.order_by('rank').values_list('candidate_key', flat=True)))
+        self.assertEqual(keys[0], [f'blog:{blog_book.id}', f'news:{s.id}'])
+        self.assertEqual(keys[1:], [keys[0], keys[0]])
+        self.assertEqual(len(llm.calls), 3)
         s.refresh_from_db()
         self.assertIsNotNone(s.used_at)
