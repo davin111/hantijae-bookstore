@@ -4,7 +4,7 @@ from unittest import mock
 from django.test import TestCase, override_settings
 
 from intake.models import TelegramChat, WorkerState
-from marketing.bot import Marketing
+from marketing.bot import KIT_DAILY_CAP, Marketing
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, Proposal, WatchQuery
 from marketing.tests.fakes import FakeLLM, FakeTG, make_book
 from marketing.timeutil import KST
@@ -139,9 +139,9 @@ class AdminCommandTest(TestCase):
         self.tg, self.host = FakeTG(), FakeHost()
         self.book = make_book()
 
-    def run_cmd(self, cmd, arg='', reply=None):
+    def run_cmd(self, cmd, arg='', reply=None, now=DAY):
         with mock.patch('marketing.bot.Marketing.blog_posts', return_value=[]):
-            Marketing(self.tg, FakeLLM(reply or {}), self.host).admin_command(ADMIN, cmd, arg, now=DAY)
+            Marketing(self.tg, FakeLLM(reply or {}), self.host).admin_command(ADMIN, cmd, arg, now=now)
         return self.tg.sent('send')[-1]['text']
 
     def test_mk_sets_mode_and_shows_status(self):
@@ -186,6 +186,32 @@ class AdminCommandTest(TestCase):
         self.assertEqual(self.run_cmd('/kit', f'send {p.id}'), '검수 방에 보냈어요')
         p.refresh_from_db()
         self.assertEqual(p.chat_id, GROUP)
+
+    def test_kit_send_refuses_resend(self):
+        reply = {'blog_body': '', 'instagram': '인스타', 'one_liners': [], 'summary_200': '', 'outreach': [], 'caution': ''}
+        self.run_cmd('/kit', '산속으로', reply)
+        p = Proposal.objects.get(kind=Proposal.KIT)
+        self.assertEqual(self.run_cmd('/kit', f'send {p.id}'), '검수 방에 보냈어요')
+        self.assertEqual(self.run_cmd('/kit', f'send {p.id}'), '이미 검수 방에 보낸 묶음이에요')
+
+    def test_kit_send_refuses_in_quiet_hours(self):
+        reply = {'blog_body': '', 'instagram': '인스타', 'one_liners': [], 'summary_200': '', 'outreach': [], 'caution': ''}
+        self.run_cmd('/kit', '산속으로', reply)
+        p = Proposal.objects.get(kind=Proposal.KIT)
+        text = self.run_cmd('/kit', f'send {p.id}', now=datetime(2026, 9, 28, 22, 0, tzinfo=KST))
+        self.assertEqual(text, '조용한 시간(21:00~08:00)이라 보내지 않았어요. 08:00 뒤에 다시 보내 주세요')
+        p.refresh_from_db()
+        self.assertIsNone(p.chat_id)
+
+    def test_kit_send_respects_daily_cap_for_review_room(self):
+        for i in range(2):
+            b = make_book(title=f'이미 보낸 책{i}', isbn=f'979-11-00000-3{i}-1', author=None)
+            Proposal.objects.create(kind=Proposal.KIT, book=b, headline=f'『{b.title}』 홍보 자료', chat_id=GROUP, sent_at=DAY)
+        reply = {'blog_body': '', 'instagram': '인스타', 'one_liners': [], 'summary_200': '', 'outreach': [], 'caution': ''}
+        self.run_cmd('/kit', '산속으로', reply)
+        p = Proposal.objects.get(kind=Proposal.KIT, book=self.book)
+        text = self.run_cmd('/kit', f'send {p.id}')
+        self.assertEqual(text, f'오늘은 검수 방에 묶음 카드를 이미 {KIT_DAILY_CAP}장 보냈어요. 내일 다시 보내 주세요')
 
     def test_brief_preview_does_not_record_then_send(self):
         reply = {'items': [{'candidate_id': f'blog:{self.book.id}', 'headline': '『나는 산속으로 더 깊이 들어간다』 ― 블로그 글',

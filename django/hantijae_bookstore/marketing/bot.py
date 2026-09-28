@@ -120,12 +120,15 @@ class Marketing:
         proposal.chat_id, proposal.message_id, proposal.sent_at, proposal.status = chat, message_id, now, Proposal.SHOWN
         proposal.save(update_fields=['chat_id', 'message_id', 'sent_at', 'status', 'updated_at'])
 
+    @staticmethod
+    def _day_start(now):
+        return datetime.combine(kst_today(now), datetime.min.time(), tzinfo=KST)
+
     def send_pending_kits(self, now):
         chat = self.target_chat()
         if chat is None or in_quiet_hours(now):
             return 0
-        start = datetime.combine(kst_today(now), datetime.min.time(), tzinfo=KST)
-        room = KIT_DAILY_CAP - Proposal.objects.filter(kind=Proposal.KIT, sent_at__gte=start).count()
+        room = KIT_DAILY_CAP - Proposal.objects.filter(kind=Proposal.KIT, sent_at__gte=self._day_start(now)).count()
         pending = (Proposal.objects.filter(kind=Proposal.KIT, sent_at__isnull=True, status=Proposal.PROPOSED)
                    .select_related('book').order_by('id')[:max(room, 0)])
         n = 0
@@ -269,6 +272,14 @@ class Marketing:
             review = self.host.review_chat_id()
             if not p or not review:
                 return '그런 묶음이 없어요'
+            if p.sent_at and p.chat_id == review:
+                return '이미 검수 방에 보낸 묶음이에요'
+            if in_quiet_hours(now):
+                return '조용한 시간(21:00~08:00)이라 보내지 않았어요. 08:00 뒤에 다시 보내 주세요'
+            sent_today = Proposal.objects.filter(kind=Proposal.KIT, chat_id=review,
+                                                 sent_at__gte=self._day_start(now)).count()
+            if sent_today >= KIT_DAILY_CAP:
+                return f'오늘은 검수 방에 묶음 카드를 이미 {KIT_DAILY_CAP}장 보냈어요. 내일 다시 보내 주세요'
             self._mark_sent(p, review, self.send_kit(p, review), now)
             return '검수 방에 보냈어요'
         books = find_books(arg)
