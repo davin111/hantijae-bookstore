@@ -6,7 +6,7 @@ from django.conf import settings
 from books.models import Book
 from intake.llm import complete_json
 from marketing.hooks import upcoming
-from marketing.models import Draft, Proposal
+from marketing.models import BookProfile, Draft, Proposal
 from marketing.prompts import KIT_SYSTEM, build_kit_user
 from marketing.text import fix_title_marks, foreign_numbers, title_key, unverified_quotes
 from web.presenters import UNTRUSTED_SHORTLINK, authors_of, credit_line, store_links
@@ -43,11 +43,16 @@ def missing_stores(book):
     return out
 
 
+def quiet_until(book, today):
+    """/quiet 로 홍보를 쉬는 중이면 그 마지막 날, 아니면 None."""
+    return BookProfile.objects.filter(book=book, quiet_until__gte=today).values_list('quiet_until', flat=True).first()
+
+
 def pending_books(today):
     done = Proposal.objects.filter(kind=Proposal.KIT).values_list('book_id', flat=True)
     return (Book.objects.filter(is_published=True, published_date__gte=today - timedelta(days=NEW_BOOK_DAYS),
                                 published_date__lte=today)
-            .exclude(id__in=done).order_by('published_date', 'id'))
+            .exclude(id__in=done).exclude(marketing__quiet_until__gte=today).order_by('published_date', 'id'))
 
 
 def _clean(value):

@@ -1,11 +1,11 @@
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 from django.test import TestCase, override_settings
 
 from marketing.hooks import seed
 from marketing.kit import blog_has, build_kit, build_pending, links_text, missing_stores, pending_books
-from marketing.models import Draft, Proposal
+from marketing.models import BookProfile, Draft, Proposal
 from marketing.tests.fakes import FakeLLM, make_book
 
 DESC = '시인은 산불감시원 일을 시작했다. 몸을 통과한 흙과 풀의 이야기가 시가 될 때 나는 큰 위로를 받는다.'
@@ -87,3 +87,10 @@ class KitTest(TestCase):
         self.assertEqual(list(pending_books(self.today)), [])
         self.assertNotIn(old, pending_books(self.today))
         self.assertNotIn(draft, pending_books(self.today))
+
+    def test_quiet_book_gets_no_kit_until_quiet_ends(self):
+        BookProfile.objects.create(book=self.book, quiet_until=self.today)
+        self.assertEqual(list(pending_books(self.today)), [])
+        self.assertEqual(build_pending(FakeLLM(REPLY), self.today, posts=[]), [])
+        self.assertFalse(Proposal.objects.exists())
+        self.assertEqual(list(pending_books(self.today + timedelta(days=1))), [self.book])

@@ -159,8 +159,9 @@ def select(cands, today, now, limit=12):
     recent = _recently_proposed(today, now)
     out = []
     for c in cands:
+        had_books = bool(c.books)
         c.books = [b for b in c.books if b.id not in quiet]
-        if not c.books and c.kind != 'fund':
+        if not c.books and (had_books or c.kind != 'fund'):  # 책이 모두 쉬는 중이면 펀딩이라도 뺀다
             continue
         if c.kind in NEEDS_REST and any(b.id in recent for b in c.books):
             continue

@@ -66,6 +66,20 @@ class MarketingBotTest(TestCase):
         self.assertEqual(m.send_pending_kits(DAY + timedelta(days=1)), 1)
         self.assertEqual(len(self.tg.sent('send')), 3)  # 표지가 없으면 글 메시지로 보낸다
 
+    def test_quiet_book_kit_waits_and_does_not_use_a_slot(self):
+        WorkerState.put('marketing_mode', 'live')
+        quiet = kit(self.book)
+        BookProfile.objects.create(book=self.book, quiet_until=date(2026, 9, 28))
+        others = [kit(make_book(title=f'책{i}', isbn=f'979-11-00000-4{i}-1', author=None)) for i in range(2)]
+        m = self.m()
+        self.assertEqual(m.send_pending_kits(DAY), 2)
+        quiet.refresh_from_db()
+        self.assertEqual((quiet.sent_at, quiet.status), (None, Proposal.PROPOSED))
+        self.assertEqual(Proposal.objects.filter(pk__in=[o.pk for o in others], sent_at__isnull=False).count(), 2)
+        self.assertEqual(m.send_pending_kits(DAY + timedelta(days=1)), 1)
+        quiet.refresh_from_db()
+        self.assertIsNotNone(quiet.sent_at)
+
     def test_kit_card_not_sent_in_quiet_hours(self):
         WorkerState.put('marketing_mode', 'live')
         kit(self.book)
@@ -193,6 +207,16 @@ class AdminCommandTest(TestCase):
         p = Proposal.objects.get(kind=Proposal.KIT)
         self.assertEqual(self.run_cmd('/kit', f'send {p.id}'), '검수 방에 보냈어요')
         self.assertEqual(self.run_cmd('/kit', f'send {p.id}'), '이미 검수 방에 보낸 묶음이에요')
+
+    def test_kit_preview_warns_and_send_refuses_for_quiet_book(self):
+        BookProfile.objects.create(book=self.book, quiet_until=date(2026, 10, 31))
+        reply = {'blog_body': '', 'instagram': '인스타', 'one_liners': [], 'summary_200': '', 'outreach': [], 'caution': ''}
+        text = self.run_cmd('/kit', '산속으로', reply)
+        self.assertTrue(text.endswith('\n(이 책은 2026-10-31까지 홍보를 쉬는 중이에요)'))
+        p = Proposal.objects.get(kind=Proposal.KIT)
+        self.assertEqual(self.run_cmd('/kit', f'send {p.id}'), '이 책은 2026-10-31까지 홍보를 쉬는 중이라 보내지 않았어요')
+        p.refresh_from_db()
+        self.assertIsNone(p.sent_at)
 
     def test_kit_send_refuses_in_quiet_hours(self):
         reply = {'blog_body': '', 'instagram': '인스타', 'one_liners': [], 'summary_200': '', 'outreach': [], 'caution': ''}

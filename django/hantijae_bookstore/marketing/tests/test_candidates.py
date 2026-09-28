@@ -75,6 +75,12 @@ class CandidateTest(TestCase):
                  C.Candidate(id='noreview:2', kind='noreview', books=[self.naeran], summary='', facts={}, urgency=1)]
         self.assertEqual([c.id for c in C.select(cands, TODAY, NOW)], ['blog:1', 'noreview:2'])
 
+    def test_select_drops_fund_of_quiet_book_but_keeps_bookless_fund(self):
+        BookProfile.objects.create(book=self.sibwol, quiet_until=date(2026, 10, 31))
+        cands = [C.Candidate(id='fund:1', kind='fund', books=[self.sibwol], summary='', facts={}, urgency=3),
+                 C.Candidate(id='fund:2', kind='fund', books=[], summary='', facts={}, urgency=3)]
+        self.assertEqual([c.id for c in C.select(cands, TODAY, NOW)], ['fund:2'])
+
     def test_allowed_texts_include_book_description(self):
         c = C.Candidate(id='x', kind='hook', books=[self.sibwol], summary='10월 1일', facts={'n': 376}, urgency=1)
         self.assertTrue(any('41편' in t for t in c.allowed_texts()))

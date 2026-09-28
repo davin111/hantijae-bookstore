@@ -130,6 +130,7 @@ class Marketing:
             return 0
         room = KIT_DAILY_CAP - Proposal.objects.filter(kind=Proposal.KIT, sent_at__gte=self._day_start(now)).count()
         pending = (Proposal.objects.filter(kind=Proposal.KIT, sent_at__isnull=True, status=Proposal.PROPOSED)
+                   .exclude(book__marketing__quiet_until__gte=kst_today(now))  # 쉬는 책은 쉬는 날이 지나면 보낸다
                    .select_related('book').order_by('id')[:max(room, 0)])
         n = 0
         for p in pending:
@@ -274,6 +275,9 @@ class Marketing:
                 return '그런 묶음이 없어요'
             if p.sent_at and p.chat_id == review:
                 return '이미 검수 방에 보낸 묶음이에요'
+            until = kit_mod.quiet_until(p.book, today)
+            if until:
+                return f'이 책은 {until}까지 홍보를 쉬는 중이라 보내지 않았어요'
             if in_quiet_hours(now):
                 return '조용한 시간(21:00~08:00)이라 보내지 않았어요. 08:00 뒤에 다시 보내 주세요'
             sent_today = Proposal.objects.filter(kind=Proposal.KIT, chat_id=review,
@@ -289,7 +293,9 @@ class Marketing:
         p.status = Proposal.SHOWN  # 미리보기로 만든 묶음은 자동 발송하지 않는다
         p.save(update_fields=['status', 'updated_at'])
         self.send_kit(p, chat_id)
-        return f'미리보기예요 (묶음 {p.id}). 검수 방에 보내려면 /kit send {p.id}'
+        until = kit_mod.quiet_until(books[0], today)
+        return (f'미리보기예요 (묶음 {p.id}). 검수 방에 보내려면 /kit send {p.id}'
+                + (f'\n(이 책은 {until}까지 홍보를 쉬는 중이에요)' if until else ''))
 
     def _hook(self, chat_id, arg, now, today):
         if arg in ('', 'list'):
