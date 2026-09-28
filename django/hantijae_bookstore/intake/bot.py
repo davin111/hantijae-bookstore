@@ -21,6 +21,7 @@ FOLDER_RE = re.compile(r'drive\.google\.com/(?:drive/(?:u/\d+/)?folders/|open\?i
 ADMIN_COMMANDS = ('/status', '/mode', '/drive', '/notion', '/baseline', '/ingest', '/retry', '/fund')
 DONE_WORDS = ('완료', '끝', '다 보냈어요', '다보냈어요')
 MAX_TG_FILE = 20 * 1024 * 1024
+REPLY_GUIDE = '이 메시지에는 답장으로 고칠 수 있는 게 없어요. 책 초안(📕)이나 알림 띠 메시지에 답장해 주세요.'
 
 
 def parse_folder_id(text):
@@ -155,10 +156,10 @@ class Bot:
                 return self.on_draft_reply(draft, msg, text, actor)
         if kind == TelegramChat.ADMIN and parse_folder_id(text):
             return self.ingest_folder(chat_id, parse_folder_id(text))
-        if reply and kind == TelegramChat.REVIEWERS:
-            # privacy mode 에선 봇 메시지에 단 답장만 들어온다 → 초안이 아닌 메시지에 답장한 경우 안내
-            return self.tg.send_message(chat_id, '고칠 내용은 책 초안 사진 메시지(📕)에 답장으로 적어 주세요.',
-                                        reply_to=msg['message_id'])
+        if reply and kind == TelegramChat.REVIEWERS and reply.get('from', {}).get('is_bot'):
+            # 봇이 보낸 메시지에 단 답장에만 안내한다. privacy mode 를 끄면 사람끼리 주고받는 답장도 들어오는데, 거기엔 끼어들지 않는다.
+            # 내린 알림 카드·지난 카드에 단 답장도 여기로 온다 → 책 초안에 한정하지 않는 문구
+            return self.tg.send_message(chat_id, REPLY_GUIDE, reply_to=msg['message_id'])
 
     def register(self, chat, kind, code):
         expected = self.config.get('TELEGRAM_INVITE_CODE')

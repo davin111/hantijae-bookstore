@@ -15,6 +15,7 @@ from intake.models import BookDraft, IntakeSource, PendingPatch, TelegramChat, W
 WORK = tempfile.mkdtemp()
 CONFIG = {'TELEGRAM_INVITE_CODE': 'letmein', 'WORK_DIR': WORK, 'NOTION_DATA_SOURCE_ID': 'ds'}
 ADMIN, GROUP = 100, -200
+GUIDE = '이 메시지에는 답장으로 고칠 수 있는 게 없어요. 책 초안(📕)이나 알림 띠 메시지에 답장해 주세요.'
 
 
 class FakeTG:
@@ -58,11 +59,11 @@ class FakeLLM:
         return json.dumps(self.reply, ensure_ascii=False)
 
 
-def msg(chat_id, text='', reply_to=None, chat_type='group', **extra):
+def msg(chat_id, text='', reply_to=None, chat_type='group', reply_is_bot=True, **extra):
     m = {'message_id': 1, 'chat': {'id': chat_id, 'type': chat_type, 'title': 't'},
          'from': {'first_name': '검수자A'}, 'text': text}
     if reply_to:
-        m['reply_to_message'] = {'message_id': reply_to}
+        m['reply_to_message'] = {'message_id': reply_to, 'from': {'is_bot': reply_is_bot}}
     m.update(extra)
     return {'update_id': 1, 'message': m}
 
@@ -227,7 +228,19 @@ class BotRealTelegramRulesTest(TestCase):
         bot = Bot(self.tg, FakeLLM({}), config=CONFIG)
         sent = self.tg.send_message(GROUP, '반영했어요')
         bot.handle_update(msg(GROUP, '고마워', reply_to=sent['message_id']))
-        self.assertIn('초안 사진 메시지', self.tg.texts()[-1])
+        self.assertEqual(self.tg.texts()[-1], GUIDE)
+
+    def test_reply_to_human_message_is_ignored(self):
+        # privacy mode 를 끄면 사람끼리 주고받는 답장도 봇에 들어온다 → 끼어들지 않는다
+        Bot(self.tg, FakeLLM({}), config=CONFIG).handle_update(
+            msg(GROUP, '저도 그렇게 생각해요', reply_to=4242, reply_is_bot=False))
+        self.assertEqual(self.tg.calls, [])
+
+    def test_reply_to_removed_notice_card_gets_generic_guidance(self):
+        from web.models import Notice
+        Notice.objects.create(message='지난 알림', chat_id=GROUP, message_id=4444, state=Notice.REMOVED)
+        Bot(self.tg, FakeLLM({}), config=CONFIG).handle_update(msg(GROUP, '다시 올려 주세요', reply_to=4444))
+        self.assertEqual(self.tg.texts()[-1], GUIDE)
 
 
 @override_settings(INTAKE=CONFIG)

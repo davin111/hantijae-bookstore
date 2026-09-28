@@ -10,7 +10,7 @@ from django.test import TestCase, override_settings
 
 from books.models import Book, Category
 from intake import review
-from intake.bot import Bot
+from intake.bot import REPLY_GUIDE, Bot
 from intake.messages import review_buttons
 from intake.models import ReviewItem, TelegramChat, WorkerState
 from intake.tests.test_bot import ADMIN, CONFIG, GROUP, FakeTG, cb, msg
@@ -193,7 +193,7 @@ class ReviewBotTest(TestCase):
         self.bot.handle_update(msg(GROUP, '노션은 본문 기준이라 둘 다 맞아', reply_to=555))
         self.assertIn('본문 기준', ReviewItem.objects.get(pk=self.item.id).note)
         self.assertTrue(any(c[1] == ADMIN and '본문 기준' in c[2] for c in self.tg.calls if c[0] == 'send'))
-        self.assertFalse(any('초안 사진' in c[2] for c in self.tg.calls if c[0] == 'send'))
+        self.assertNotIn(REPLY_GUIDE, [c[2] for c in self.tg.calls if c[0] == 'send'])
 
     def test_admin_is_told_when_batch_is_done(self):
         self.bot.handle_update(cb(GROUP, f'rv:{self.item.id}:2'))
