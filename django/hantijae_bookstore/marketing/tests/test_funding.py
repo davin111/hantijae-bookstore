@@ -50,3 +50,15 @@ class FundingTest(TestCase):
 
     def test_is_stalled_false_without_history(self):
         self.assertFalse(is_stalled(campaign(), date(2026, 9, 28)))
+
+    def test_is_stalled_false_with_single_old_snapshot(self):
+        c = campaign()
+        FundingSnapshot.objects.create(campaign=c, date=date(2026, 9, 20), amount=6700000, goal=5000000)
+        self.assertFalse(is_stalled(c, date(2026, 9, 28)))
+
+    def test_collect_funding_sleeps_between_requests_not_before_first(self):
+        campaign(external_id='11')
+        campaign(external_id='12')
+        slept = []
+        self.assertEqual(collect_funding(date(2026, 9, 28), NOW, get=lambda url: HTML, sleep=slept.append), 2)
+        self.assertEqual(slept, [1.5])

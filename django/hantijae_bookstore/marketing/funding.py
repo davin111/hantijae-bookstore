@@ -1,5 +1,6 @@
 """진행 중인 한티재 북펀드의 진척. 펀딩 감지는 intake(FundingCampaign)가 하고, 여기서는 기록된 펀딩만 읽는다."""
 import re
+import time
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Optional
@@ -37,10 +38,13 @@ def ends_on(campaign):
     return (campaign.ends_at.astimezone(KST) - timedelta(seconds=1)).date()
 
 
-def collect_funding(today, now, get=http_get):
+def collect_funding(today, now, get=http_get, sleep=time.sleep, spacing=1.5):
     """진행 중인 알라딘 북펀드의 오늘 진척을 저장한다. 텀블벅은 v1에서 진척을 읽지 않는다."""
-    saved = 0
+    saved, asked = 0, 0
     for camp in live_campaigns(now).filter(platform='aladin'):
+        if asked:
+            sleep(spacing)
+        asked += 1
         try:
             p = parse_aladin_progress(get(camp.url))
         except Exception:
@@ -56,6 +60,6 @@ def collect_funding(today, now, get=http_get):
 def is_stalled(campaign, today, days=3, threshold=0.02):
     now_snap = campaign.snapshots.filter(date__lte=today).order_by('-date').first()
     before = campaign.snapshots.filter(date__lte=today - timedelta(days=days)).order_by('-date').first()
-    if not now_snap or not before or not now_snap.amount:
+    if not now_snap or not before or not now_snap.amount or before.pk == now_snap.pk:
         return False
     return (now_snap.amount - before.amount) < now_snap.amount * threshold
