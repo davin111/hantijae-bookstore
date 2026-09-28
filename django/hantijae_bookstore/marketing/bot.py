@@ -13,7 +13,7 @@ from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
 from marketing import messages
 from marketing.hooks import add_hook, upcoming
-from marketing.models import BookProfile, Briefing, CopyNote, Draft, Proposal, WatchQuery
+from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
 from marketing.text import fix_title_marks, title_key
 from marketing.timeutil import KST, in_quiet_hours, kst_today, week_start
@@ -95,7 +95,7 @@ class Marketing:
 
     def owns_message(self, chat_id, message_id):
         return any(model.objects.filter(chat_id=chat_id, message_id=message_id).exists()
-                   for model in (Draft, Proposal, Briefing))
+                   for model in (DraftMessage, Draft, Proposal, Briefing))
 
     @staticmethod
     def blog_posts():
@@ -156,7 +156,17 @@ class Marketing:
     def _send_draft(self, draft, chat_id, reply_to=None, note=''):
         sent = self.tg.send_message(chat_id, messages.draft_text(draft, note), reply_to=reply_to,
                                     buttons=messages.draft_buttons(draft))
-        Draft.objects.filter(pk=draft.pk).update(chat_id=chat_id, message_id=sent['message_id'])
+        Draft.objects.filter(pk=draft.pk).update(chat_id=chat_id, message_id=sent['message_id'])  # 마지막 사본
+        DraftMessage.objects.create(draft=draft, chat_id=chat_id, message_id=sent['message_id'])
+
+    @staticmethod
+    def _draft_for_message(chat_id, message_id):
+        """답장한 메시지가 보낸 초안 사본이면 그 초안. 예전 기록(Draft.chat_id/message_id)도 본다."""
+        sent = (DraftMessage.objects.filter(chat_id=chat_id, message_id=message_id)
+                .select_related('draft__proposal__book').first())
+        if sent:
+            return sent.draft
+        return Draft.objects.filter(chat_id=chat_id, message_id=message_id).select_related('proposal__book').first()
 
     @staticmethod
     def _newest(proposal_id, channel=None):
@@ -210,7 +220,7 @@ class Marketing:
 
     # ---- 답장으로 고치기 ----
     def handle_reply(self, chat_id, reply_id, msg, text, actor):
-        draft = Draft.objects.filter(chat_id=chat_id, message_id=reply_id).select_related('proposal__book').first()
+        draft = self._draft_for_message(chat_id, reply_id)
         if draft is None:  # 카드·브리핑에 단 답장: 어느 글을 고칠지 모른다
             self.tg.send_message(chat_id, '고칠 점은 초안 메시지에 답장으로 적어 주세요.', reply_to=msg['message_id'])
             return

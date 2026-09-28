@@ -117,6 +117,17 @@ class Draft(BaseModel):
         return dict(self.CHANNEL_CHOICES)[self.channel]
 
 
+class DraftMessage(models.Model):
+    """초안을 보낸 메시지마다 한 줄. [글 보기]를 여러 번 눌러도 어느 사본에 답장하든 그 초안을 찾는다."""
+    draft = models.ForeignKey(Draft, related_name='messages', on_delete=models.CASCADE)
+    chat_id = models.BigIntegerField()
+    message_id = models.BigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('chat_id', 'message_id')
+
+
 class CopyNote(models.Model):
     draft = models.ForeignKey(Draft, related_name='notes', on_delete=models.CASCADE)
     text = models.TextField()

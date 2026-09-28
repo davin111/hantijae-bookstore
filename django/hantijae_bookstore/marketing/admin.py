@@ -1,7 +1,7 @@
 from django.contrib import admin
 
-from marketing.models import (BookProfile, Briefing, CopyNote, Draft, FundingSnapshot, HookDate, Proposal,
-                              SalesSnapshot, Signal, WatchQuery)
+from marketing.models import (BookProfile, Briefing, CopyNote, Draft, DraftMessage, FundingSnapshot, HookDate,
+                              Proposal, SalesSnapshot, Signal, WatchQuery)
 
 
 @admin.register(SalesSnapshot)
@@ -29,5 +29,5 @@ class DraftAdmin(admin.ModelAdmin):
     list_filter = ('channel', 'status')
 
 
-for model in (BookProfile, Briefing, CopyNote, FundingSnapshot, Signal, WatchQuery):
+for model in (BookProfile, Briefing, CopyNote, DraftMessage, FundingSnapshot, Signal, WatchQuery):
     admin.site.register(model)

@@ -140,6 +140,17 @@ class MarketingBotTest(TestCase):
         self.assertEqual(texts[0], '고치고 있어요. 2~3분쯤 걸려요.')
         self.assertIn('첫 줄을 줄였어요', texts[1])
 
+    def test_reply_to_earlier_copy_of_a_shown_draft_still_rewrites(self):
+        d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)
+        m = self.m({'title': '', 'body': '짧아진 인스타 글', 'note': '줄였어요'})
+        m.handle_callback(f'mk:v:{d.id}', GROUP, cbq(), '검수자A')
+        first_copy = self.tg.next_id
+        m.handle_callback(f'mk:v:{d.id}', GROUP, cbq(), '검수자B')
+        self.assertTrue(m.owns_message(GROUP, first_copy))
+        m.handle_reply(GROUP, first_copy, {'message_id': 9}, '짧게 써 주세요', '검수자A')
+        new = Draft.objects.get(version=2)
+        self.assertEqual((new.body, new.parent_id), ('짧아진 인스타 글', d.id))
+
     def test_reply_to_kit_card_asks_for_draft_reply(self):
         p = kit(self.book)
         Proposal.objects.filter(pk=p.pk).update(chat_id=GROUP, message_id=888)
