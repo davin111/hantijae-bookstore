@@ -108,7 +108,16 @@ class TkpfTest(SimpleTestCase):
                          lambda u: fetched.append(u) or tiny_xlsx(['무궁화호를 위하여'], ['9791192455808']), no_sleep)
         self.assertEqual(fetched, [XLSX_URL])
         a = anns[0]
-        self.assertEqual((a.key, a.label, a.posted_on, a.fresh), ('tkpf:137', '2026년 상반기 청소년 교양도서',
-                                                                  date(2026, 5, 11), True))
+        self.assertEqual((a.key, a.label, a.posted_on, a.fresh, a.withdrawal), ('tkpf:137', '2026년 상반기 청소년 교양도서',
+                                                                  date(2026, 5, 11), True, False))
         self.assertIn('9791192455808', a.texts[0])
         self.assertEqual(scan_tkpf(date(2026, 6, 1), {'tkpf:137'}, pages.__getitem__, None, no_sleep), [])
+
+    def test_scan_flags_withdrawn_selection(self):
+        withdrawal_html = """<a href="/contents/readCountN.php?no=138&cp=1&searchSelect=&searchText=">제159차 2026년 상반기 올해의 청소년 교양도서 선정ㆍ보급사업 선정 결과 철회 공고</a>"""
+        withdrawal_view_html = f"""<div class="date">2026.05.15</div>
+<a href="/contents/download.php?filename=202605/withdraw.xlsx">목록</a>"""
+        pages = {TKPF_LIST: withdrawal_html, TKPF_VIEW.format(no='138'): withdrawal_view_html}
+        anns = scan_tkpf(date(2026, 6, 1), set(), pages.__getitem__,
+                         lambda u: tiny_xlsx(['책'], ['9791111111111']), no_sleep)
+        self.assertTrue(anns[0].withdrawal)

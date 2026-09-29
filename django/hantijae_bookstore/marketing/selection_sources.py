@@ -133,5 +133,5 @@ def scan_tkpf(today, seen, get_text, get_bytes, sleep):
         files = [f for f in tkpf_files(html) if f[1].lower().endswith('.xlsx')]
         fresh = bool(posted and posted >= today - timedelta(days=FRESH_DAYS))
         out.append(Announcement('tkpf', key, tkpf_label(title), view, posted, fresh,
-                                _download_texts(files, get_bytes, sleep)))
+                                _download_texts(files, get_bytes, sleep), is_withdrawal(title)))
     return out
