@@ -8,12 +8,14 @@ import io
 import os
 import tempfile
 
+from django.db.models import F
 from PIL import Image, ImageOps
 
 from context.models import ContextEntry
 from context.redact import redact
 
-BATCH, LIMIT, MAX_SIDE, KEEP = 8, 24, 1600, 3000
+BATCH, LIMIT, MAX_SIDE, KEEP, MAX_TRIES = 8, 24, 1600, 3000, 3
+MAX_PIXELS = 40_000_000  # 이보다 큰 그림은 풀지 않는다(1GB 서버). JPEG은 draft 로 줄여 연다
 UNREADABLE = '[읽지 못함]'
 KINDS = ('주문 화면', '포스터', '책', '행사 사진', '문서', '기타')
 
@@ -35,7 +37,11 @@ def pending(limit=LIMIT):
 
 def shrink(data):
     """긴 변 1600px 이하 JPEG로. 휴대폰 사진의 회전 정보(EXIF)를 먼저 반영한다."""
-    img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert('RGB')
+    img = Image.open(io.BytesIO(data))
+    img.draft('RGB', (MAX_SIDE, MAX_SIDE))  # JPEG은 디코딩 단계에서 줄여 메모리를 아낀다(다른 형식은 그대로)
+    if img.width * img.height > MAX_PIXELS:
+        raise ValueError(f'too large: {img.width}x{img.height}')
+    img = ImageOps.exif_transpose(img).convert('RGB')
     img.thumbnail((MAX_SIDE, MAX_SIDE))
     out = io.BytesIO()
     img.save(out, 'JPEG', quality=85)
@@ -50,6 +56,27 @@ def _text(item):
     kind = str(item.get('kind') or '기타').strip()[:10]
     body = str(item.get('text') or '').strip() or str(item.get('desc') or '').strip()
     return f'[{kind}] {body}'.strip()
+
+
+def _numbered(out):
+    """응답 항목을 번호(1부터)로. LLM이 0부터 매겼으면 한 칸 민다."""
+    by_n = {}
+    for item in (out or {}).get('items') or []:
+        if isinstance(item, dict):
+            try:
+                by_n[int(item.get('n'))] = item
+            except (TypeError, ValueError):
+                continue
+    if by_n and min(by_n) == 0:
+        by_n = {n + 1: item for n, item in by_n.items()}
+    return by_n
+
+
+def _failed(entries, now):
+    """읽기 실패를 센다. 3번째 실패면 '[읽지 못함]'으로 적어 더 시도하지 않는다(한 장이 매일 막지 않게)."""
+    ContextEntry.objects.filter(pk__in=[e.pk for e in entries]).update(media_read_tries=F('media_read_tries') + 1)
+    for e in ContextEntry.objects.filter(pk__in=[e.pk for e in entries], media_read_tries__gte=MAX_TRIES):
+        _save(e, UNREADABLE, now)
 
 
 def _save(entry, text, now):
@@ -67,8 +94,8 @@ def _load(entry, download):
 def read_pending(ask, download, now, limit=LIMIT):
     """ask(system, user, images: list[bytes]) -> dict, download(file_id, path) -> path. 읽은(또는 못 읽음으로 적은) 수.
 
-    내려받기·그림 열기 실패는 '[읽지 못함]'으로 적고 끝낸다. ask 가 예외를 내면 그 묶음은 적지 않고 예외를 올린다
-    (다음 날 다시 읽는다).
+    내려받기·그림 열기 실패는 '[읽지 못함]'으로 적고 끝낸다. 묶음 호출이 실패하면 한 장씩 다시 부르고, 그래도 실패한
+    사진은 실패 횟수만 센다(3번이면 '[읽지 못함]'). 한 장도 못 읽으면 예외를 올린다(다음 날 다시).
     """
     done = 0
     todo = pending(limit)
@@ -83,15 +110,31 @@ def read_pending(ask, download, now, limit=LIMIT):
                 done += 1
         if not batch:
             continue
-        out = ask(PHOTO_SYSTEM, _user(len(batch)), images)
-        by_n = {}
-        for item in (out or {}).get('items') or []:
-            if isinstance(item, dict):
-                try:
-                    by_n[int(item.get('n'))] = item
-                except (TypeError, ValueError):
-                    continue
+        try:
+            by_n = _numbered(ask(PHOTO_SYSTEM, _user(len(batch)), images))
+        except Exception:
+            done += _one_by_one(ask, batch, images, now)  # 한 장 때문에 묶음 전체가 막히지 않게 한 장씩 다시
+            continue
         for n, e in enumerate(batch, 1):
             _save(e, _text(by_n[n]) if n in by_n else UNREADABLE, now)
             done += 1
+    return done
+
+
+def _one_by_one(ask, batch, images, now):
+    """묶음이 실패했을 때 한 장씩. 모두 실패하면(사이드카가 안 되는 날) 실패만 세고 예외를 올린다."""
+    done, failed, last = 0, [], None
+    for e, image in zip(batch, images):
+        try:
+            by_n = _numbered(ask(PHOTO_SYSTEM, _user(1), [image]))
+        except Exception as err:
+            failed.append(e)
+            last = err
+            continue
+        _save(e, _text(by_n[1]) if 1 in by_n else UNREADABLE, now)
+        done += 1
+    if failed:
+        _failed(failed, now)
+    if done == 0 and last is not None:
+        raise last
     return done

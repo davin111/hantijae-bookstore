@@ -211,6 +211,9 @@ class Marketing:
             return False
         items = list(Proposal.objects.filter(kind=Proposal.NOW, sent_at__isnull=True, created_at__gte=self._day_start(now))
                      .order_by('rank', 'id'))
+        if midweek.to_room(self.mode()) and WorkerState.get('moment_mode', 'off') != 'live':
+            # 만든 뒤 모드가 바뀐 경우: 계기 항목은 계기 잡기가 live일 때만 검수 방에 간다(남은 것은 다음 날 풀림)
+            items = [p for p in items if not p.candidate_key.startswith('moment:')]
         if not items:
             return False
         sent = self.tg.send_message(chat, messages.midweek_text(items), buttons=messages.midweek_buttons(items))

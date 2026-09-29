@@ -263,3 +263,37 @@ class MomentScheduleTest(TestCase):
             tasks.run_due(deps, datetime(2026, 9, 29, 9, 40, tzinfo=KST))
         self.assertEqual(order, ['build', 'send'])
         self.assertTrue(any('주중 제안에서 버린 항목' in n for n in deps.bot.notes))
+
+
+@mock.patch('marketing.tasks.kit.build_pending', return_value=[])
+@mock.patch('marketing.tasks.briefing.build_weekly',
+            return_value=(mock.Mock(**{'items.exists.return_value': True}), []))
+@mock.patch('marketing.tasks.news.collect_news', return_value=[])
+@mock.patch('marketing.tasks.funding.collect_funding', return_value=0)
+@mock.patch('marketing.tasks.sales.collect_sales', return_value=(0, []))
+class MomentQuietTest(TestCase):
+    def test_dawn_digest_waits_until_eight(self, *_):
+        from marketing.moments import Report
+        WorkerState.put('moment_mode', 'admin_only')
+        deps = Deps()
+        with mock.patch('marketing.tasks.moments.daily', return_value=Report(dropped=['x: 근거 없음'])):
+            tasks.run_due(deps, datetime(2026, 9, 29, 5, 0, tzinfo=KST))
+            tasks.run_due(deps, datetime(2026, 9, 29, 7, 59, tzinfo=KST))
+            self.assertFalse(any('대화 속 계기' in n for n in deps.bot.notes))
+            tasks.run_due(deps, datetime(2026, 9, 29, 8, 0, tzinfo=KST))
+            tasks.run_due(deps, datetime(2026, 9, 29, 8, 1, tzinfo=KST))
+        self.assertEqual(len([n for n in deps.bot.notes if '대화 속 계기' in n]), 1)
+
+    def test_long_build_near_nine_pm_does_not_send_late(self, *_):
+        WorkerState.put('midweek_mode', 'live')
+        deps = Deps()
+        clock = iter([0] + [600] * 10)  # 바퀴 시작 0초, 만들기 뒤 600초(10분) 지남
+        with mock.patch('marketing.tasks.time.monotonic', side_effect=lambda: next(clock)), \
+                mock.patch('marketing.tasks.midweek.build', return_value=([], [])):
+            tasks.run_due(deps, datetime(2026, 9, 29, 20, 55, tzinfo=KST))
+        self.assertEqual(getattr(deps.bot.marketing, 'midweek_sends', 0), 0)
+
+    def test_stale_midweek_released_even_when_off(self, *_):
+        with mock.patch('marketing.tasks.midweek.release_stale') as release:
+            tasks.run_due(Deps(), datetime(2026, 9, 28, 12, 0, tzinfo=KST))
+        release.assert_called_once()

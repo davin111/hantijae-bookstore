@@ -160,3 +160,20 @@ class MidweekSendTest(TestCase):
         self.m.send_midweek(SEND + timedelta(days=1))
         self.assertEqual(len(self.host.notes), 1)
         self.assertIn('주중 제안이 두 번째', self.host.notes[0])
+
+
+class MidweekModeSwitchTest(TestCase):
+    def test_room_send_skips_moment_items_unless_moment_mode_live(self):
+        tg, host = FakeTG(), FakeHost()
+        m = Marketing(tg, FakeLLM({}), host)
+        book = make_book()
+        for key in ('hook:1:2026-10-01', 'moment:7'):
+            p = Proposal.objects.create(kind=Proposal.NOW, book=book, candidate_key=key, headline=key, reason='이유')
+            Proposal.objects.filter(pk=p.pk).update(created_at=SEND - timedelta(hours=4))
+        WorkerState.put('marketing_mode', 'live')
+        WorkerState.put('midweek_mode', 'live')
+        WorkerState.put('moment_mode', 'admin_only')
+        self.assertTrue(m.send_midweek(SEND))
+        self.assertIn('hook:1:2026-10-01', tg.sent('send')[-1]['text'])
+        self.assertNotIn('moment:7', tg.sent('send')[-1]['text'])
+        self.assertIsNone(Proposal.objects.get(candidate_key='moment:7').sent_at)

@@ -1,7 +1,8 @@
 """워커 루프(intake.pipeline.run_iteration)가 매 바퀴(약 1분) 부른다. 일정은 KST 기준이다.
 작업을 시작하기 전에 '했다'고 먼저 적어서, 도중에 워커가 죽어도 같은 작업을 되풀이하지 않는다."""
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 
 from django.utils import timezone
 
@@ -10,12 +11,13 @@ from marketing import briefing, funding, kit, midweek, moments, news, sales
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
-from marketing.timeutil import kst_now, week_start
+from marketing.timeutil import in_quiet_hours, kst_now, week_start
 
 log = logging.getLogger('intake')
 KIT_CHECK_SECONDS = 600
 SALES_AT, NEWS_AT, BRIEF_BUILD_AT, BRIEF_SEND_AT, BRIEF_GIVE_UP_AT = (6, 0), (6, 30), (7, 0), (9, 30), (21, 0)
 MOMENT_AT, MIDWEEK_BUILD_AT, MIDWEEK_SEND_AT = (5, 0), (5, 30), (9, 30)
+ADMIN_QUEUE = 'moment_admin_queue'
 MISSED_NOTE = '⏭️ 이번 주 브리핑을 보내지 못했어요(항목 없음·모드·시간). /mk 로 확인하세요'
 
 
@@ -91,46 +93,77 @@ def _build_kits(deps, m, today):
     return kit.build_pending(deps.llm, today, m.blog_posts(), notify=deps.bot.notify_admin)
 
 
-def _moments(deps, now):
+def _later(now, started):
+    """바퀴 시작 시각 + 지금까지 걸린 시간. LLM 단계가 몇 분 걸린 뒤 조용한 시간·보내기 시각을 옛 시각으로 판단하지 않게.
+    30초 안이면 그대로 둔다(보통 바퀴의 '10분마다' 같은 경계 판단이 흔들리지 않게)."""
+    elapsed = time.monotonic() - started
+    return now + timedelta(seconds=elapsed) if elapsed >= 30 else now
+
+
+def _notify_awake(deps, now, text):
+    """관리자에게 보낼 요약. 조용한 시간(21~08시)이면 모아 뒀다가 08시 뒤 첫 바퀴에 보낸다(새벽에 휴대폰을 울리지 않게)."""
+    if in_quiet_hours(now):
+        WorkerState.put(ADMIN_QUEUE, (WorkerState.get(ADMIN_QUEUE) or []) + [text])
+    else:
+        deps.bot.notify_admin(text)
+
+
+def _flush_admin_queue(deps, now):
+    queued = WorkerState.get(ADMIN_QUEUE) or []
+    if queued and not in_quiet_hours(now):
+        WorkerState.put(ADMIN_QUEUE, [])
+        for text in queued:
+            deps.bot.notify_admin(text)
+
+
+def _moments(deps, now, started):
     """새벽 계기 잡기. 바뀐 게 있으면 관리자 1:1 방에 요약 한 메시지."""
     report = moments.daily(deps, now)
     text = moments.digest(report, now)
     if text:
-        deps.bot.notify_admin(text)
+        _notify_awake(deps, _later(now, started), text)
     return report
 
 
-def _build_midweek(deps, m, today, now):
+def _build_midweek(deps, m, today, now, started):
     made, dropped = midweek.build(deps.llm, today, now, m.mode())
     if dropped:
-        deps.bot.notify_admin('⏭️ 주중 제안에서 버린 항목: ' + '; '.join(dropped))
+        _notify_awake(deps, _later(now, started), '⏭️ 주중 제안에서 버린 항목: ' + '; '.join(dropped))
     return made
 
 
-def _midweek_blocks(deps, m, local, now, today, day):
-    """화~토 05:30 만들기, 09:30~21:00 보내기. 워커가 늦게 켜져도 같은 바퀴에서 만들고 바로 보낸다."""
+def _midweek_blocks(deps, m, local, now, today, day, started):
+    """화~토 05:30 만들기, 09:30~21:00 보내기. 워커가 늦게 켜져도 같은 바퀴에서 만들고 바로 보낸다.
+    못 보낸 지난 주중 제안은 모드와 상관없이 풀어 준다(보내기를 꺼도 그 계기가 브리핑에서 빠지지 않게)."""
+    _guard(deps, 'midweek', now, lambda: midweek.release_stale(today))
     if local.weekday() not in midweek.BUILD_DAYS or WorkerState.get('midweek_mode', 'off') == 'off':
         return
     if _hm(local) >= MIDWEEK_BUILD_AT and WorkerState.get('midweek_last_build') != day:
         WorkerState.put('midweek_last_build', day)
-        _guard(deps, 'midweek', now, lambda: _build_midweek(deps, m, today, now))
-    if MIDWEEK_SEND_AT <= _hm(local) < BRIEF_GIVE_UP_AT:
-        _guard(deps, 'midweek_send', now, lambda: m.send_midweek(now))
+        _guard(deps, 'midweek', now, lambda: _build_midweek(deps, m, today, now, started))
+    send_now = _later(now, started)
+    if kst_now(send_now).date() == today and MIDWEEK_SEND_AT <= _hm(kst_now(send_now)) < BRIEF_GIVE_UP_AT:
+        _guard(deps, 'midweek_send', send_now, lambda: m.send_midweek(send_now))
 
 
 def _run_due(deps, now):
     m = deps.bot.marketing
     if m.mode() == 'off':
         return
+    started = time.monotonic()
     local = kst_now(now)
     today, day, monday = local.date(), local.date().isoformat(), local.weekday() == 0
+    _flush_admin_queue(deps, now)
 
     # 계기 잡기는 LLM으로 몇 분 걸려 워커가 텔레그램을 못 본다 → 새벽에, 월요일 07:00 브리핑 만들기보다 먼저
     if (_hm(local) >= MOMENT_AT and WorkerState.get('moment_mode', 'off') != 'off'
             and WorkerState.get('moment_last_run') != day):
         WorkerState.put('moment_last_run', day)
-        _guard(deps, 'moment', now, lambda: _moments(deps, now))
-    _midweek_blocks(deps, m, local, now, today, day)
+        _guard(deps, 'moment', now, lambda: _moments(deps, now, started))
+    _midweek_blocks(deps, m, local, now, today, day, started)
+    now = _later(now, started)  # 뒤 블록(판매 지수·브리핑·묶음)은 지금 시각으로 판단한다
+    local = kst_now(now)
+    today, day, monday = local.date(), local.date().isoformat(), local.weekday() == 0
 
     if _hm(local) >= SALES_AT and WorkerState.get('marketing_last_sales_scan') != day:
         WorkerState.put('marketing_last_sales_scan', day)

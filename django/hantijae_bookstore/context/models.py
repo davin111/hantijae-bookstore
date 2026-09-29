@@ -45,6 +45,7 @@ class ContextEntry(BaseModel):
     heading = models.CharField(max_length=200, blank=True, help_text='노션 구역: 『페이지 제목』 · 구역 제목')
     media_text = models.TextField(blank=True, help_text='사진에서 읽은 글(가림 적용). 첫 줄에 [포스터] 같은 종류')
     media_read_at = models.DateTimeField(null=True, blank=True, help_text='사진을 읽은 시각(글자 없는 사진도)')
+    media_read_tries = models.PositiveSmallIntegerField(default=0, help_text='사진 읽기에 실패한 횟수(3번이면 읽지 못함으로)')
 
     class Meta:
         ordering = ['at']

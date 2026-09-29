@@ -1,6 +1,8 @@
 import io
 from datetime import datetime, timezone
 
+from unittest import mock
+
 from django.test import TestCase
 from PIL import Image
 
@@ -80,11 +82,42 @@ class PhotoTest(TestCase):
         for e in (a, b):
             self.assertEqual(ContextEntry.objects.get(pk=e.pk).media_text, P.UNREADABLE)
 
-    def test_llm_error_leaves_batch_for_tomorrow(self):
-        photo(1)
+    def test_llm_error_leaves_batch_for_tomorrow_until_third_failure(self):
+        e = photo(1)
+        for _ in range(2):
+            with self.assertRaises(RuntimeError):
+                P.read_pending(FakeAsk(error=RuntimeError('sidecar down')), download_ok, NOW)
+        self.assertEqual(P.pending(), [e])
         with self.assertRaises(RuntimeError):
             P.read_pending(FakeAsk(error=RuntimeError('sidecar down')), download_ok, NOW)
-        self.assertEqual(len(P.pending()), 1)
+        self.assertEqual(ContextEntry.objects.get(pk=e.pk).media_text, P.UNREADABLE)
+
+    def test_one_bad_photo_does_not_block_the_batch(self):
+        good, bad = photo(1), photo(2)
+
+        def ask(system, user, images):
+            if len(images) > 1 or images[0] == 'BAD':
+                raise RuntimeError('sidecar 500')
+            return {'items': [{'n': 1, 'kind': '포스터', 'text': '10월 2일 강연'}]}
+
+        def download(file_id, path):
+            return download_ok(file_id, path)
+        with mock.patch.object(P, 'shrink', side_effect=lambda data: 'BAD' if bad_turn.pop(0) else b'ok'):
+            bad_turn = [False, True]
+            self.assertEqual(P.read_pending(ask, download, NOW), 1)
+        self.assertEqual(ContextEntry.objects.get(pk=good.pk).media_text, '[포스터] 10월 2일 강연')
+        b = ContextEntry.objects.get(pk=bad.pk)
+        self.assertEqual((b.media_read_at, b.media_read_tries), (None, 1))
+
+    def test_zero_based_numbers_are_shifted(self):
+        a, b = photo(1), photo(2)
+        P.read_pending(FakeAsk({'items': [{'n': 0, 'kind': '책', 'text': '첫째'}, {'n': 1, 'kind': '책', 'text': '둘째'}]}),
+                       download_ok, NOW)
+        self.assertEqual([ContextEntry.objects.get(pk=e.pk).media_text for e in (a, b)], ['[책] 첫째', '[책] 둘째'])
+
+    def test_huge_png_is_not_decoded(self):
+        with self.assertRaises(ValueError):
+            P.shrink(png(8000, 6000))
 
     def test_text_less_photo_keeps_description_and_is_clipped(self):
         a, b = photo(1), photo(2)

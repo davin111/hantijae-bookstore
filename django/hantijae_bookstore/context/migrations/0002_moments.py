@@ -12,6 +12,11 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name='contextentry',
+            name='media_read_tries',
+            field=models.PositiveSmallIntegerField(default=0, help_text='사진 읽기에 실패한 횟수(3번이면 읽지 못함으로)'),
+        ),
+        migrations.AddField(
+            model_name='contextentry',
             name='heading',
             field=models.CharField(blank=True, help_text='노션 구역: 『페이지 제목』 · 구역 제목', max_length=200),
         ),
