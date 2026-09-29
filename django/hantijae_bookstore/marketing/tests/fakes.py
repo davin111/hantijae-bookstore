@@ -57,3 +57,36 @@ def make_book(title='나는 산속으로 더 깊이 들어간다', subtitle='최
     if author:
         BookAuthor.objects.create(book=book, author=Author.objects.create(name=author))
     return book
+
+
+def tiny_pdf(text):
+    """영문·숫자 한 줄짜리 최소 PDF. pdf_text 확인용(한글 글꼴은 넣지 않는다)."""
+    stream = f'BT /F1 12 Tf 10 50 Td ({text}) Tj ET'.encode()
+    objs = [b'<< /Type /Catalog /Pages 2 0 R >>', b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 100] /Contents 4 0 R '
+            b'/Resources << /Font << /F1 5 0 R >> >> >>',
+            b'<< /Length %d >>\nstream\n' % len(stream) + stream + b'\nendstream',
+            b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>']
+    out, offsets = b'%PDF-1.4\n', []
+    for i, body in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b'%d 0 obj\n' % i + body + b'\nendobj\n'
+    xref = len(out)
+    out += b'xref\n0 %d\n0000000000 65535 f \n' % (len(objs) + 1)
+    out += b''.join(b'%010d 00000 n \n' % o for o in offsets)
+    out += b'trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n' % (len(objs) + 1, xref)
+    return out
+
+
+def tiny_xlsx(strings, numbers=()):
+    """sharedStrings에 strings, 첫 시트에 숫자 셀 numbers가 든 최소 엑셀."""
+    import io
+    import zipfile
+    ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as z:
+        z.writestr('xl/sharedStrings.xml', f'<sst xmlns="{ns}">' + ''.join(f'<si><t>{s}</t></si>' for s in strings)
+                   + '</sst>')
+        z.writestr('xl/worksheets/sheet1.xml', f'<worksheet xmlns="{ns}"><sheetData><row>'
+                   + ''.join(f'<c><v>{n}</v></c>' for n in numbers) + '</row></sheetData></worksheet>')
+    return buf.getvalue()
