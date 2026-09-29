@@ -105,6 +105,7 @@ def build_kit(book, llm, posts, today):
         if notes:
             p.caution = '\n'.join([p.caution, *notes]) if p.caution else '\n'.join(notes)
             p.save(update_fields=['caution'])
+    _clear_failure(book)  # 자동이든 /kit 으로 직접 만들었든, 성공하면 자동 만들기 실패 기록을 지운다
     return p
 
 
@@ -145,5 +146,4 @@ def build_pending(llm, today, posts, limit=1, notify=lambda text: None):
         except Exception:
             _record_failure(book, today, notify)
             raise
-        _clear_failure(book)
     return made

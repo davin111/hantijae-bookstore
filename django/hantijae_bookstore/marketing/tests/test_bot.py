@@ -80,22 +80,96 @@ class MarketingBotTest(TestCase):
         quiet.refresh_from_db()
         self.assertIsNotNone(quiet.sent_at)
 
-    def test_one_failing_kit_send_does_not_block_the_next(self):
-        WorkerState.put('marketing_mode', 'live')
-        first, second = kit(self.book), kit(make_book(title='책0', isbn='979-11-00000-50-1', author=None))
+    def _flaky_for(self, *titles):
         send = self.tg.send_message
 
         def flaky(chat, text, reply_to=None, buttons=None):
-            if self.book.title in text:
+            if any(t in text for t in titles):
                 raise RuntimeError('telegram 400')
             return send(chat, text, reply_to=reply_to, buttons=buttons)
-        self.tg.send_message = flaky
+        return flaky
+
+    def test_failing_kit_send_is_recorded_and_raised_but_other_kit_still_sent(self):
+        WorkerState.put('marketing_mode', 'live')
+        first, second = kit(self.book), kit(make_book(title='책0', isbn='979-11-00000-50-1', author=None))
+        self.tg.send_message = self._flaky_for(self.book.title)
+        m = self.m()
         with self.assertLogs('intake', level='ERROR'):
-            self.assertEqual(self.m().send_pending_kits(DAY), 1)
+            with self.assertRaises(RuntimeError):
+                m.send_pending_kits(DAY)
         first.refresh_from_db()
         second.refresh_from_db()
         self.assertEqual((first.sent_at, first.status), (None, Proposal.PROPOSED))
+        self.assertEqual(first.extra['send_fail_count'], 1)
+        self.assertEqual(first.extra['send_fail_day'], '2026-09-28')
         self.assertIsNotNone(second.sent_at)
+
+    def test_failed_kit_card_not_retried_same_day_next_card_sent_instead(self):
+        WorkerState.put('marketing_mode', 'live')
+        first = kit(self.book)
+        second = kit(make_book(title='책1', isbn='979-11-00000-51-1', author=None))
+        third = kit(make_book(title='책2', isbn='979-11-00000-52-1', author=None))
+        self.tg.send_message = self._flaky_for(self.book.title)
+        m = self.m()
+        with self.assertLogs('intake', level='ERROR'):
+            with self.assertRaises(RuntimeError):
+                m.send_pending_kits(DAY)
+        third.refresh_from_db()
+        self.assertIsNone(third.sent_at)  # 이번 바퀴엔 방(room) 2자리가 첫째·둘째로 다 찼다
+
+        self.assertEqual(m.send_pending_kits(DAY), 1)  # 같은 날: 실패한 첫째 대신 셋째가 나간다
+        first.refresh_from_db()
+        second.refresh_from_db()
+        third.refresh_from_db()
+        self.assertIsNone(first.sent_at)  # 여전히 재시도되지 않음
+        self.assertIsNotNone(second.sent_at)
+        self.assertIsNotNone(third.sent_at)
+
+    def test_failed_kit_send_retried_next_day(self):
+        WorkerState.put('marketing_mode', 'live')
+        p = kit(self.book)
+        state = {'fail': True}
+        send = self.tg.send_message
+
+        def flaky(chat, text, reply_to=None, buttons=None):
+            if state['fail']:
+                raise RuntimeError('telegram 400')
+            return send(chat, text, reply_to=reply_to, buttons=buttons)
+        self.tg.send_message = flaky
+        m = self.m()
+        with self.assertLogs('intake', level='ERROR'):
+            with self.assertRaises(RuntimeError):
+                m.send_pending_kits(DAY)
+        p.refresh_from_db()
+        self.assertEqual(p.extra['send_fail_count'], 1)
+        state['fail'] = False
+        self.assertEqual(m.send_pending_kits(DAY + timedelta(days=1)), 1)
+        p.refresh_from_db()
+        self.assertIsNotNone(p.sent_at)
+        self.assertNotIn('send_fail_day', p.extra)
+        self.assertNotIn('send_fail_count', p.extra)
+
+    def test_third_failed_kit_send_notifies_admin_then_stops_trying(self):
+        WorkerState.put('marketing_mode', 'live')
+        p = kit(self.book)
+
+        def always_fail(chat, text, reply_to=None, buttons=None):
+            raise RuntimeError('telegram 400')
+        self.tg.send_message = always_fail
+        m = self.m()
+        for i in range(3):
+            with self.assertLogs('intake', level='ERROR'):
+                with self.assertRaises(RuntimeError):
+                    m.send_pending_kits(DAY + timedelta(days=i))
+        p.refresh_from_db()
+        self.assertEqual(p.extra['send_fail_count'], 3)
+        self.assertEqual(len(self.host.notes), 1)
+        self.assertEqual(self.host.notes[0],
+                         f'⚠️ 『{self.book.title}』 홍보 묶음 카드를 3번 보내지 못했어요. 확인한 뒤 /kit send {p.id} 로 보내 주세요')
+        self.assertEqual(m.send_pending_kits(DAY + timedelta(days=3)), 0)  # 3번째부턴 아예 시도하지 않는다
+        p.refresh_from_db()
+        self.assertEqual(p.extra['send_fail_count'], 3)
+        self.assertEqual(len(self.host.notes), 1)
 
     def test_kit_card_not_sent_in_quiet_hours(self):
         WorkerState.put('marketing_mode', 'live')
@@ -113,6 +187,64 @@ class MarketingBotTest(TestCase):
         p.refresh_from_db()
         self.assertEqual((p.status, p.chat_id), (Proposal.SHOWN, GROUP))
         self.assertTrue(self.tg.sent('send')[0]['text'].startswith('이번 주 홍보 제안'))
+
+    def test_quiet_book_briefing_item_dropped_at_send_time_and_renumbered(self):
+        WorkerState.put('marketing_mode', 'live')
+        other = make_book(title='다른책', isbn='979-11-00000-60-1', author=None)
+        b = Briefing.objects.create(week_start=date(2026, 9, 28))
+        quiet_item = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b,
+                                             headline='『책』 ― 계기1', reason='이유1', rank=1)
+        kept_item = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=other, briefing=b,
+                                            headline='『다른책』 ― 계기2', reason='이유2', rank=2)
+        BookProfile.objects.create(book=self.book, quiet_until=date(2026, 9, 28))
+        m = self.m()
+        self.assertTrue(m.send_briefing(b, DAY))
+        quiet_item.refresh_from_db()
+        kept_item.refresh_from_db()
+        self.assertEqual(quiet_item.status, Proposal.SKIPPED)
+        self.assertEqual(kept_item.status, Proposal.SHOWN)
+        text = self.tg.sent('send')[0]['text']
+        self.assertIn('1. 『다른책』 ― 계기2', text)
+        self.assertNotIn('계기1', text)
+
+    def test_quiet_book_does_not_override_an_already_acted_item(self):
+        WorkerState.put('marketing_mode', 'live')
+        b = Briefing.objects.create(week_start=date(2026, 9, 28))
+        acted = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b, headline='『책』 ― 계기1',
+                                        reason='이유1', rank=1, status=Proposal.ACTED)
+        BookProfile.objects.create(book=self.book, quiet_until=date(2026, 9, 28))
+        m = self.m()
+        self.assertTrue(m.send_briefing(b, DAY))
+        acted.refresh_from_db()
+        self.assertEqual(acted.status, Proposal.ACTED)
+        self.assertIn('1. 『책』 ― 계기1', self.tg.sent('send')[0]['text'])
+
+    def test_briefing_not_sent_when_all_items_are_quiet(self):
+        WorkerState.put('marketing_mode', 'live')
+        b = Briefing.objects.create(week_start=date(2026, 9, 28))
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b, headline='h', reason='r', rank=1)
+        BookProfile.objects.create(book=self.book, quiet_until=date(2026, 9, 28))
+        m = self.m()
+        self.assertFalse(m.send_briefing(b, DAY))
+        self.assertEqual(self.tg.sent('send'), [])
+        b.refresh_from_db()
+        self.assertIsNone(b.sent_at)
+
+    def test_briefing_preview_excludes_quiet_item_without_changing_status(self):
+        other = make_book(title='다른책', isbn='979-11-00000-61-1', author=None)
+        b = Briefing.objects.create(week_start=date(2026, 9, 28))
+        quiet_item = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b,
+                                             headline='『책』 ― 계기1', reason='이유1', rank=1)
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=other, briefing=b,
+                                headline='『다른책』 ― 계기2', reason='이유2', rank=2)
+        BookProfile.objects.create(book=self.book, quiet_until=date(2026, 9, 28))
+        m = self.m()
+        self.assertTrue(m.send_briefing(b, DAY, chat=ADMIN, record=False))
+        text = self.tg.sent('send')[0]['text']
+        self.assertIn('1. 『다른책』 ― 계기2', text)
+        self.assertNotIn('계기1', text)
+        quiet_item.refresh_from_db()
+        self.assertEqual(quiet_item.status, Proposal.PROPOSED)  # 미리보기는 상태를 바꾸지 않는다
 
     def test_view_callback_sends_latest_version_as_reply(self):
         p = kit(self.book)
@@ -201,6 +333,22 @@ class AdminCommandTest(TestCase):
         self.assertEqual(BookProfile.objects.get(book=self.book).quiet_reason, '저자 사정')
         self.assertEqual(self.run_cmd('/quiet', '산속으로 2026-13-01'), '날짜가 이상해요')
 
+    def test_quiet_adds_note_when_book_is_in_unsent_weekly_briefing(self):
+        b = Briefing.objects.create(week_start=date(2026, 9, 28))
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b, headline='h', reason='r', rank=1)
+        reply = self.run_cmd('/quiet', '산속으로 2026-11-30 저자 사정', now=DAY)
+        self.assertTrue(reply.endswith('\n이번 주 브리핑에서 이 책 항목은 빼고 보낼게요'))
+
+    def test_quiet_no_note_when_briefing_already_sent_to_review_room(self):
+        b = Briefing.objects.create(week_start=date(2026, 9, 28), chat_id=GROUP, message_id=1, sent_at=DAY)
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b, headline='h', reason='r', rank=1)
+        reply = self.run_cmd('/quiet', '산속으로 2026-11-30 저자 사정', now=DAY)
+        self.assertFalse(reply.endswith('빼고 보낼게요'))
+
+    def test_quiet_no_note_when_book_not_in_this_week_briefing(self):
+        reply = self.run_cmd('/quiet', '산속으로 2026-11-30 저자 사정', now=DAY)
+        self.assertFalse(reply.endswith('빼고 보낼게요'))
+
     def test_hook_add_and_list(self):
         self.assertIn('책 1권', self.run_cmd('/hook', '11-01 산불조심기간 | 나는 산속으로 더 깊이 들어간다'))
         self.assertIn('산불조심기간', self.run_cmd('/hook', 'list'))
@@ -224,6 +372,12 @@ class AdminCommandTest(TestCase):
 
         reply3 = self.run_cmd('/watch', '없는사람')
         self.assertIn('연결된 책 없음', reply3)
+
+    def test_manual_kit_build_clears_automatic_build_failure_record(self):
+        WorkerState.put('marketing_kit_failures', {str(self.book.id): {'day': '2026-09-27', 'count': 2}})
+        reply = {'blog_body': '', 'instagram': '인스타', 'one_liners': [], 'summary_200': '', 'outreach': [], 'caution': ''}
+        self.run_cmd('/kit', '산속으로', reply)
+        self.assertEqual(WorkerState.get('marketing_kit_failures'), {})
 
     def test_kit_preview_then_send(self):
         reply = {'blog_body': '', 'instagram': '인스타', 'one_liners': [], 'summary_200': '', 'outreach': [], 'caution': ''}
@@ -288,6 +442,23 @@ class AdminCommandTest(TestCase):
         self.assertNotEqual(b.message_id, 1)
         self.assertEqual(self.tg.sent('send')[-2]['chat'], GROUP)
         self.assertEqual(self.run_cmd('/brief', 'send'), '이미 검수 방에 보낸 브리핑이에요')
+
+    def test_brief_send_forward_keeps_acted_decisions_and_shows_rest(self):
+        WorkerState.put('marketing_mode', 'admin_only')
+        b = Briefing.objects.create(week_start=date(2026, 9, 28), chat_id=ADMIN, message_id=1, sent_at=DAY,
+                                    mode='admin_only')
+        other = make_book(title='다른책', isbn='979-11-00000-62-1', author=None)
+        acted = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b, headline='『책』 ― 계기1',
+                                        reason='이유1', rank=1, status=Proposal.ACTED, chat_id=ADMIN)
+        shown = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=other, briefing=b, headline='『다른책』 ― 계기2',
+                                        reason='이유2', rank=2, status=Proposal.SHOWN, chat_id=ADMIN)
+        later = DAY + timedelta(hours=1)
+        self.assertEqual(self.run_cmd('/brief', 'send', now=later), '검수 방에 보냈어요')
+        acted.refresh_from_db()
+        shown.refresh_from_db()
+        self.assertEqual(acted.status, Proposal.ACTED)
+        self.assertEqual(shown.status, Proposal.SHOWN)
+        self.assertEqual((acted.chat_id, shown.chat_id), (GROUP, GROUP))
 
     def test_brief_send_forward_respects_quiet_hours(self):
         b = self.sent_briefing(ADMIN)

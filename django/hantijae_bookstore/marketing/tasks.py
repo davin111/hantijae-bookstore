@@ -76,9 +76,11 @@ def _brief_send(deps, m, local, now, wk):
         _guard(deps, 'brief_send', now, lambda: m.send_briefing(b, now))
     elif _hm(local) >= BRIEF_GIVE_UP_AT and WorkerState.get('marketing_brief_missed') != wk:
         lost = b is None and WorkerState.get('marketing_last_brief_week') == wk  # 만들다가 워커가 멈춘 경우
+        has_items = bool(b and b.items.exists())  # 항목 0개인 브리핑은 07:00 알림으로 이미 끝났다
         if unsent or lost:
             WorkerState.put('marketing_brief_missed', wk)
-            deps.bot.notify_admin(MISSED_NOTE)
+            if lost or has_items:
+                deps.bot.notify_admin(MISSED_NOTE)
 
 
 def _build_kits(deps, m, today):

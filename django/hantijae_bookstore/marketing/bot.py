@@ -24,6 +24,7 @@ log = logging.getLogger('intake')
 COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch')
 MODES = ('off', 'admin_only', 'live')
 KIT_DAILY_CAP = 2
+KIT_SEND_MAX_FAILURES = 3  # 이 횟수에 닿으면 관리자에게 알리고 더는 자동으로 시도하지 않는다
 BUILDING = '만들고 있어요. 몇 분 걸려요.'
 USAGE = ('사용법: /mk off|admin_only|live · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
          '/hook <MM-DD> <이름> | <책1>, <책2> · /hook list · /quiet <제목 일부> <YYYY-MM-DD> [이유] · /quiet list · '
@@ -121,7 +122,22 @@ class Marketing:
 
     def _mark_sent(self, proposal, chat, message_id, now):
         proposal.chat_id, proposal.message_id, proposal.sent_at, proposal.status = chat, message_id, now, Proposal.SHOWN
-        proposal.save(update_fields=['chat_id', 'message_id', 'sent_at', 'status', 'updated_at'])
+        fields = ['chat_id', 'message_id', 'sent_at', 'status', 'updated_at']
+        if 'send_fail_day' in proposal.extra or 'send_fail_count' in proposal.extra:
+            extra = dict(proposal.extra)
+            extra.pop('send_fail_day', None)
+            extra.pop('send_fail_count', None)
+            proposal.extra = extra
+            fields.append('extra')
+        proposal.save(update_fields=fields)
+
+    def _record_kit_send_failure(self, proposal, today_iso):
+        count = proposal.extra.get('send_fail_count', 0) + 1
+        proposal.extra = {**proposal.extra, 'send_fail_day': today_iso, 'send_fail_count': count}
+        proposal.save(update_fields=['extra', 'updated_at'])
+        if count == KIT_SEND_MAX_FAILURES:
+            self.host.notify_admin(f'⚠️ 『{proposal.book.title}』 홍보 묶음 카드를 3번 보내지 못했어요. '
+                                   f'확인한 뒤 /kit send {proposal.id} 로 보내 주세요')
 
     @staticmethod
     def _day_start(now):
@@ -131,18 +147,26 @@ class Marketing:
         chat = self.target_chat()
         if chat is None or in_quiet_hours(now):
             return 0
+        today_iso = kst_today(now).isoformat()
         room = KIT_DAILY_CAP - Proposal.objects.filter(kind=Proposal.KIT, sent_at__gte=self._day_start(now)).count()
-        pending = (Proposal.objects.filter(kind=Proposal.KIT, sent_at__isnull=True, status=Proposal.PROPOSED)
-                   .exclude(book__marketing__quiet_until__gte=kst_today(now))  # 쉬는 책은 쉬는 날이 지나면 보낸다
-                   .select_related('book').order_by('id')[:max(room, 0)])
-        n = 0
+        candidates = (Proposal.objects.filter(kind=Proposal.KIT, sent_at__isnull=True, status=Proposal.PROPOSED)
+                      .exclude(book__marketing__quiet_until__gte=kst_today(now))  # 쉬는 책은 쉬는 날이 지나면 보낸다
+                      .select_related('book').order_by('id'))
+        ready = [p for p in candidates if p.extra.get('send_fail_day') != today_iso
+                and p.extra.get('send_fail_count', 0) < KIT_SEND_MAX_FAILURES]
+        pending = ready[:max(room, 0)]
+        n, first_exc = 0, None
         for p in pending:
             try:
                 self._mark_sent(p, chat, self.send_kit(p, chat), now)
-            except Exception:  # 카드 하나가 실패해도 나머지는 보낸다. 실패한 것은 다음 바퀴에 다시 해 본다
+            except Exception as e:  # 카드 하나가 실패해도 나머지는 보낸다. 실패는 기록해 두고 다음 바퀴로 넘긴다
                 log.exception('marketing kit %s send failed', p.id)
+                self._record_kit_send_failure(p, today_iso)
+                first_exc = first_exc or e
                 continue
             n += 1
+        if first_exc is not None:  # _guard('kit_send')가 하루 한 번 관리자에게 알리게 한다
+            raise first_exc
         return n
 
     def send_briefing(self, briefing, now, chat=None, record=True):
@@ -151,14 +175,26 @@ class Marketing:
         if chat is None or (record and (already or in_quiet_hours(now))):
             return False
         items = list(briefing.items.order_by('rank'))
-        if not items:
+        today = kst_today(now)
+        quiet_books = set(BookProfile.objects.filter(quiet_until__gte=today, book_id__in=[i.book_id for i in items if i.book_id])
+                          .values_list('book_id', flat=True))
+        def is_quiet_drop(i):  # 이미 ACTED로 확정된 항목은 책이 나중에 보류돼도 그대로 둔다(운영진 결정 보존)
+            return bool(i.book_id and i.book_id in quiet_books and i.status != Proposal.ACTED)
+        active = [i for i in items if not is_quiet_drop(i)]
+        if not active:  # 전부 보류 중이거나 애초에 항목이 없으면 지금의 '항목 없음' 경로와 같다
             return False
-        sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, items, briefing.measure),
-                                    buttons=messages.briefing_buttons(briefing, items))
+        if record:
+            dropped_ids = [i.id for i in items if is_quiet_drop(i)]
+            if dropped_ids:
+                Proposal.objects.filter(pk__in=dropped_ids).update(status=Proposal.SKIPPED)
+        sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, active, briefing.measure),
+                                    buttons=messages.briefing_buttons(briefing, active))
         if record:
             briefing.chat_id, briefing.message_id, briefing.sent_at, briefing.mode = chat, sent['message_id'], now, self.mode()
             briefing.save(update_fields=['chat_id', 'message_id', 'sent_at', 'mode'])
-            Proposal.objects.filter(briefing=briefing).update(status=Proposal.SHOWN, chat_id=chat)
+            # 운영진이 이미 관리자 방 사본에서 누른 ACTED/SKIPPED 결정은 검수 방으로 넘길 때도 덮지 않는다
+            Proposal.objects.filter(briefing=briefing, status__in=(Proposal.PROPOSED, Proposal.SHOWN)).update(status=Proposal.SHOWN)
+            Proposal.objects.filter(briefing=briefing).update(chat_id=chat)
         return True
 
     def _send_draft(self, draft, chat_id, reply_to=None, note=''):
@@ -355,7 +391,17 @@ class Marketing:
             return _narrow(books)
         BookProfile.objects.update_or_create(book=books[0], defaults={'quiet_until': until,
                                                                       'quiet_reason': (m.group(3) or '')[:200]})
-        return f'『{books[0].title}』 {until}까지 홍보 제안을 쉬어요'
+        return f'『{books[0].title}』 {until}까지 홍보 제안을 쉬어요' + self._quiet_briefing_note(books[0], today)
+
+    def _quiet_briefing_note(self, book, today):
+        """이번 주 브리핑이 아직 검수 방으로 나가지 않았고 이 책 항목이 들어 있으면 한 줄 덧붙인다(B에서 보낼 때 뺀다)."""
+        b = Briefing.objects.filter(week_start=week_start(today)).first()
+        if not b:
+            return ''
+        in_review = bool(b.sent_at and b.chat_id == self.host.review_chat_id())
+        if in_review or not Proposal.objects.filter(briefing=b, book=book).exists():
+            return ''
+        return '\n이번 주 브리핑에서 이 책 항목은 빼고 보낼게요'
 
     def _watch(self, chat_id, arg, now, today):
         if arg in ('', 'list'):

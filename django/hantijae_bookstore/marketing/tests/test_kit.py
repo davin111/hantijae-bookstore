@@ -136,6 +136,11 @@ class KitFailureTest(TestCase):
         self.assertEqual(p.book, self.book)
         self.assertEqual(WorkerState.get('marketing_kit_failures'), {})
 
+    def test_manual_build_kit_also_clears_the_automatic_failure_record(self):
+        WorkerState.put('marketing_kit_failures', {str(self.book.id): {'day': '2026-09-27', 'count': 2}})
+        build_kit(self.book, FakeLLM(REPLY), posts=[], today=self.today)  # /kit 처럼 직접 만드는 경로
+        self.assertEqual(WorkerState.get('marketing_kit_failures'), {})
+
     def test_third_failure_notifies_once_and_stops_retrying(self):
         notes, llm = [], FakeLLM('not json')
         for i in range(4):

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone as dt_tz
+from datetime import date, datetime, timedelta, timezone as dt_tz
 from types import SimpleNamespace
 from unittest import mock
 
@@ -6,7 +6,7 @@ from django.test import TestCase
 
 from intake.models import WorkerState
 from marketing import tasks
-from marketing.models import Briefing
+from marketing.models import Briefing, Proposal
 from marketing.timeutil import KST
 
 
@@ -88,11 +88,22 @@ class RunDueTest(TestCase):
 
     def test_missed_brief_notifies_admin_once(self, *_):
         deps = Deps()
-        Briefing.objects.create(week_start=date(2026, 9, 28))
+        b = Briefing.objects.create(week_start=date(2026, 9, 28))
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, briefing=b, headline='h')
         WorkerState.put('marketing_last_brief_week', '2026-09-28')
         tasks.run_due(deps, datetime(2026, 9, 28, 21, 5, tzinfo=KST))
         tasks.run_due(deps, datetime(2026, 9, 28, 22, 5, tzinfo=KST))
         self.assertEqual(len([n for n in deps.bot.notes if '브리핑' in n]), 1)
+        self.assertEqual(deps.bot.marketing.briefs_sent, [])
+
+    def test_empty_briefing_gets_no_missed_notice_at_give_up_time(self, *_):
+        """07:00에 이미 '후보 없음'을 알렸다면 21:00에 또 알리지 않는다."""
+        deps = Deps()
+        Briefing.objects.create(week_start=date(2026, 9, 28))  # 항목 0개
+        WorkerState.put('marketing_last_brief_week', '2026-09-28')
+        tasks.run_due(deps, datetime(2026, 9, 28, 21, 5, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 28, 22, 5, tzinfo=KST))
+        self.assertEqual([n for n in deps.bot.notes if '브리핑' in n], [])
         self.assertEqual(deps.bot.marketing.briefs_sent, [])
 
     def test_empty_scheduled_briefing_notifies_admin_with_reasons(self, sales_, fund_, news_, brief_, kit_):
@@ -134,6 +145,16 @@ class RunDueTest(TestCase):
         self.assertEqual(kit_.call_count, 2)
         self.assertEqual(len([n for n in deps.bot.notes if '마케팅 kit 실패' in n]), 1)
         self.assertEqual(deps.bot.marketing.kits_sent, 3)
+
+    def test_kit_send_failure_notifies_admin_once_per_day(self, sales_, fund_, news_, brief_, kit_):
+        deps = Deps()
+        deps.bot.marketing.send_pending_kits = mock.Mock(side_effect=RuntimeError('telegram down'))
+        t = datetime(2026, 9, 29, 12, 0, tzinfo=KST)
+        tasks.run_due(deps, t)
+        tasks.run_due(deps, t.replace(hour=13))
+        self.assertEqual(len([n for n in deps.bot.notes if '마케팅 kit_send 실패' in n]), 1)
+        tasks.run_due(deps, t + timedelta(days=1))
+        self.assertEqual(len([n for n in deps.bot.notes if '마케팅 kit_send 실패' in n]), 2)
 
     def test_kit_build_reads_blog_only_when_a_book_is_buildable(self, sales_, fund_, news_, brief_, kit_):
         deps = Deps()
