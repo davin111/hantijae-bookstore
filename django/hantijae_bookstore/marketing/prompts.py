@@ -115,9 +115,11 @@ def build_kit_user(book, authors_line, today, blog_exists, hooks=()):
     return '\n'.join(lines)
 
 
-def build_briefing_user(candidates, today):
+def build_briefing_user(candidates, today, midweek=False):
+    ask = ('날짜가 가까운 계기·기념일이라 주중에 따로 알립니다. 후보를 모두 쓰세요(같은 책은 하나만).' if midweek
+           else '이번 주 제안을 골라 주세요.')
     return '\n'.join([
-        f'오늘은 {today.isoformat()}({"월화수목금토일"[today.weekday()]}요일)입니다. 이번 주 제안을 골라 주세요.',
+        f'오늘은 {today.isoformat()}({"월화수목금토일"[today.weekday()]}요일)입니다. {ask}',
         '<후보>', json.dumps([c.as_prompt() for c in candidates], ensure_ascii=False, indent=1), '</후보>',
     ])
 

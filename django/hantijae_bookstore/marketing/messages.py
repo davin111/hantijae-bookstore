@@ -75,3 +75,16 @@ def briefing_buttons(briefing, proposals):
     btns = [(f'{i}번 글 보기', cb('b', p.id)) for i, p in enumerate(proposals, 1)]
     btns.append(('이번 주는 넘기기', cb('sw', briefing.id)))
     return keyboard([btns[i:i + 2] for i in range(0, len(btns), 2)])
+
+
+def midweek_text(proposals):
+    lines = ['이번 주에 앞둔 일이 있어 글을 준비해 뒀어요']
+    for i, p in enumerate(proposals, 1):
+        lines += ['', f'{i}. {p.headline}', p.reason]
+    return clip('\n'.join(lines), TEXT_LIMIT)
+
+
+def midweek_buttons(proposals):
+    btns = [(f'{i}번 글 보기', cb('b', p.id)) for i, p in enumerate(proposals, 1)]
+    btns.append(('넘기기', cb('sn', proposals[0].id)))
+    return keyboard([btns[i:i + 2] for i in range(0, len(btns), 2)])

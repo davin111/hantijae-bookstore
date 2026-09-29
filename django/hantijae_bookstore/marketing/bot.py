@@ -12,7 +12,7 @@ from intake.llm import LLMError, complete_json
 from intake.models import TelegramChat, WorkerState
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
-from marketing import messages
+from marketing import messages, midweek
 from marketing.hooks import add_hook, upcoming
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
@@ -201,6 +201,29 @@ class Marketing:
             Proposal.objects.filter(briefing=briefing).update(chat_id=chat)
         return True
 
+    def send_midweek(self, now):
+        """오늘 만든 주중 제안을 한 메시지로. 보낼 게 없거나 받는 곳이 없거나 조용한 시간이면 False."""
+        chat = midweek.target(self.host, self.mode())
+        if chat is None or in_quiet_hours(now):
+            return False
+        items = list(Proposal.objects.filter(kind=Proposal.NOW, sent_at__isnull=True, created_at__gte=self._day_start(now))
+                     .order_by('rank', 'id'))
+        if not items:
+            return False
+        sent = self.tg.send_message(chat, messages.midweek_text(items), buttons=messages.midweek_buttons(items))
+        Proposal.objects.filter(pk__in=[p.id for p in items]).update(chat_id=chat, message_id=sent['message_id'],
+                                                                     sent_at=now, status=Proposal.SHOWN)
+        self._midweek_week_notice(now)
+        return True
+
+    def _midweek_week_notice(self, now):
+        wk = week_start(kst_today(now))
+        start = datetime.combine(wk, datetime.min.time(), tzinfo=KST)
+        sent = Proposal.objects.filter(kind=Proposal.NOW, sent_at__gte=start).values('message_id').distinct().count()
+        if sent >= 2 and WorkerState.get('moment_week_notice') != wk.isoformat():
+            WorkerState.put('moment_week_notice', wk.isoformat())
+            self.host.notify_admin('ℹ️ 이번 주 주중 제안이 두 번째예요. 너무 잦으면 /moment midweek 로 조정하세요')
+
     def _send_draft(self, draft, chat_id, reply_to=None, note=''):
         sent = self.tg.send_message(chat_id, messages.draft_text(draft, note), reply_to=reply_to,
                                     buttons=messages.draft_buttons(draft))
@@ -260,6 +283,9 @@ class Marketing:
             return '알겠어요'
         if action == 'sk':
             Proposal.objects.filter(pk=pk, kind=Proposal.KIT).update(status=Proposal.SKIPPED)
+            return '이번엔 넘길게요'
+        if action == 'sn':
+            Proposal.objects.filter(kind=Proposal.NOW, chat_id=chat_id, message_id=here).update(status=Proposal.SKIPPED)
             return '이번엔 넘길게요'
         if action == 'sw':
             Proposal.objects.filter(briefing_id=pk).update(status=Proposal.SKIPPED)

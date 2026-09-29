@@ -18,11 +18,11 @@ SALES_WORDS = ('구매', '주문', '할인', '서점에서', '링크', 'http', '
 CHANNELS = (Draft.INSTAGRAM, Draft.BLOG, Draft.LETTER)
 
 
-def compose(llm, cands, today):
+def compose(llm, cands, today, midweek=False):
     if not cands:
         return [], []
     by_id = {c.id: c for c in cands}
-    result = complete_json(llm, BRIEFING_SYSTEM, build_briefing_user(cands, today))
+    result = complete_json(llm, BRIEFING_SYSTEM, build_briefing_user(cands, today, midweek=midweek))
     items, dropped, used_books = [], [], set()
     for raw in result.get('items') or []:
         if not isinstance(raw, dict):
