@@ -265,7 +265,7 @@ class RunTest(TestCase):
         deps = Deps(llm=FakeLLM([]))  # 부르면 IndexError
         social.run_due(deps, NOW, client=client)
         self.assertEqual(SocialRun.objects.get().state, 'succeeded')
-        self.assertEqual(SocialPost.objects.filter(judged_at__isnull=True).count(), 2)
+        self.assertEqual(SocialPost.objects.filter(judged_at__isnull=True).count(), 4)  # 미리 넣은 2건 + 새 글 2건
         self.assertEqual(len([n for n in deps.notes if '판정(LLM) 실패' in n]), 1)
 
     def test_switched_on_without_config_alerts_once_a_day(self):
