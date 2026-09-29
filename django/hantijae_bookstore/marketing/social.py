@@ -10,6 +10,7 @@ from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Max
 
 from intake.models import WorkerState
@@ -87,8 +88,9 @@ def _save(p, run, now):
     return post
 
 
+@transaction.atomic
 def store(run, items, accounts, now):
-    """결과를 글로 저장하고 계정별 통계·틈을 적는다. 새로 본 글 목록을 돌려준다."""
+    """결과를 글로 저장하고 계정별 통계·틈을 적는다. 새로 본 글 목록을 돌려준다(도중에 실패하면 아무것도 남기지 않는다)."""
     parse = parse_facebook if run.platform == FACEBOOK else parse_instagram
     parsed = parse(items, accounts)
     stats, new = {}, []
@@ -97,10 +99,11 @@ def store(run, items, accounts, now):
         mine = list({p.post_id: p for p in parsed.posts if p.account == role}.values())  # 한 결과 안 중복 제거
         newest = SocialPost.objects.filter(platform=run.platform, account=role).aggregate(m=Max('posted_at'))['m']
         # 같은 글이 두 운영진 결과에 함께 올 수 있다(공동 글·태그) → 계정과 상관없이 이미 저장한 글은 '아는 글'
-        known = set(SocialPost.objects.filter(platform=run.platform, post_id__in=[p.post_id for p in mine])
-                    .values_list('post_id', flat=True))
+        existing = SocialPost.objects.filter(platform=run.platform, post_id__in=[p.post_id for p in mine])
+        known = set(existing.values_list('post_id', flat=True))
+        known_before = set(existing.exclude(first_run=run).values_list('post_id', flat=True))  # 이번 실행 전부터 알던 글
         status = account_status(c)
-        reached = (newest is None or bool(known) or len(mine) < run.limit
+        reached = (newest is None or bool(known_before) or len(mine) < run.limit
                    or (bool(mine) and min(p.posted_at for p in mine) <= newest))
         made = [_save(p, run, now) for p in mine if p.post_id not in known]
         SocialPost.objects.filter(platform=run.platform, post_id__in=known).update(last_seen=now)
@@ -156,12 +159,15 @@ def next_run(platform, accounts, now):
         return None
     good = ok_roles(runs)
     todo = [a['role'] for a in accounts if a.get(platform) and a['role'] not in good]
-    fresh = [r for r in todo if not SocialPost.objects.filter(platform=platform, account=r).exists()]
-    if fresh and not any(r.purpose == SocialRun.FIRST for r in runs):  # 처음 보는 계정만 20건(기준선), 기간에 한 번
-        return SocialRun.FIRST, fresh, DEEP_LIMIT
-    normal = [r for r in runs if r.purpose == SocialRun.NORMAL]
-    if todo and len(normal) < MAX_ATTEMPTS[platform] and (
-            not normal or now - normal[-1].started_at >= RETRY_GAP[platform]):
+    regular = [r for r in runs if r.purpose in REGULAR]
+    if todo and len(regular) < MAX_ATTEMPTS[platform] and (
+            not regular or now - regular[-1].started_at >= RETRY_GAP[platform]):
+        ever_first = {role for r in SocialRun.objects.filter(platform=platform, purpose=SocialRun.FIRST)
+                      for role in r.accounts}
+        fresh = [r for r in todo
+                 if r not in ever_first and not SocialPost.objects.filter(platform=platform, account=r).exists()]
+        if fresh:  # 처음 보는 계정만 20건(기준선). 빈 결과가 나도 다음부터는 평소 5건
+            return SocialRun.FIRST, fresh, DEEP_LIMIT
         return SocialRun.NORMAL, todo, NORMAL_LIMIT
     gaps = gap_roles(runs)
     if gaps and not any(r.purpose == SocialRun.DEEP for r in runs):
@@ -198,7 +204,7 @@ def _names(accounts, roles):
 def alert_failures(deps, platform, accounts, now):
     """이번 기간 시도를 다 썼는데 정상으로 못 받은 계정이 있으면 한 번 알린다(예산으로 건너뛴 것은 예산 알림이 대신)."""
     runs = _period_runs(platform, now)
-    regular = [r for r in runs if r.purpose == SocialRun.NORMAL]
+    regular = [r for r in runs if r.purpose in REGULAR]
     if (len(regular) < MAX_ATTEMPTS[platform] or any(r.state in (SocialRun.STARTING, SocialRun.RUNNING) for r in runs)
             or all(r.state == SocialRun.SKIPPED for r in regular)):
         return
@@ -253,8 +259,31 @@ def finish_if_done(deps, client, run, data, accounts, now):
         return None
     new = store(run, items, accounts, now)
     if new:
-        social_judge.judge_pending(deps.llm, now, labels(accounts))
+        judge(deps, accounts, now)
     return new
+
+
+def judge(deps, accounts, now):
+    """LLM 판정. 실패해도 글은 이미 저장돼 있고, 판정 못 한 글은 매일 점검(daily)이 다시 판정한다."""
+    try:
+        return social_judge.judge_pending(deps.llm, now, labels(accounts))
+    except Exception as e:
+        log.exception('social judge failed')
+        alert_once(deps, 'judge', kst_now(now).date().isoformat(),
+                   f'⚠️ SNS 글 판정(LLM) 실패: {type(e).__name__}. 글은 저장했고 내일 06:20에 다시 판정해요')
+        return []
+
+
+def _finish_safely(deps, client, run, data, accounts, now):
+    """결과 처리에서 예외가 나면 실행을 실패로 끝낸다(진행 중으로 남아 다음 수집을 막거나 매분 다시 받지 않게)."""
+    try:
+        return finish_if_done(deps, client, run, data, accounts, now)
+    except Exception as e:
+        log.exception('social finish %s', run.apify_run_id)
+        run.refresh_from_db(fields=['state'])
+        if run.state in (SocialRun.STARTING, SocialRun.RUNNING):
+            fail(run, now, f'결과 처리 실패: {type(e).__name__}')
+        return None
 
 
 def start(deps, client, platform, purpose, roles, limit, accounts, now):
@@ -281,7 +310,7 @@ def start(deps, client, platform, purpose, roles, limit, accounts, now):
         return run
     run.apify_run_id, run.dataset_id, run.state = data.get('id', ''), data.get('defaultDatasetId', ''), SocialRun.RUNNING
     run.save(update_fields=['apify_run_id', 'dataset_id', 'state'])
-    finish_if_done(deps, client, run, data, accounts, now)
+    _finish_safely(deps, client, run, data, accounts, now)
     return run
 
 
@@ -296,7 +325,7 @@ def poll(deps, client, platform, accounts, now):
                 except ApifyError:
                     data = {}
                 if data.get('status') in FINAL:
-                    finish_if_done(deps, client, run, data, accounts, now)
+                    _finish_safely(deps, client, run, data, accounts, now)
                     continue
                 try:
                     client.abort_run(run.apify_run_id)
@@ -309,7 +338,7 @@ def poll(deps, client, platform, accounts, now):
             except ApifyError as e:  # 잠깐의 네트워크 오류는 다음 바퀴에 다시 본다
                 log.warning('social poll %s: %s', run.apify_run_id, e)
                 continue
-            finish_if_done(deps, client, run, data, accounts, now)
+            _finish_safely(deps, client, run, data, accounts, now)
 
 
 def run_due(deps, now, client=None):
@@ -344,7 +373,7 @@ def daily(deps, accounts, now):
     check_health(deps, accounts, now)
     social_judge.link_later(now)
     prune(now)
-    social_judge.judge_pending(deps.llm, now, labels(accounts))
+    judge(deps, accounts, now)
 
 
 def check_health(deps, accounts, now):

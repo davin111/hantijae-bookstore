@@ -26,7 +26,8 @@ def _long_enough(text):
 
 def _posts_at(key):
     """주소의 묶음 열쇠(share_key)가 key인 저장된 글."""
-    path = key.split('/', 1)[1] if '/' in key else key
+    base = key.split('?', 1)[0]
+    path = base.split('/', 1)[1] if '/' in base else base
     return [p for p in SocialPost.objects.filter(url__contains=path).exclude(group_key='').order_by('first_seen', 'id')
             if share_key(p.url) == key]
 

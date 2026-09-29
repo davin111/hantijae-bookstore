@@ -238,8 +238,35 @@ class RunTest(TestCase):
                                      'd2': [fb_item('c1', account='ceo.test', text='b', time=iso(NOW))]})
         social.run_due(Deps(), NOW, client=client)
         social.run_due(Deps(), NOW + timedelta(minutes=1), client=client)
+        self.assertEqual(len(client.started), 1)  # 첫 실행도 시도 한 번 → 다음은 2시간 뒤
+        social.run_due(Deps(), NOW + timedelta(hours=2), client=client)
         self.assertEqual([(r.purpose, r.accounts, r.limit) for r in SocialRun.objects.order_by('id')],
                          [('first', ['editor'], 20), ('normal', ['ceo'], 5)])
+
+    def test_account_that_had_a_first_run_goes_back_to_five(self):
+        make_run(purpose='first', accounts=['editor', 'ceo'], limit=20, state='succeeded',
+                 started_at=NOW - timedelta(days=1), stats={'editor': {'status': 'empty'}, 'ceo': {'status': 'empty'}})
+        self.assertEqual(social.next_run('facebook', FB_ONLY, NOW), ('normal', ['editor', 'ceo'], 5))
+
+    def test_result_processing_error_fails_the_run_instead_of_hanging(self):
+        self.seed_known()
+
+        class Broken(FakeApify):
+            def dataset_items(self, dataset_id, limit=500):
+                raise ValueError('bad json')
+        client = Broken(starts=[done('d1')])
+        social.run_due(Deps(), NOW, client=client)
+        run = SocialRun.objects.get()
+        self.assertEqual((run.state, run.error), ('failed', '결과 처리 실패: ValueError'))
+
+    def test_judge_failure_keeps_the_run_and_alerts_once(self):
+        self.seed_known()
+        client = FakeApify(starts=[done()], datasets={'d1': both_accounts('a', NOW)})
+        deps = Deps(llm=FakeLLM([]))  # 부르면 IndexError
+        social.run_due(deps, NOW, client=client)
+        self.assertEqual(SocialRun.objects.get().state, 'succeeded')
+        self.assertEqual(SocialPost.objects.filter(judged_at__isnull=True).count(), 2)
+        self.assertEqual(len([n for n in deps.notes if '판정(LLM) 실패' in n]), 1)
 
     def test_switched_on_without_config_alerts_once_a_day(self):
         deps = Deps()
@@ -259,10 +286,10 @@ class RunTest(TestCase):
     def test_new_posts_are_judged(self):
         self.seed_known()
         client = FakeApify(starts=[done()], datasets={'d1': both_accounts('a', NOW)})
-        with mock.patch('marketing.social.social_judge.judge_pending', return_value=[]) as judge:
+        with mock.patch('marketing.social.social_judge.judge_pending', return_value=[]) as judge_pending:
             social.run_due(Deps(), NOW, client=client)
-        self.assertEqual(judge.call_count, 2)  # 새 글이 들어온 직후 + 하루 한 번 점검(못 한 판정 다시)
-        self.assertEqual(judge.call_args_list[0][0][2], {'editor': '편집장', 'ceo': '대표'})
+        self.assertEqual(judge_pending.call_count, 2)  # 새 글이 들어온 직후 + 하루 한 번 점검(못 한 판정 다시)
+        self.assertEqual(judge_pending.call_args_list[0][0][2], {'editor': '편집장', 'ceo': '대표'})
 
 
 @override_settings(MARKETING=SETTINGS)
