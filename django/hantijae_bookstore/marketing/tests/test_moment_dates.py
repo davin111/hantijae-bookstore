@@ -68,3 +68,11 @@ class MentionTest(SimpleTestCase):
         self.assertEqual(unsupported_mentions('10월 2일 저자 강연', ev), [])
         self.assertEqual(unsupported_mentions('10월 17일 저자 강연', ev), [{date(2026, 10, 17)}])
         self.assertEqual(unsupported_mentions('2026-10-02 금요일에 강연', ev), [])
+
+
+class SentDayTest(SimpleTestCase):
+    def test_the_day_the_evidence_was_sent_is_allowed_in_text(self):
+        from marketing.moment_dates import unsupported_mentions
+        ev = [('AI 오디오북 제작 지원 사업에 선정됐어요', date(2026, 9, 28))]
+        self.assertEqual(unsupported_mentions('9월 28일 방에 선정 소식을 알렸다', ev), [])
+        self.assertEqual(unsupported_mentions('10월 5일 발표', ev), [{date(2026, 10, 5)}])

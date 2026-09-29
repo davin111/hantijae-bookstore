@@ -103,6 +103,6 @@ def unsupported_mentions(text, evidence):
         return []
     ref = max(sent for _, sent in evidence)
     pool = set()
-    for body, sent in evidence:
-        pool |= candidate_dates(body, sent)
+    for body, sent in evidence:  # 근거를 보낸 날 자체도 허용한다("9/28 방에 알렸다")
+        pool |= candidate_dates(body, sent) | {sent}
     return [found for found in explicit_mentions(text, ref) if not found & pool]

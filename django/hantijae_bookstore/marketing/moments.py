@@ -248,6 +248,10 @@ def _allowed(entries, today, day):
     return texts
 
 
+def _days(mentions):
+    return ', '.join(f'{min(found).month}/{min(found).day}' for found in mentions)
+
+
 def _check_date(value, date_text, entries):
     """(확인된 날짜 또는 None, 날짜 글, 확인 못 함 여부)."""
     text = _clean(date_text, 50)
@@ -293,8 +297,9 @@ def _new(raw, by_id, index, today):
     bad = foreign_numbers(text, _allowed(ev, today, day))
     if bad:
         return None, [], f'{title}: 자료에 없는 숫자 {", ".join(bad)}'
-    if unsupported_mentions(text, _date_evidence(ev)):
-        return None, [], f'{title}: 자료에 없는 날짜'
+    odd = unsupported_mentions(text, _date_evidence(ev))
+    if odd:
+        return None, [], f'{title}: 자료에 없는 날짜 {_days(odd)}'
     books, hint = _books(raw.get('books'), index)
     return {'type': kind, 'status': status, 'status_given': bool(raw.get('status')), 'title': title,
             'summary': summary, 'place': place, 'happens_on': day, 'date_text': date_text,
@@ -373,8 +378,9 @@ def _update(raw, by_id, open_by_id, today):
     bad = foreign_numbers(text, _allowed(every, today, changes.get('happens_on') or s.happens_on))
     if bad:
         return None, f'#{s.id}: 자료에 없는 숫자 {", ".join(bad)}'
-    if unsupported_mentions(text, _date_evidence(every)):
-        return None, f'#{s.id}: 자료에 없는 날짜'
+    odd = unsupported_mentions(text, _date_evidence(every))
+    if odd:
+        return None, f'#{s.id}: 자료에 없는 날짜 {_days(odd)}'
     return {'op': 'update', 'signal': s, 'changes': changes, 'evidence': added}, ''
 
 

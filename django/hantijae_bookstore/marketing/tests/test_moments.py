@@ -366,7 +366,7 @@ class ReviewFixTest(TestCase):
         r = self.run_with({'new': [new_item([e.id], title='10월 17일 저자 강연', date_='', date_text=''),
                                    new_item([e.id], title='저자 강연', summary='10월 17일에 한다.', date_='', date_text='')]})
         self.assertEqual(r.new, [])
-        self.assertTrue(all('자료에 없는 날짜' in d for d in r.dropped))
+        self.assertTrue(all('자료에 없는 날짜 10/17' in d for d in r.dropped))
 
     def test_update_without_new_evidence_is_ignored(self):
         first = entry(1, '금요일 강연')
