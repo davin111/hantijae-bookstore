@@ -29,6 +29,10 @@ class FakeMarketing:
         self.briefs_sent.append(b.id)
         return True
 
+    def send_midweek(self, now):
+        self.midweek_sends = getattr(self, 'midweek_sends', 0) + 1
+        return False
+
 
 class FakeBot:
     def __init__(self, mode):
@@ -188,3 +192,74 @@ class RunDueTest(TestCase):
         sales_.return_value = (5, [])
         tasks.run_due(deps, datetime(2026, 10, 2, 6, 0, tzinfo=KST))
         self.assertEqual(WorkerState.get('marketing_sales_fail_streak'), 0)
+
+
+@mock.patch('marketing.tasks.kit.build_pending', return_value=[])
+@mock.patch('marketing.tasks.briefing.build_weekly',
+            return_value=(mock.Mock(**{'items.exists.return_value': True}), []))
+@mock.patch('marketing.tasks.news.collect_news', return_value=[])
+@mock.patch('marketing.tasks.funding.collect_funding', return_value=0)
+@mock.patch('marketing.tasks.sales.collect_sales', return_value=(0, []))
+class MomentScheduleTest(TestCase):
+    TUE = datetime(2026, 9, 29, 5, 0, tzinfo=KST)
+
+    def test_moment_runs_once_after_five_only_when_on(self, *_):
+        from marketing.moments import Report
+        deps = Deps()
+        with mock.patch('marketing.tasks.moments.daily', return_value=Report(dropped=['x: 근거 없음'])) as daily:
+            tasks.run_due(deps, self.TUE)
+            daily.assert_not_called()
+            WorkerState.put('moment_mode', 'admin_only')
+            tasks.run_due(deps, self.TUE - timedelta(minutes=1))
+            daily.assert_not_called()
+            tasks.run_due(deps, self.TUE)
+            tasks.run_due(deps, self.TUE + timedelta(hours=3))
+            self.assertEqual(daily.call_count, 1)
+        self.assertTrue(any('대화 속 계기' in n and '근거 없음' in n for n in deps.bot.notes))
+
+    def test_moment_failure_is_reported_and_loop_goes_on(self, sales_, *_):
+        WorkerState.put('moment_mode', 'live')
+        deps = Deps()
+        with mock.patch('marketing.tasks.moments.daily', side_effect=RuntimeError('db')):
+            tasks.run_due(deps, self.TUE + timedelta(hours=1))
+        self.assertTrue(any('마케팅 moment 실패' in n for n in deps.bot.notes))
+        sales_.assert_called_once()
+
+    def test_moment_runs_before_monday_brief(self, sales_, fund_, news_, brief_, kit_):
+        WorkerState.put('moment_mode', 'live')
+        order = []
+        brief_.side_effect = lambda *a, **k: order.append('brief') or (mock.Mock(**{'items.exists.return_value': True}), [])
+        from marketing.moments import Report
+        with mock.patch('marketing.tasks.moments.daily', side_effect=lambda *a, **k: order.append('moment') or Report()):
+            tasks.run_due(Deps(), datetime(2026, 9, 28, 7, 5, tzinfo=KST))
+        self.assertEqual(order, ['moment', 'brief'])
+
+    def test_midweek_build_and_send_times(self, *_):
+        WorkerState.put('midweek_mode', 'admin_only')
+        deps = Deps()
+        with mock.patch('marketing.tasks.midweek.build', return_value=([], [])) as build:
+            tasks.run_due(deps, datetime(2026, 9, 28, 9, 30, tzinfo=KST))  # 월요일: 안 함
+            tasks.run_due(deps, datetime(2026, 9, 29, 5, 29, tzinfo=KST))
+            build.assert_not_called()
+            tasks.run_due(deps, datetime(2026, 9, 29, 5, 30, tzinfo=KST))
+            tasks.run_due(deps, datetime(2026, 9, 29, 9, 29, tzinfo=KST))
+            self.assertEqual((build.call_count, getattr(deps.bot.marketing, 'midweek_sends', 0)), (1, 0))
+            tasks.run_due(deps, datetime(2026, 9, 29, 9, 30, tzinfo=KST))
+            tasks.run_due(deps, datetime(2026, 9, 29, 21, 0, tzinfo=KST))
+        self.assertEqual(deps.bot.marketing.midweek_sends, 1)
+
+    def test_midweek_off_does_nothing(self, *_):
+        deps = Deps()
+        with mock.patch('marketing.tasks.midweek.build') as build:
+            tasks.run_due(deps, datetime(2026, 9, 29, 9, 40, tzinfo=KST))
+        build.assert_not_called()
+        self.assertEqual(getattr(deps.bot.marketing, 'midweek_sends', 0), 0)
+
+    def test_late_start_builds_then_sends(self, *_):
+        WorkerState.put('midweek_mode', 'live')
+        deps, order = Deps(), []
+        deps.bot.marketing.send_midweek = lambda now: order.append('send') or True
+        with mock.patch('marketing.tasks.midweek.build', side_effect=lambda *a: order.append('build') or ([], ['x: 없는 후보'])):
+            tasks.run_due(deps, datetime(2026, 9, 29, 9, 40, tzinfo=KST))
+        self.assertEqual(order, ['build', 'send'])
+        self.assertTrue(any('주중 제안에서 버린 항목' in n for n in deps.bot.notes))

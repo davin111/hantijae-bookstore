@@ -320,3 +320,35 @@ class PhotoAskTest(TestCase):
         self.assertEqual(M.photo_ask(llm)('sys', 'user', [b'a', b'b']), {'items': []})
         self.assertEqual([(a.kind, a.media_type, a.data) for a in llm.attachments],
                          [('image', 'image/jpeg', b'a'), ('image', 'image/jpeg', b'b')])
+
+
+class DailyTest(TestCase):
+    def test_daily_runs_steps_in_order_and_survives_failures(self):
+        from types import SimpleNamespace
+        make_book()
+        e = entry(1, '금요일에 강연')
+        deps = SimpleNamespace(llm=FakeLLM({'new': [new_item([e.id])]}), tg=SimpleNamespace(download_file=None),
+                               notion=object())
+        with self.settings(INTAKE={'NOTION_DATA_SOURCE_ID': 'ds'}), \
+                mock.patch.object(M.context_notion, 'sync', side_effect=RuntimeError('notion 500')), \
+                mock.patch.object(M.context_photos, 'read_pending', return_value=3) as read:
+            r = M.daily(deps, NOW)
+        read.assert_called_once()
+        self.assertEqual((len(r.new), r.photos), (1, 3))
+        self.assertIn('노션 읽기 실패: RuntimeError: notion 500', r.errors)
+
+    def test_daily_dry_run_skips_writes_and_filters_by_time(self):
+        from types import SimpleNamespace
+        make_book()
+        entry(1, '금요일에 강연', at=datetime(2026, 9, 1, 10, 0, tzinfo=KST))
+        late = entry(2, '금요일에 강연', at=datetime(2026, 9, 29, 10, 0, tzinfo=KST))
+        llm = FakeLLM({'new': [new_item([late.id])]})
+        with mock.patch.object(M.context_photos, 'read_pending') as read, mock.patch.object(M, 'sweep') as sweep:
+            r = M.daily(SimpleNamespace(llm=llm, tg=None, notion=None), NOW, since=datetime(2026, 9, 20, tzinfo=KST),
+                        dry_run=True)
+        read.assert_not_called()
+        sweep.assert_not_called()
+        self.assertEqual((len(r.preview), Signal.objects.count(), MomentScan.objects.count()), (1, 0, 0))
+        new_part = llm.calls[0][1].split('\n<새 기록>\n')[1]
+        self.assertNotIn('9/1(', new_part)
+        self.assertIn('9/29(', new_part)

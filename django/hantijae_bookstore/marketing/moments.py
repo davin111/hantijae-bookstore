@@ -11,10 +11,12 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import List
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
 
 from books.models import Book
+from context import notion as context_notion, photos as context_photos
 from context.models import ContextEntry
 from context.redact import redact
 from intake.llm import Attachment, complete_json
@@ -558,3 +560,30 @@ def photo_ask(llm):
         return complete_json(llm, system, user,
                              [Attachment('image', 'image/jpeg', data, f'{i}.jpg') for i, data in enumerate(images, 1)])
     return ask
+
+
+# ---- 새벽 한 번 ----
+def daily(deps, now, since=None, until=None, notion=True, photos=True, max_chunks=MAX_CHUNKS, dry_run=False):
+    """정리 → 노션 구역 → 사진 읽기 → 추출. 앞 단계가 실패해도 뒤 단계는 한다(오류는 보고서에).
+    dry-run 은 아무것도 쓰지 않으므로 정리·노션·사진을 건너뛴다. since/until 은 기록 시각(at) 범위."""
+    report = Report()
+    if dry_run:
+        notion = photos = False
+    else:
+        report.swept = sweep()
+    data_source = settings.INTAKE.get('NOTION_DATA_SOURCE_ID')
+    if notion and getattr(deps, 'notion', None) and data_source:
+        try:
+            report.notion = context_notion.sync(deps.notion, data_source, now)
+        except Exception as e:
+            log.exception('moment notion sync failed')
+            report.errors.append(f'노션 읽기 실패: {type(e).__name__}: {e}')
+    if photos:
+        try:
+            report.photos = context_photos.read_pending(photo_ask(deps.llm), deps.tg.download_file, now)
+        except Exception as e:
+            log.exception('moment photo reading failed')
+            report.errors.append(f'사진 읽기 실패: {type(e).__name__}: {e}')
+    entries = [e for e in pending_entries()
+               if (since is None or e.at >= since) and (until is None or e.at < until)]
+    return run(deps.llm, now, report=report, entries=entries, max_chunks=max_chunks, dry_run=dry_run)
