@@ -90,3 +90,21 @@ def tiny_xlsx(strings, numbers=()):
         z.writestr('xl/worksheets/sheet1.xml', f'<worksheet xmlns="{ns}"><sheetData><row>'
                    + ''.join(f'<c><v>{n}</v></c>' for n in numbers) + '</row></sheetData></worksheet>')
     return buf.getvalue()
+
+
+# ---- 운영진 개인 SNS(지어낸 계정·글. 실제 계정 주소·글은 공개 저장소에 넣지 않는다) ----
+SOCIAL_ACCOUNTS = [
+    {'role': 'editor', 'label': '편집장', 'facebook': 'https://www.facebook.com/editor.test', 'instagram': 'editor_ig'},
+    {'role': 'ceo', 'label': '대표', 'facebook': 'https://www.facebook.com/ceo.test/', 'instagram': 'ceo_ig'},
+]
+
+
+def fb_item(post_id, account='editor.test', text='', time='2026-09-29T02:35:04.000Z', **extra):
+    return {'postId': post_id, 'url': f'https://www.facebook.com/{account}/posts/{post_id}', 'time': time,
+            'text': text, 'inputUrl': f'https://www.facebook.com/{account}',
+            'facebookUrl': f'https://www.facebook.com/{account}', **extra}
+
+
+def ig_item(post_id, owner='ceo_ig', caption='', ts='2026-09-18T09:15:24.000Z', **extra):
+    return {'id': post_id, 'url': f'https://www.instagram.com/p/{post_id}/', 'timestamp': ts, 'caption': caption,
+            'ownerUsername': owner, **extra}
