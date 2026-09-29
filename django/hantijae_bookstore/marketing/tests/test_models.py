@@ -44,3 +44,13 @@ class DraftTest(TestCase):
     def test_label_is_korean_channel_name(self):
         self.assertEqual(Draft(channel=Draft.INSTAGRAM).label, '인스타 글')
         self.assertEqual(Draft(channel=Draft.LINKS).label, '서점 링크 공지')
+
+
+class SelectionModelTest(TestCase):
+    def test_selection_kind_and_announcement_record(self):
+        from marketing.models import SelectionAnnouncement, Signal
+        self.assertEqual(Signal.SELECTION, 'selection')
+        self.assertIn(('selection', '공공 선정'), Signal._meta.get_field('kind').choices)
+        a = SelectionAnnouncement.objects.create(key='kpipa:2145', source='kpipa', label='2026년 세종도서 교양부문',
+                                                 url='https://www.kpipa.or.kr/p/g1_2/2145')
+        self.assertEqual((a.matched, a.withdrawal, a.posted_on), (0, False, None))

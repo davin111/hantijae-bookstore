@@ -52,8 +52,8 @@ class HookDate(BaseModel):
 
 
 class Signal(models.Model):
-    NEWS = 'news'
-    kind = models.CharField(max_length=20, choices=((NEWS, '저자 소식'),))
+    NEWS, SELECTION = 'news', 'selection'
+    kind = models.CharField(max_length=20, choices=((NEWS, '저자 소식'), (SELECTION, '공공 선정')))
     key = models.CharField(max_length=200, unique=True)
     book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL)
     title = models.CharField(max_length=500)
@@ -154,3 +154,15 @@ class FundingSnapshot(models.Model):
     @property
     def percent(self):
         return round(self.amount * 100 / self.goal) if self.goal else 0
+
+
+class SelectionAnnouncement(models.Model):
+    """공공 선정 발표 한 건(게시글 또는 목록 한 줄). 한 번 본 발표는 다시 받지 않으려고 모두 적는다."""
+    key = models.CharField(max_length=200, unique=True)
+    source = models.CharField(max_length=20)
+    label = models.CharField(max_length=200)
+    url = models.URLField(max_length=1000)
+    posted_on = models.DateField(null=True, blank=True)
+    withdrawal = models.BooleanField(default=False, help_text='철회·취소 공고')
+    matched = models.PositiveSmallIntegerField(default=0, help_text='찾은 한티재 책 수')
+    scanned_at = models.DateTimeField(auto_now_add=True)
