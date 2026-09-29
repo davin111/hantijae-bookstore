@@ -1,10 +1,12 @@
+import urllib.parse
 from datetime import date
 
 from django.test import SimpleTestCase
 
-from marketing.selection_sources import (KPIPA_LIST, KPIPA_VIEW, is_selection_title, kpipa_files, kpipa_label,
-                                         kpipa_posts, scan_kpipa)
-from marketing.tests.fakes import tiny_pdf
+from marketing.selection_sources import (KPIPA_LIST, KPIPA_VIEW, TKPF_LIST, TKPF_VIEW, is_selection_title, kpipa_files,
+                                         kpipa_label, kpipa_posts, scan_kpipa, scan_tkpf, tkpf_files, tkpf_label,
+                                         tkpf_posted, tkpf_posts)
+from marketing.tests.fakes import tiny_pdf, tiny_xlsx
 
 KPIPA_LIST_HTML = """<ul class="fz-list">
 <li class=""><div class="fz-subject">
@@ -74,3 +76,39 @@ class KpipaScanTest(SimpleTestCase):
     def test_post_older_than_60_days_is_not_fresh(self):
         anns = scan_kpipa(date(2027, 1, 30), set(), PAGES.__getitem__, FILES.__getitem__, no_sleep)
         self.assertFalse(anns[0].fresh)
+
+
+TKPF_LIST_HTML = """<a href="/contents/readCountN.php?no=143&cp=1&searchSelect=&searchText=">2026년 하반기 올해의 청소년 교양도서 선정ㆍ보급사업 신청 안내</a>
+<a href="/contents/readCountN.php?no=137&cp=1&searchSelect=&searchText=">제159차 2026년 상반기 올해의 청소년 교양도서 선정ㆍ보급사업 선정 결과 발표</a>"""
+XLSX_NAME = '202605/1778483519674094_2026년 상반기 올해의 청소년 교양도서 목록(우수선정도서)_공개용.xlsx'
+TKPF_VIEW_HTML = f"""<div class="date">2026.05.11</div>
+<a href="/contents/download.php?filename=202605/1778483519673650_(260511)보도자료_제159차.pdf">보도자료</a>
+<a href="/contents/download.php?filename={XLSX_NAME}">목록</a>"""
+XLSX_URL = 'http://www.tkpf.or.kr/contents/download.php?filename=' + urllib.parse.quote(XLSX_NAME)
+
+
+class TkpfTest(SimpleTestCase):
+    def test_only_result_posts(self):
+        self.assertEqual(tkpf_posts(TKPF_LIST_HTML),
+                         [('137', '제159차 2026년 상반기 올해의 청소년 교양도서 선정ㆍ보급사업 선정 결과 발표')])
+
+    def test_files_are_percent_encoded(self):
+        self.assertEqual(tkpf_files(TKPF_VIEW_HTML)[1],
+                         (XLSX_URL, '1778483519674094_2026년 상반기 올해의 청소년 교양도서 목록(우수선정도서)_공개용.xlsx'))
+
+    def test_posted_date_and_label(self):
+        self.assertEqual(tkpf_posted(TKPF_VIEW_HTML), date(2026, 5, 11))
+        self.assertEqual(tkpf_label('제159차 2026년 상반기 올해의 청소년 교양도서 선정ㆍ보급사업 선정 결과 발표'),
+                         '2026년 상반기 청소년 교양도서')
+
+    def test_scan_downloads_only_xlsx(self):
+        pages = {TKPF_LIST: TKPF_LIST_HTML, TKPF_VIEW.format(no='137'): TKPF_VIEW_HTML}
+        fetched = []
+        anns = scan_tkpf(date(2026, 6, 1), set(), pages.__getitem__,
+                         lambda u: fetched.append(u) or tiny_xlsx(['무궁화호를 위하여'], ['9791192455808']), no_sleep)
+        self.assertEqual(fetched, [XLSX_URL])
+        a = anns[0]
+        self.assertEqual((a.key, a.label, a.posted_on, a.fresh), ('tkpf:137', '2026년 상반기 청소년 교양도서',
+                                                                  date(2026, 5, 11), True))
+        self.assertIn('9791192455808', a.texts[0])
+        self.assertEqual(scan_tkpf(date(2026, 6, 1), {'tkpf:137'}, pages.__getitem__, None, no_sleep), [])

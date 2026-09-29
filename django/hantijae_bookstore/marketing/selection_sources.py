@@ -85,3 +85,53 @@ def scan_kpipa(today, seen, get_text, get_bytes, sleep):
                                 posted >= today - timedelta(days=FRESH_DAYS),
                                 _download_texts(lists, get_bytes, sleep), is_withdrawal(title)))
     return out
+
+
+# ---- 한국출판문화진흥재단 '올해의 청소년 교양도서' (반기, 엑셀에 출판사·ISBN) ----
+TKPF_BASE = 'http://www.tkpf.or.kr'   # https는 열리지 않는다(조사 2026-09-29)
+TKPF_LIST = TKPF_BASE + '/contents/community_notice.php'
+TKPF_VIEW = TKPF_BASE + '/contents/community_notice_view.php?no={no}'
+_TKPF_ROW = re.compile(r'href="/contents/readCountN\.php\?no=(\d+)[^"]*"[^>]*>(.*?)</a>', re.S)
+_TKPF_FILE = re.compile(r'href="/contents/download\.php\?filename=([^"]+)"')
+_DOT_DATE = re.compile(r'(20\d{2})\.(\d{2})\.(\d{2})')
+
+
+def tkpf_posts(html):
+    out = []
+    for no, raw in _TKPF_ROW.findall(html):
+        title = clean(raw)
+        if '청소년 교양도서' in title and '결과' in title:
+            out.append((no, title))
+    return out
+
+
+def tkpf_files(html):
+    return [(TKPF_BASE + '/contents/download.php?filename=' + urllib.parse.quote(name), name.rsplit('/', 1)[-1])
+            for name in _TKPF_FILE.findall(html)]
+
+
+def tkpf_posted(html):
+    m = _DOT_DATE.search(html)
+    return date(int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+
+
+def tkpf_label(title):
+    m = re.search(r'(20\d{2})년\s*(상반기|하반기)', title)
+    return f'{m.group(1)}년 {m.group(2)} 청소년 교양도서' if m else '올해의 청소년 교양도서'
+
+
+def scan_tkpf(today, seen, get_text, get_bytes, sleep):
+    out = []
+    for no, title in tkpf_posts(get_text(TKPF_LIST)):
+        key = f'tkpf:{no}'
+        if key in seen:
+            continue
+        view = TKPF_VIEW.format(no=no)
+        sleep(SPACING)
+        html = get_text(view)
+        posted = tkpf_posted(html)
+        files = [f for f in tkpf_files(html) if f[1].lower().endswith('.xlsx')]
+        fresh = bool(posted and posted >= today - timedelta(days=FRESH_DAYS))
+        out.append(Announcement('tkpf', key, tkpf_label(title), view, posted, fresh,
+                                _download_texts(files, get_bytes, sleep)))
+    return out
