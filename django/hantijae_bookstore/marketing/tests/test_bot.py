@@ -332,6 +332,30 @@ class MarketingBotTest(TestCase):
         self.m().handle_reply(GROUP, 888, {'message_id': 9}, '고쳐 주세요', 'x')
         self.assertEqual(self.tg.sent('send')[0]['text'], '고칠 점은 초안 메시지에 답장으로 적어 주세요.')
 
+    def test_thank_you_reply_to_draft_is_skipped_without_rewrite(self):
+        d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)
+        Draft.objects.filter(pk=d.pk).update(chat_id=GROUP, message_id=777)
+        m = self.m({'title': '', 'body': '안 쓰일 새 글', 'note': ''})
+        m.handle_reply(GROUP, 777, {'message_id': 9}, '좋네요', '검수자A')
+        self.assertEqual(m.llm.calls, [])
+        self.assertEqual(CopyNote.objects.count(), 0)
+        self.assertEqual(self.tg.sent('send'), [])
+        self.assertEqual(Draft.objects.filter(proposal=d.proposal).count(), 2)  # 새 버전이 생기지 않는다
+
+    def test_edit_request_reply_to_draft_still_rewrites(self):
+        d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)
+        Draft.objects.filter(pk=d.pk).update(chat_id=GROUP, message_id=777)
+        m = self.m({'title': '', 'body': '짧아진 인스타 글', 'note': ''})
+        m.handle_reply(GROUP, 777, {'message_id': 9}, '짧게요', '검수자A')
+        self.assertEqual(len(m.llm.calls), 1)
+        self.assertTrue(Draft.objects.filter(version=2).exists())
+
+    def test_thank_you_reply_to_kit_card_sends_nothing(self):
+        p = kit(self.book)
+        Proposal.objects.filter(pk=p.pk).update(chat_id=GROUP, message_id=888)
+        self.m().handle_reply(GROUP, 888, {'message_id': 9}, '감사합니다', 'x')
+        self.assertEqual(self.tg.sent('send'), [])
+
 
 @override_settings(SITE_URL='https://hantijae-bookstore.com')
 class AdminCommandTest(TestCase):

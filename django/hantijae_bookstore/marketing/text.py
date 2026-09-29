@@ -1,5 +1,6 @@
 """홍보 초안 후처리·검증 (순수 함수)."""
 import re
+import unicodedata
 
 from intake.extract import is_verbatim
 from intake.messages import tg_len
@@ -49,3 +50,43 @@ def title_key(title):
 
 def won_display(n):
     return f'{round(n / 10000):,}만 원'
+
+
+# 인사·맞장구 답장 판별: '좋네요', '감사합니다', 'ㅋㅋㅋ' 같은 답에는 다시쓰기(LLM)를 돌리지 않는다.
+_ACK_WORDS = {
+    '좋네요', '좋아요', '좋습니다', '좋다', '좋음', '좋군요', '좋은데요', '좋았어요',
+    '굿', '굳', '최고', '최고예요', '최고네요', '멋져요', '멋지네요', '훌륭해요', '훌륭하네요',
+    '괜찮네요', '괜찮아요', '괜찮습니다', '감사합니다', '감사해요', '감사', '고마워요', '고맙습니다', '땡큐',
+    '수고하셨습니다', '수고했어요', '수고많으셨습니다', '확인', '확인했어요', '확인했습니다', '확인완료',
+    '알겠습니다', '알겠어요', '알았어요', '네', '넵', '넹', '예', '넵넵', '네네', '오케이', 'ok', 'okay', '오키',
+    'ㅇㅋ', 'ㅇㅇ', '올렸어요', '올렸습니다', '올림', '게시했어요', '게시했습니다',
+}
+_ACK_LAUGHS = {'ㅋ', 'ㅎ', 'ㅠ', 'ㅜ'}  # 웃음·감탄 한 글자 토큰. 자모라 정규화에서 지워지지 않는다
+_ACK_TOKENS = _ACK_WORDS | _ACK_LAUGHS
+_ACK_MAX_LEN = 20  # 이보다 길면 인사말 반복이라도 다시쓰기로 보낸다
+
+
+def _ack_normalize(text):
+    """NFC → 소문자 → 공백 제거 → 문장부호·기호(P*, S*)·결합표시(M*)·서식문자(Cf) 제거. 자모는 남긴다."""
+    out = []
+    for ch in unicodedata.normalize('NFC', text or '').lower():
+        if ch.isspace():
+            continue
+        cat = unicodedata.category(ch)
+        if cat[0] in ('P', 'S', 'M') or cat == 'Cf':
+            continue
+        out.append(ch)
+    return ''.join(out)
+
+
+def is_acknowledgement(text):
+    """고맙다·좋다·확인했다는 뜻뿐인 답인가(정정·수정 요청은 아무리 짧아도 False)."""
+    norm = _ack_normalize(text)
+    if not norm:  # 이모지·문장부호만 있는 답
+        return True
+    if len(norm) > _ACK_MAX_LEN:
+        return False
+    reachable = [True] + [False] * len(norm)  # 앞에서부터 토큰을 이어 붙여 끝까지 닿는지 보는 DP
+    for i in range(1, len(norm) + 1):
+        reachable[i] = any(reachable[j] and norm[j:i] in _ACK_TOKENS for j in range(i))
+    return reachable[-1]

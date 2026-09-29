@@ -4,7 +4,8 @@ from types import SimpleNamespace
 from django.test import SimpleTestCase
 
 from marketing import prompts
-from marketing.text import clip, fix_title_marks, foreign_numbers, title_key, unverified_quotes, won_display
+from marketing.text import (clip, fix_title_marks, foreign_numbers, is_acknowledgement, title_key, unverified_quotes,
+                            won_display)
 from marketing.timeutil import in_quiet_hours, kst_today, week_start
 
 
@@ -49,6 +50,16 @@ class TextTest(SimpleTestCase):
     def test_won_display(self):
         self.assertEqual(won_display(6768000), '677만 원')
         self.assertEqual(won_display(18480000), '1,848만 원')
+
+    def test_is_acknowledgement_true_for_thanks_and_thumbs_up(self):
+        for text in ('좋네요', '좋네요!', '👍', '👍🏻', 'ㅋㅋㅋ', '네 좋아요~', '감사합니다 :)', '올렸어요', '넵넵',
+                     'OK', '좋네요 감사합니다 🙏'):
+            self.assertTrue(is_acknowledgement(text), text)
+
+    def test_is_acknowledgement_false_for_edit_requests_and_long_text(self):
+        for text in ('짧게요', '첫 줄이 너무 길어요', '좋네요 근데 해시태그 줄여 주세요', '좋은데 첫 줄만 바꿔 주세요',
+                     '해시태그 빼 주세요', '네 그런데 제목을 바꿔요', '좋네요' * 8):
+            self.assertFalse(is_acknowledgement(text), text)
 
 
 class PromptTest(SimpleTestCase):

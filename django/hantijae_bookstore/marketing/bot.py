@@ -16,7 +16,7 @@ from marketing import messages
 from marketing.hooks import add_hook, upcoming
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
-from marketing.text import fix_title_marks, title_key
+from marketing.text import fix_title_marks, is_acknowledgement, title_key
 from marketing.timeutil import KST, in_quiet_hours, kst_today, week_start
 from web.blog import fetch_rss, parse_rss
 
@@ -270,9 +270,10 @@ class Marketing:
     def handle_reply(self, chat_id, reply_id, msg, text, actor):
         draft = self._draft_for_message(chat_id, reply_id)
         if draft is None:  # 카드·브리핑에 단 답장: 어느 글을 고칠지 모른다
-            self.tg.send_message(chat_id, '고칠 점은 초안 메시지에 답장으로 적어 주세요.', reply_to=msg['message_id'])
+            if not (text and is_acknowledgement(text)):  # 인사 답장이면 안내도 안 보낸다 — 운영진끼리 맞장구에 끼어들지 않는다
+                self.tg.send_message(chat_id, '고칠 점은 초안 메시지에 답장으로 적어 주세요.', reply_to=msg['message_id'])
             return
-        if not text:
+        if not text or is_acknowledgement(text):  # 고맙다·좋다는 답뿐이면 고치지 않는다
             return
         CopyNote.objects.create(draft=draft, text=text, by=actor[:100])
         self.tg.send_message(chat_id, '고치고 있어요. 2~3분쯤 걸려요.', reply_to=msg['message_id'])
