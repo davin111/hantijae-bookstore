@@ -66,3 +66,9 @@ class CollectTest(TestCase):
     def test_all_sources_failing_raises(self):
         with self.assertRaises(RuntimeError):
             self.run_with(('kpipa', '출판진흥원', boom), ('nl', '국립중앙도서관', boom))
+
+    def test_duplicate_key_in_same_run_is_skipped(self):
+        found, failed = self.run_with(('kpipa', 'x', lambda *a: [ann(), ann()]))
+        self.assertEqual(failed, [])
+        self.assertEqual(len(found), 1)
+        self.assertEqual(SelectionAnnouncement.objects.count(), 1)

@@ -52,6 +52,9 @@ def collect(today, get_text=http_get, get_bytes=http_get_bytes, sleep=time.sleep
             failed.append(sid)
             continue
         for ann in anns:
+            if ann.key in seen:
+                continue
+            seen.add(ann.key)
             found += _record(ann, books)
     if failed and len(failed) == len(SCANNERS):
         raise RuntimeError('공공 선정 발표를 한 곳도 읽지 못했어요: ' + ', '.join(failed))
