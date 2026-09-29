@@ -1,6 +1,8 @@
 """마케팅 비서 LLM 프롬프트. VOICE는 .claude/docs/marketing/voice-guide.md를 줄인 것이다(운영진 지적이 쌓이면 여기에 반영)."""
 import json
 
+from marketing.timeutil import KST
+
 VOICE = """[한티재 말투]
 - 도서출판 한티재는 대구의 작은 출판사입니다. 조용하고 솔직한 편집자의 목소리로 씁니다. 판촉하지 않습니다.
 - 과장('최고의', '필독서', '역대급'), 거창한 수사, 착한 척·다정한 척하는 말, 어려운 말은 쓰지 않습니다.
@@ -52,6 +54,21 @@ NEWS_FILTER_SYSTEM = f"""당신은 기사 제목 목록을 보고 한티재 책�
 JSON 객체 하나만 출력하세요:
 {{"items": [{{"id": 기사 번호, "same_person": true, "evidence": "근거", "relevant": true, "sensitive": false, "summary": "한 줄 요약(쉬운 말)"}}]}}"""
 
+SOCIAL_JUDGE_SYSTEM = f"""당신은 도서출판 한티재 운영진(편집장·대표)이 개인 SNS에 올린 글을 보고, 한티재의 책·저자·행사·펀딩과 직접 관련 있는지 판정하는 도우미입니다. {NO_WEB} 글은 쓰지 않습니다.
+글마다 판정합니다:
+- relevant: 한티재 책(아래 목록에 있거나 한티재에서 곧 나올 책), 한티재 저자, 한티재가 열거나 함께하는 행사, 펀딩, 한티재 책의 서평·기사와 직접 닿으면 true. 저자의 일상 글을 공유했더라도 한티재 책이나 활동 이야기가 없으면 false.
+- private: 가족·건강·개인 일상처럼 사생활 이야기인지.
+- sensitive: 추모·부고·사고·재난·다툼처럼 홍보에 쓰면 안 되는지.
+- category: new_book(신간·출간 소식) | event(북토크·강연·행사) | funding(북펀드·텀블벅) | review(독자 서평·추천) | press(기사·방송·인터뷰) | author_news(저자의 다른 소식) | other
+- books: 글에 나온 책 제목을 글에 적힌 그대로. 목록에 없는 책도 적습니다. 없으면 빈 목록.
+- event: 행사 글이면 {{"date": "YYYY-MM-DD"(글에 날짜가 있을 때만. 연도가 없으면 게시일 뒤 가장 가까운 날), "name": "행사 이름", "place": "장소"}}, 아니면 null.
+- summary: 운영진에게 보여 줄 한 문장(쉬운 말). 저자 이름은 써도 되지만 다른 사람의 이름·연락처는 옮기지 않습니다.
+공유한 글이면 '공유한 원문'이 판단의 중심입니다. 원문을 쓴 사람과 공유한 사람을 헷갈리지 마세요.
+JSON 객체 하나만 출력하세요:
+{{"items": [{{"id": 글 번호, "relevant": true, "private": false, "sensitive": false, "category": "event", "books": ["책 제목"], "event": null, "summary": "한 줄"}}]}}"""
+
+PLATFORM_KO = {'facebook': '페이스북', 'instagram': '인스타그램'}
+
 
 def _book_block(book, authors_line):
     return '\n'.join([
@@ -93,4 +110,21 @@ def build_news_user(rows):
     for i, name, book_line, a in rows:
         lines.append(f'{i}. 찾은 이름: {name} / 한티재 책: {book_line} / [{a.source}] {a.title} ({a.published})')
     lines.append('</기사>')
+    return '\n'.join(lines)
+
+
+def build_social_user(posts, catalog_lines, role_labels):
+    lines = ['<한티재 도서 목록(제목 | 부제 | 지은이)>', *catalog_lines, '</한티재 도서 목록>', '<글>']
+    for i, p in enumerate(posts):
+        day = p.posted_at.astimezone(KST).date().isoformat()
+        lines.append(f'[{i}] {role_labels.get(p.account, p.account)} · {PLATFORM_KO.get(p.platform, p.platform)} · {day}')
+        if p.text:
+            lines.append('본인 글: ' + p.text[:1500])
+        if p.shared.get('text') or p.shared.get('url'):
+            when = (p.shared.get('posted_at') or '')[:10] or '날짜 모름'
+            lines.append(f'공유한 원문(원작성자 {p.shared.get("author") or "모름"}, {when}): '
+                         + (p.shared.get('text') or '')[:1500])
+        if p.link.get('title'):
+            lines.append(f'링크: {p.link["title"]} 〈{p.link.get("source", "")}〉')
+    lines.append('</글>')
     return '\n'.join(lines)
