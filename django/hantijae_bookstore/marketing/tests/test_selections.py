@@ -1,8 +1,10 @@
 import json
 from datetime import date, datetime, timedelta
+from io import StringIO
 from types import SimpleNamespace
 from unittest import mock
 
+from django.core.management import call_command
 from django.test import TestCase
 
 from intake.models import WorkerState
@@ -196,3 +198,14 @@ class AnnounceTest(TestCase):
             with self.assertLogs('intake', level='WARNING') as logs:
                 run_scan(deps, TODAY, NOW)
         self.assertEqual(Notice.objects.count(), 2)
+
+
+class CommandTest(TestCase):
+    def test_dry_run_reports_but_keeps_nothing(self):
+        make_book(title='무궁화호를 위하여', published=date(2026, 3, 16), isbn='979-11-92455-80-8  03300', author='하승우')
+        out = StringIO()
+        with mock.patch('marketing.selections.SCANNERS', [('kpipa', '출판진흥원 결과공고', lambda *a: [ann()])]):
+            call_command('marketing_scan_selections', '--dry-run', stdout=out)
+        self.assertIn('찾은 책 1건', out.getvalue())
+        self.assertIn('『무궁화호를 위하여』', out.getvalue())
+        self.assertEqual((SelectionAnnouncement.objects.count(), Signal.objects.count()), (0, 0))
