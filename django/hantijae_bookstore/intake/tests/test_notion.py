@@ -69,3 +69,39 @@ class FillNotionTest(TestCase):
         self.assertEqual(r['page_id'], 'p1')
         self.assertIn('접두 일치', r['note'])
         self.assertIn('사그라다 파밀리아', r['note'])
+
+
+class FakeSession:
+    def __init__(self, pages):
+        self.pages, self.calls = list(pages), []
+
+    def request(self, method, url, headers=None, timeout=None, **kw):
+        self.calls.append((method, url, kw))
+        body = self.pages.pop(0)
+
+        class Res:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return body
+        return Res()
+
+
+class NotionReadTest(TestCase):
+    def test_query_pages_follows_cursor_with_date_filter(self):
+        s = FakeSession([{'results': [{'id': 'a'}], 'has_more': True, 'next_cursor': 'c1'},
+                         {'results': [{'id': 'b'}], 'has_more': False}])
+        c = notion.NotionClient('t', session=s)
+        self.assertEqual([p['id'] for p in c.query_pages('ds', '2025-09-30')], ['a', 'b'])
+        first = s.calls[0][2]['json']['filter']['or']
+        self.assertEqual(first[0], {'property': '발행일', 'date': {'on_or_after': '2025-09-30'}})
+        self.assertEqual(s.calls[1][2]['json']['start_cursor'], 'c1')
+
+    def test_children_follows_cursor(self):
+        s = FakeSession([{'results': [{'id': 'x'}], 'has_more': True, 'next_cursor': 'n'},
+                         {'results': [{'id': 'y'}], 'has_more': False}])
+        c = notion.NotionClient('t', session=s)
+        self.assertEqual([b['id'] for b in c.children('page')], ['x', 'y'])
+        self.assertTrue(s.calls[0][1].endswith('/blocks/page/children'))
+        self.assertEqual(s.calls[1][2]['params']['start_cursor'], 'n')

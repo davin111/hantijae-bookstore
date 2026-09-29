@@ -32,6 +32,31 @@ class NotionClient:
     def update_page(self, page_id, properties):
         self._call('PATCH', f'/pages/{page_id}', json={'properties': properties})
 
+    # ---- 읽기 전용(계기 잡기: context.notion 이 쓴다) ----
+    def query_pages(self, data_source_id, published_after):
+        """발행일이 published_after(YYYY-MM-DD) 이후이거나 비어 있는 페이지 전부(페이지 넘김 포함)."""
+        body = {'page_size': 100, 'filter': {'or': [
+            {'property': '발행일', 'date': {'on_or_after': published_after}},
+            {'property': '발행일', 'date': {'is_empty': True}}]}}
+        out = []
+        while True:
+            res = self._call('POST', f'/data_sources/{data_source_id}/query', json=body)
+            out += res.get('results', [])
+            if not res.get('has_more'):
+                return out
+            body['start_cursor'] = res['next_cursor']
+
+    def children(self, block_id):
+        """블록의 바로 아래 블록들(페이지 넘김 포함)."""
+        out, cursor = [], None
+        while True:
+            params = {'page_size': 100, **({'start_cursor': cursor} if cursor else {})}
+            res = self._call('GET', f'/blocks/{block_id}/children', params=params)
+            out += res.get('results', [])
+            if not res.get('has_more'):
+                return out
+            cursor = res['next_cursor']
+
 
 def _title(page):
     return ''.join(t.get('plain_text', '') for t in page['properties'].get('제목', {}).get('title', []))
