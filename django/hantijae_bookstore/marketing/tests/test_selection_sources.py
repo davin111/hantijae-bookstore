@@ -78,6 +78,10 @@ class KpipaScanTest(SimpleTestCase):
         anns = scan_kpipa(date(2027, 1, 30), set(), PAGES.__getitem__, FILES.__getitem__, no_sleep)
         self.assertFalse(anns[0].fresh)
 
+    def test_unreadable_list_page_raises(self):
+        with self.assertRaises(RuntimeError):
+            scan_kpipa(date(2026, 9, 30), set(), lambda _: '<html>바뀐 형식</html>', FILES.__getitem__, no_sleep)
+
 
 TKPF_LIST_HTML = """<a href="/contents/readCountN.php?no=143&cp=1&searchSelect=&searchText=">2026년 하반기 올해의 청소년 교양도서 선정ㆍ보급사업 신청 안내</a>
 <a href="/contents/readCountN.php?no=137&cp=1&searchSelect=&searchText=">제159차 2026년 상반기 올해의 청소년 교양도서 선정ㆍ보급사업 선정 결과 발표</a>"""
@@ -122,6 +126,10 @@ class TkpfTest(SimpleTestCase):
         anns = scan_tkpf(date(2026, 6, 1), set(), pages.__getitem__,
                          lambda u: tiny_xlsx(['책'], ['9791111111111']), no_sleep)
         self.assertTrue(anns[0].withdrawal)
+
+    def test_unreadable_list_page_raises(self):
+        with self.assertRaises(RuntimeError):
+            scan_tkpf(date(2026, 6, 1), set(), lambda _: '<html>바뀐 형식</html>', None, no_sleep)
 
 
 NAS_HTML = """<ul class="data__list">

@@ -73,7 +73,10 @@ def kpipa_label(title):
 
 def scan_kpipa(today, seen, get_text, get_bytes, sleep):
     out = []
-    for no, title, posted in kpipa_posts(get_text(KPIPA_LIST)):
+    posts = kpipa_posts(get_text(KPIPA_LIST))
+    if not posts:
+        raise RuntimeError('출판진흥원 결과공고 목록에서 글을 하나도 찾지 못했어요(페이지 형식이 바뀌었을 수 있어요)')
+    for no, title, posted in posts:
         key = f'kpipa:{no}'
         if key in seen or not is_selection_title(title):
             continue
@@ -122,7 +125,10 @@ def tkpf_label(title):
 
 def scan_tkpf(today, seen, get_text, get_bytes, sleep):
     out = []
-    for no, title in tkpf_posts(get_text(TKPF_LIST)):
+    list_html = get_text(TKPF_LIST)
+    if not _TKPF_ROW.findall(list_html):
+        raise RuntimeError('청소년 교양도서 공지 목록에서 글을 하나도 찾지 못했어요(페이지 형식이 바뀌었을 수 있어요)')
+    for no, title in tkpf_posts(list_html):
         key = f'tkpf:{no}'
         if key in seen:
             continue
