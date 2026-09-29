@@ -36,7 +36,9 @@ BRIEFING_SYSTEM = VOICE + '\n\n' + f"""당신은 한티재 운영진에게 이�
 - 같은 책을 두 항목에 넣지 않습니다.
 - 숫자는 후보에 적힌 표기 그대로만 씁니다. 후보에 없는 숫자를 만들지 마세요.
 - memorial이 true인 후보는 알리기만 하고, 구매·주문·할인·링크를 권하지 않습니다.
-- headline은 『책 제목』 ― 계기 한 줄, reason은 운영진에게 하는 말로 두 문장 이내(쉬운 존댓말).
+- 운영진 SNS 후보(다가오는 행사·행사 후기·공식 채널로 옮겨 싣기·서평·기사 모음)는 운영진이 이미 개인 계정에 올린 것입니다. 같은 사실을 한티재 공식 채널용으로 새로 쓰고, 개인적인 이야기와 다른 사람의 이름·연락처는 빼며, 운영진의 글을 그대로 베끼지 않습니다. books가 비어 있으면 facts의 not_on_site 제목을 그대로 씁니다. 서평·기사 모음은 블로그 모음 글이나 서점 리뷰 부탁으로 씁니다.
+- '참고' 블록은 후보가 아닙니다. 운영진이 이미 충분히 알린 책은 같은 내용을 되풀이하지 말고 다른 각도를 고릅니다. 그 블록의 숫자는 쓰지 않습니다.
+- headline은 『책 제목』 ― 계기 한 줄(책이 없는 후보는 행사·소식 이름 ― 계기), reason은 운영진에게 하는 말로 두 문장 이내(쉬운 존댓말).
 JSON 객체 하나만 출력하세요:
 {{"items": [{{"candidate_id": "후보 id", "headline": "『제목』 ― 계기", "reason": "...",
    "draft": {{"channel": "instagram|blog|letter", "title": "글 제목(없으면 빈 문자열)", "body": "글"}}}}],
@@ -88,11 +90,14 @@ def build_kit_user(book, authors_line, today, blog_exists, hooks=()):
     return '\n'.join(lines)
 
 
-def build_briefing_user(candidates, today):
-    return '\n'.join([
+def build_briefing_user(candidates, today, context=()):
+    lines = [
         f'오늘은 {today.isoformat()}({"월화수목금토일"[today.weekday()]}요일)입니다. 이번 주 제안을 골라 주세요.',
         '<후보>', json.dumps([c.as_prompt() for c in candidates], ensure_ascii=False, indent=1), '</후보>',
-    ])
+    ]
+    if context:
+        lines += ['<참고: 운영진이 최근 개인 SNS에 올린 한티재 소식(후보 아님)>', *context, '</참고>']
+    return '\n'.join(lines)
 
 
 def build_rewrite_user(draft, note, source_text):

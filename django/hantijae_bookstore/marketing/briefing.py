@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from intake.llm import complete_json
@@ -18,11 +19,11 @@ SALES_WORDS = ('구매', '주문', '할인', '서점에서', '링크', 'http', '
 CHANNELS = (Draft.INSTAGRAM, Draft.BLOG, Draft.LETTER)
 
 
-def compose(llm, cands, today):
+def compose(llm, cands, today, context=()):
     if not cands:
         return [], []
     by_id = {c.id: c for c in cands}
-    result = complete_json(llm, BRIEFING_SYSTEM, build_briefing_user(cands, today))
+    result = complete_json(llm, BRIEFING_SYSTEM, build_briefing_user(cands, today, context))
     items, dropped, used_books = [], [], set()
     for raw in result.get('items') or []:
         if not isinstance(raw, dict):
@@ -62,15 +63,20 @@ def save_briefing(items, today):
     with transaction.atomic():  # 도중에 실패하면 옛 항목이 그대로 남는다(반쯤 만든 브리핑이 나가지 않게)
         briefing, _ = Briefing.objects.get_or_create(week_start=week_start(today))
         # 관리자가 /brief 로 다시 만들면 새 항목으로 바꾼다. 옛 항목이 쓴 저자 소식은 다시 후보가 되게 풀어 준다
-        Signal.objects.filter(proposal__briefing=briefing).update(used_at=None)
+        # 묶음 후보(서평·기사 모음)의 나머지 신호는 Proposal.extra['signals']에 적어 두었다
+        more = [i for extra in briefing.items.values_list('extra', flat=True) for i in (extra or {}).get('signals', [])]
+        Signal.objects.filter(Q(proposal__briefing=briefing) | Q(pk__in=more)).update(used_at=None)
         briefing.items.all().delete()
         for rank, (cand, headline, reason, d) in enumerate(items, 1):
+            extra = [s.pk for s in cand.more_signals]
             p = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=cand.books[0] if cand.books else None,
                                         signal=cand.signal, briefing=briefing, candidate_key=cand.id,
-                                        headline=headline[:300], reason=reason, rank=rank)
+                                        headline=headline[:300], reason=reason, rank=rank,
+                                        extra={'signals': extra} if extra else {})
             Draft.objects.create(proposal=p, channel=d['channel'], title=d['title'][:300], body=d['body'])
-            if cand.signal:
-                Signal.objects.filter(pk=cand.signal.pk).update(used_at=timezone.now())
+            used = ([cand.signal.pk] if cand.signal else []) + extra
+            if used:
+                Signal.objects.filter(pk__in=used).update(used_at=timezone.now())
     return briefing
 
 
@@ -101,7 +107,7 @@ def measure_line(today):
 
 
 def build_weekly(llm, today, now, posts):
-    items, dropped = compose(llm, candidates.gather(today, now, posts), today)
+    items, dropped = compose(llm, candidates.gather(today, now, posts), today, candidates.social_context(now))
     briefing = save_briefing(items, today)
     briefing.measure = measure_line(today)[:300]
     briefing.save(update_fields=['measure'])
