@@ -158,3 +158,8 @@ class MomentCandidateTest(TestCase):
         self.assertIn('방에서 나온 이야기: 단체 주문 200권', surge.summary)
         self.assertEqual((surge.facts['room'], surge.signal), ('단체 주문 200권', m_group))
         self.assertFalse({m_fund.id, m_sel.id} & {c.signal.id for c in out if c.signal})
+
+    def test_undated_window_follows_seen_on_not_found_at(self):
+        self.moment('7월 이야기', seen_on='2026-07-20')
+        self.moment('어제 이야기', seen_on='2026-09-27', found=NOW - timedelta(days=40))
+        self.assertEqual(self.ids(), ['어제 이야기'])

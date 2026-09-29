@@ -12,7 +12,7 @@ from marketing.funding import ends_on, is_stalled, live_campaigns
 from marketing.hooks import upcoming
 from marketing.kit import blog_has
 from marketing.models import BookProfile, Proposal, SalesSnapshot, Signal
-from marketing.moments import TYPE_LABEL, find_book
+from marketing.moments import TYPE_LABEL, find_book, seen_on
 from marketing.sales import latest
 from marketing.text import title_key, won_display
 from marketing.timeutil import kst_today, week_start
@@ -139,7 +139,7 @@ def moment_candidates(today, now):
             left = (day - today).days
             if not -7 <= left <= 21:
                 continue
-        elif s.found_at < now - timedelta(days=30 if d.get('type') == 'upcoming' else 14):
+        elif seen_on(s) < today - timedelta(days=30 if d.get('type') == 'upcoming' else 14):
             continue
         books = moment_books(s)
         if not books:
@@ -172,7 +172,8 @@ def with_moments(cands, moments, now):
     for surge in [c for c in cands if c.kind == 'surge' and c.signal is None]:
         book_id = surge.books[0].id
         talk = next((m for m in keep if m.signal.detail.get('type') in ROOM_TALK_TYPES
-                     and book_id in {b.id for b in m.books} and m.signal.found_at >= now - timedelta(days=14)), None)
+                     and book_id in {b.id for b in m.books}
+                     and seen_on(m.signal) >= kst_today(now) - timedelta(days=14)), None)
         if talk:
             surge.summary += f' ― 방에서 나온 이야기: {talk.signal.title}'
             surge.facts['room'] = talk.signal.title

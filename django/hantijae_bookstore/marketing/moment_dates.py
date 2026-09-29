@@ -71,3 +71,38 @@ def candidate_dates(text, sent):
 def date_supported(day, evidence):
     """evidence: [(근거 글, 보낸 날)] 가운데 하나라도 day를 설명하면 True."""
     return any(day in candidate_dates(text, sent) for text, sent in evidence)
+
+
+def explicit_mentions(text, ref):
+    """결과 글(제목·요약)에 적힌 날짜 표현마다 그 표현이 뜻할 수 있는 날짜 집합. ref: 기준 날(근거 가운데 가장 늦은 날).
+    '저녁 7시'·'80주년'처럼 날짜가 아닌 숫자는 잡지 않는다."""
+    text = text or ''
+    out = []
+    for y, m, d in _FULL.findall(text):
+        found = set()
+        _add(found, int(y), int(m), int(d))
+        out.append(found)
+    stripped = _FULL.sub(' ', text)  # 연월일은 위에서 봤으니 월·일로 다시 세지 않는다
+    for m, d in _MONTH_DAY.findall(stripped):
+        found = set()
+        _month_day(found, int(m), int(d), ref)
+        out.append(found)
+    first = ref.replace(day=1)
+    following = (first + timedelta(days=32)).replace(day=1)
+    for d in _DAY_ONLY.findall(_MONTH_DAY.sub(' ', stripped)):
+        found = set()
+        for base in (first, following):
+            _add(found, base.year, base.month, int(d))
+        out.append(found)
+    return [f for f in out if f]
+
+
+def unsupported_mentions(text, evidence):
+    """결과 글의 날짜 표현 가운데 근거로 설명되지 않는 것들(표현마다 가능한 날짜 집합)."""
+    if not evidence:
+        return []
+    ref = max(sent for _, sent in evidence)
+    pool = set()
+    for body, sent in evidence:
+        pool |= candidate_dates(body, sent)
+    return [found for found in explicit_mentions(text, ref) if not found & pool]

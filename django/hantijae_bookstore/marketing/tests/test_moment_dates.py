@@ -52,3 +52,19 @@ class SupportedTest(SimpleTestCase):
         self.assertTrue(date_supported(date(2026, 9, 18), ev))
         self.assertFalse(date_supported(date(2026, 9, 19), ev))
         self.assertFalse(date_supported(date(2026, 9, 18), []))
+
+
+class MentionTest(SimpleTestCase):
+    def test_explicit_mentions(self):
+        from marketing.moment_dates import explicit_mentions
+        self.assertEqual(explicit_mentions('10월 17일 저자 강연', WED), [{date(2026, 10, 17)}])
+        self.assertEqual(explicit_mentions('2026-10-02에 강연', WED), [{date(2026, 10, 2)}])
+        self.assertEqual(explicit_mentions('17일 저녁 7시, 80주년', WED), [{date(2026, 9, 17), date(2026, 10, 17)}])
+        self.assertEqual(explicit_mentions('저녁 7시 강연, 264쪽', WED), [])
+
+    def test_unsupported_mentions(self):
+        from marketing.moment_dates import unsupported_mentions
+        ev = [('금요일에 강연 잡혔어요', date(2026, 9, 29))]
+        self.assertEqual(unsupported_mentions('10월 2일 저자 강연', ev), [])
+        self.assertEqual(unsupported_mentions('10월 17일 저자 강연', ev), [{date(2026, 10, 17)}])
+        self.assertEqual(unsupported_mentions('2026-10-02 금요일에 강연', ev), [])

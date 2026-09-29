@@ -352,3 +352,81 @@ class DailyTest(TestCase):
         new_part = llm.calls[0][1].split('\n<새 기록>\n')[1]
         self.assertNotIn('9/1(', new_part)
         self.assertIn('9/29(', new_part)
+
+
+class ReviewFixTest(TestCase):
+    def setUp(self):
+        self.book = make_book()
+
+    def run_with(self, reply, **kw):
+        return M.run(FakeLLM(reply), NOW, **kw)
+
+    def test_invented_date_in_title_or_summary_is_dropped(self):
+        e = entry(1, '강연 잡혔대요')
+        r = self.run_with({'new': [new_item([e.id], title='10월 17일 저자 강연', date_='', date_text=''),
+                                   new_item([e.id], title='저자 강연', summary='10월 17일에 한다.', date_='', date_text='')]})
+        self.assertEqual(r.new, [])
+        self.assertTrue(all('자료에 없는 날짜' in d for d in r.dropped))
+
+    def test_update_without_new_evidence_is_ignored(self):
+        first = entry(1, '금요일 강연')
+        s = moment('저자 강연', book=self.book, day=date(2026, 10, 2), evidence=[first])
+        entry(2, '다른 이야기')
+        r = self.run_with({'updates': [{'id': s.id, 'status': 'cancelled'},
+                                       {'id': s.id, 'status': 'cancelled', 'evidence': [first.id]}]})
+        s.refresh_from_db()
+        self.assertEqual((s.relevant, s.detail['status']), (True, 'planned'))
+        self.assertEqual(r.dropped, [f'#{s.id}: 새 근거 없는 갱신'] * 2)
+
+    def test_old_unverified_date_and_old_undated_story_are_dropped(self):
+        e = entry(1, '다음 달 초에 북토크')
+        old = entry(2, '재쇄 들어가요', at=datetime(2026, 8, 20, 10, 0, tzinfo=KST))
+        r = self.run_with({'new': [new_item([e.id], date_='2026-08-03', date_text='다음 달 초'),
+                                   new_item([old.id], type='stock', title='재쇄', summary='재쇄에 들어간다.', date_='',
+                                            date_text='')]})
+        self.assertEqual(r.new, [])
+        self.assertIn('지난 일(2026-08-03)', r.dropped[0])
+        self.assertIn('오래된 이야기(2026-08-20)', r.dropped[1])
+
+    def test_seen_on_is_the_latest_evidence_day(self):
+        e = entry(1, '재쇄 들어가요', at=datetime(2026, 9, 25, 10, 0, tzinfo=KST))
+        [s] = self.run_with({'new': [new_item([e.id], type='stock', title='재쇄', summary='재쇄한다.', date_='',
+                                              date_text='')]}).new
+        self.assertEqual(s.detail['seen_on'], '2026-09-25')
+        self.assertEqual(M.seen_on(s), date(2026, 9, 25))
+
+    def test_merge_does_not_downgrade_status(self):
+        first = entry(1, '금요일 강연 확정')
+        s = moment('저자 강연', book=self.book, day=date(2026, 10, 2), evidence=[first], status='confirmed')
+        e = entry(2, '금요일 강연 기대돼요')
+        item = new_item([e.id], status='planned')
+        self.run_with({'new': [item]})
+        s.refresh_from_db()
+        self.assertEqual((s.detail['status'], s.evidence.count()), ('confirmed', 2))
+        item = new_item([entry(3, '금요일 강연 끝났어요').id], date_='2026-10-02')
+        del item['status']
+        self.run_with({'new': [item]})
+        s.refresh_from_db()
+        self.assertEqual(s.detail['status'], 'confirmed')
+
+    def test_record_forgotten_during_extraction_is_not_used(self):
+        e = entry(1, '금요일에 강연')
+
+        class ForgetMidway:
+            def complete(self, system, user, attachments=()):
+                ContextEntry.objects.filter(pk=e.pk).update(forgotten=True, text='')
+                import json
+                return json.dumps({'new': [new_item([e.id])]}, ensure_ascii=False)
+        r = M.run(ForgetMidway(), NOW)
+        self.assertEqual((r.new, Signal.objects.count()), ([], 0))
+        self.assertIn('근거가 방금 잊힘', r.dropped)
+
+    def test_acknowledgement_only_day_skips_llm_but_posted_note_does_not(self):
+        entry(1, '넵')
+        entry(2, '감사합니다 ㅎㅎ')
+        llm = FakeLLM({'new': []})
+        M.run(llm, NOW)
+        self.assertEqual(llm.calls, [])
+        entry(3, '올렸어요')
+        M.run(llm, NOW)
+        self.assertEqual(len(llm.calls), 1)

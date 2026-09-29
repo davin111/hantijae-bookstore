@@ -116,3 +116,36 @@ class NotionSectionTest(TestCase):
         secs = N.sections(page(), top)
         self.assertEqual([s.key for s in secs], ['notion:p1:top', 'notion:t'])
         self.assertEqual(secs[0].text, '앞\n뒤')
+
+
+class NotionUpdateTest(TestCase):
+    def test_changed_lines_are_starred_and_stars_ignored_when_comparing(self):
+        N.sync(FakeClient([page()], TREE), 'ds', NOW, sleep=no_sleep)
+        changed = page(**{'선정 / 추천 / 수상': {'type': 'rich_text', 'rich_text': rt('2026 세종도서 교양 선정')}})
+        self.assertEqual(N.sync(FakeClient([changed], TREE), 'ds', NOW, sleep=no_sleep), 1)
+        props = ContextEntry.objects.get(key='notion:p1:props')
+        self.assertIn('★ 선정 / 추천 / 수상: 2026 세종도서 교양 선정', props.text)
+        self.assertIn('\n발행일: 2026-10-20', props.text)
+        self.assertEqual(N.sync(FakeClient([changed], TREE), 'ds', NOW, sleep=no_sleep), 0)
+
+    def test_forgotten_section_follows_page_time_and_is_not_resurrected(self):
+        N.sync(FakeClient([page()], TREE), 'ds', NOW, sleep=no_sleep)
+        ContextEntry.objects.filter(key='notion:p1:props').update(forgotten=True, text='')
+        later = '2026-09-29T10:00:00.000Z'
+        edited = page(edited=later, **{'상태': {'type': 'select', 'select': {'name': '출간 완료'}}})
+        self.assertEqual(N.sync(FakeClient([edited], TREE), 'ds', NOW, sleep=no_sleep), 0)
+        props = ContextEntry.objects.get(key='notion:p1:props')
+        self.assertEqual((props.forgotten, props.text, props.at),
+                         (True, '', datetime(2026, 9, 29, 10, 0, tzinfo=timezone.utc)))
+
+    def test_one_failing_page_does_not_stop_the_rest(self):
+        class Broken(FakeClient):
+            def children(self, block_id):
+                if block_id == 'bad':
+                    raise RuntimeError('502')
+                return super().children(block_id)
+        client = Broken([{**page(), 'id': 'bad'}, page()], TREE)
+        with self.assertRaises(RuntimeError) as ctx:
+            N.sync(client, 'ds', NOW, sleep=no_sleep)
+        self.assertIn('노션 페이지 1개 읽기 실패', str(ctx.exception))
+        self.assertTrue(ContextEntry.objects.filter(key='notion:t1').exists())

@@ -21,10 +21,10 @@ from context.models import ContextEntry
 from context.redact import redact
 from intake.llm import Attachment, complete_json
 from intake.models import WorkerState
-from marketing.moment_dates import date_supported
+from marketing.moment_dates import date_supported, unsupported_mentions
 from marketing.models import MomentScan, Proposal, Signal, SignalEvidence
 from marketing.prompts import MOMENT_SYSTEM, build_moment_user
-from marketing.text import clip, foreign_numbers, title_key
+from marketing.text import clip, foreign_numbers, is_acknowledgement, title_key
 from marketing.timeutil import KST, kst_today, week_start
 
 log = logging.getLogger('intake')
@@ -32,7 +32,9 @@ TYPES = ('author', 'event', 'group', 'selection', 'funding', 'media', 'issue', '
 TYPE_LABEL = {'author': '저자 활동', 'event': '행사', 'group': '단체', 'selection': '선정·수상', 'funding': '펀딩',
               'media': '매체 소개', 'issue': '시사', 'stock': '책 상태·수요', 'upcoming': '신간 예고'}
 STATUSES = ('planned', 'confirmed', 'done', 'cancelled')
-CHUNK_CHARS, MAX_CHUNKS, CONTEXT_LINES, OPEN_LIMIT, PAST_DAYS = 30000, 4, 30, 40, 7
+CHUNK_CHARS, MAX_CHUNKS, CONTEXT_LINES, OPEN_LIMIT, PAST_DAYS, STALE_DAYS = 30000, 4, 30, 40, 7, 30
+STATUS_RANK = {'planned': 0, 'confirmed': 1, 'done': 2}
+POSTED_WORDS = ('올렸', '게시')  # '올렸어요'는 맞장구가 아니라 '이미 홍보함' 신호라 건너뛰지 않는다
 WEEKDAYS = '월화수목금토일'
 MEDIA_LABEL = {'video': '동영상', 'voice': '음성', 'audio': '오디오', 'sticker': '스티커', 'animation': '움짤',
                'video_note': '영상 메시지', 'contact': '연락처', 'location': '위치', 'poll': '투표'}
@@ -61,7 +63,13 @@ def pending_entries():
 
 
 def _meaningful(e):
-    return bool(e.text.strip() or e.media_text.strip())
+    """LLM에 보낼 만한 기록인가. 빈 글·스티커·'넵'·'감사합니다' 같은 맞장구만 있으면 아니다."""
+    if e.media_text.strip() or e.source == ContextEntry.NOTION:
+        return bool(e.media_text.strip() or e.text.strip())
+    text = e.text.strip()
+    if not text:
+        return False
+    return not is_acknowledgement(text) or any(w in text for w in POSTED_WORDS)
 
 
 def _waiting_photo(e):
@@ -149,15 +157,24 @@ def find_book(title, index=None):
     return None
 
 
+def seen_on(s):
+    """계기가 대화·노션에 마지막으로 나온 날(근거 가운데 가장 늦은 날). 옛 기록에서 늦게 찾은 계기가 새 계기처럼
+    보이지 않게, 날짜 없는 계기의 기간 판단은 찾은 날(found_at)이 아니라 이 날로 한다."""
+    try:
+        return date.fromisoformat(s.detail['seen_on'])
+    except (KeyError, TypeError, ValueError):
+        return s.found_at.astimezone(KST).date()
+
+
 def open_moments(today, now, limit=OPEN_LIMIT):
-    """LLM에 '이미 아는 계기'로 보여 줄 것: 취소 아님, 날짜가 7일 전 이후이거나 날짜 없이 30일 안에 찾은 것."""
+    """LLM에 '이미 아는 계기'로 보여 줄 것: 취소 아님, 날짜가 7일 전 이후이거나 날짜 없이 30일 안에 나온 것."""
     out = []
     for s in Signal.objects.filter(kind=Signal.MOMENT).select_related('book').order_by('-found_at', '-id'):
         if s.detail.get('status') == 'cancelled':
             continue
         if s.happens_on and s.happens_on < today - timedelta(days=PAST_DAYS):
             continue
-        if not s.happens_on and s.found_at < now - timedelta(days=30):
+        if not s.happens_on and seen_on(s) < today - timedelta(days=STALE_DAYS):
             continue
         out.append(s)
         if len(out) == limit:
@@ -265,15 +282,23 @@ def _new(raw, by_id, index, today):
     if not title:
         return None, [], f'빈 제목 (#{ev[0].id})'
     summary, place = _clean(raw.get('summary'), 300), _clean(raw.get('place'), 100)
+    raw_day = _parse_date(raw.get('date'))
+    if raw_day and raw_day < today - timedelta(days=PAST_DAYS):  # 확인 여부와 상관없이 지난 일은 버린다
+        return None, [], f'{title}: 지난 일({raw_day.isoformat()})'
     day, date_text, unverified = _check_date(raw.get('date'), raw.get('date_text'), ev)
-    if day and day < today - timedelta(days=PAST_DAYS):
-        return None, [], f'{title}: 지난 일({day.isoformat()})'
-    bad = foreign_numbers(' '.join([title, summary, place]), _allowed(ev, today, day))
+    last = max(_local_day(e) for e in ev)
+    if not day and last < today - timedelta(days=STALE_DAYS):
+        return None, [], f'{title}: 오래된 이야기({last.isoformat()})'
+    text = ' '.join([title, summary, place])
+    bad = foreign_numbers(text, _allowed(ev, today, day))
     if bad:
         return None, [], f'{title}: 자료에 없는 숫자 {", ".join(bad)}'
+    if unsupported_mentions(text, _date_evidence(ev)):
+        return None, [], f'{title}: 자료에 없는 날짜'
     books, hint = _books(raw.get('books'), index)
-    return {'type': kind, 'status': status, 'title': title, 'summary': summary, 'place': place, 'happens_on': day,
-            'date_text': date_text, 'date_unverified': unverified, 'books': books, 'book_hint': hint,
+    return {'type': kind, 'status': status, 'status_given': bool(raw.get('status')), 'title': title,
+            'summary': summary, 'place': place, 'happens_on': day, 'date_text': date_text,
+            'date_unverified': unverified, 'books': books, 'book_hint': hint, 'seen_on': last,
             'promoted': raw.get('promoted') is True, 'sensitive': raw.get('sensitive') is True}, ev, ''
 
 
@@ -296,10 +321,16 @@ def _evidence_of(s):
     return [x.entry for x in s.evidence.select_related('entry')]
 
 
+def _downgrade(old, new):
+    """확정 → 예정처럼 되돌아가는 상태 변경(같은 일을 새로 말한 것일 뿐이라 받지 않는다)."""
+    return old in STATUS_RANK and new in STATUS_RANK and STATUS_RANK[new] < STATUS_RANK[old]
+
+
 def _merge_changes(s, f):
     """새 계기로 들어왔지만 열린 계기와 같은 일일 때 바꿀 칸(날짜는 ±1일 안이라 그대로 둔다)."""
     changes = {}
-    if f['status'] != s.detail.get('status'):
+    old_status = s.detail.get('status')
+    if f['status_given'] and f['status'] != old_status and not _downgrade(old_status, f['status']):
         changes['status'] = f['status']
     for key in ('summary', 'place'):
         if f[key] and f[key] != s.detail.get(key):
@@ -320,6 +351,8 @@ def _update(raw, by_id, open_by_id, today):
         return None, f'#{s.id}: 모르는 상태 {status}'
     old = _evidence_of(s)
     added = [e for e in _pick(raw.get('evidence'), by_id) if e not in old]
+    if not added:  # 취소·날짜 변경·이미 올림은 이번 입력의 새 근거가 있어야 받는다
+        return None, f'#{s.id}: 새 근거 없는 갱신'
     every = old + added
     changes = {}
     if status and status != s.detail.get('status'):
@@ -336,12 +369,12 @@ def _update(raw, by_id, open_by_id, today):
             changes.update(happens_on=day, date_text=text, date_unverified=False)
         elif unverified and not s.happens_on:  # 확인된 날짜를 확인 못 한 날짜로 덮지 않는다
             changes.update(date_text=text, date_unverified=True)
-    bad = foreign_numbers(' '.join([changes.get('summary', ''), changes.get('place', '')]),
-                          _allowed(every, today, changes.get('happens_on') or s.happens_on))
+    text = ' '.join([changes.get('summary', ''), changes.get('place', '')])
+    bad = foreign_numbers(text, _allowed(every, today, changes.get('happens_on') or s.happens_on))
     if bad:
         return None, f'#{s.id}: 자료에 없는 숫자 {", ".join(bad)}'
-    if not changes and not added:
-        return None, ''
+    if unsupported_mentions(text, _date_evidence(every)):
+        return None, f'#{s.id}: 자료에 없는 날짜'
     return {'op': 'update', 'signal': s, 'changes': changes, 'evidence': added}, ''
 
 
@@ -383,7 +416,7 @@ def _create(f, entries):
     detail = {'type': f['type'], 'status': f['status'], 'summary': f['summary'], 'place': f['place'],
               'date_text': f['date_text'], 'date_unverified': f['date_unverified'],
               'book_ids': [b.id for b in f['books']], 'book_hint': f['book_hint'], 'promoted': f['promoted'],
-              'sources': sorted({e.source for e in entries})}
+              'seen_on': f['seen_on'].isoformat(), 'sources': sorted({e.source for e in entries})}
     s = Signal.objects.create(kind=Signal.MOMENT, key=f'moment:{uuid.uuid4().hex[:16]}',
                               book=f['books'][0] if f['books'] else None, title=f['title'], detail=detail,
                               happens_on=f['happens_on'], relevant=f['status'] != 'cancelled',
@@ -417,6 +450,8 @@ def _save_update(s, changes, entries):
         if key in changes:
             detail[key] = changes[key]
     detail['sources'] = sorted(set(detail.get('sources', [])) | {e.source for e in entries})
+    if entries:
+        detail['seen_on'] = max([seen_on(s)] + [_local_day(e) for e in entries]).isoformat()
     if 'happens_on' in changes:
         s.happens_on = changes['happens_on']
     s.detail = detail
@@ -427,7 +462,13 @@ def _save_update(s, changes, entries):
 
 
 def apply(actions, report):
+    """저장 직전에 근거가 잊혔는지 다시 본다(추출 도중 /잊어·관리자 '잊기'가 끼어든 경우)."""
+    ids = {e.id for a in actions for e in a['evidence']}
+    gone = set(ContextEntry.objects.filter(id__in=ids, forgotten=True).values_list('id', flat=True))
     for a in actions:
+        if gone & {e.id for e in a['evidence']}:
+            report.dropped.append('근거가 방금 잊힘')
+            continue
         if a['op'] == 'new':
             report.new.append(_create(a['fields'], a['evidence']))
         elif a['changes'] or a['evidence']:
@@ -600,7 +641,7 @@ def status_text(today, now):
         f"마지막 계기 잡기 {WorkerState.get('moment_last_run', '-')} · 주중 만들기 {WorkerState.get('midweek_last_build', '-')}",
         f'열린 계기 {len(open_moments(today, now))}개 · 최근 7일 새 계기 '
         f'{Signal.objects.filter(kind=Signal.MOMENT, found_at__gte=week_ago).count()}개',
-        f'최근 7일 사진 읽음 {ContextEntry.objects.filter(media_read_at__gte=week_ago).count()}장 · 노션 구역 '
+        f'최근 7일 사진 읽음 {ContextEntry.objects.filter(media_read_at__gte=week_ago).count()}장 · 노션 구역(전체) '
         f'{ContextEntry.objects.filter(source=ContextEntry.NOTION, forgotten=False).count()}개',
         f'추출 안 된 기록 {len(pending_entries())}줄 · 이번 주 주중 제안 {midweek_sent}번',
     ])

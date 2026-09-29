@@ -20,6 +20,7 @@ TEXT_TYPES = ('paragraph', 'heading_1', 'heading_2', 'heading_3', 'bulleted_list
               'toggle', 'quote', 'callout', 'code')
 CONTAINER_TYPES = ('table', 'column_list', 'column', 'synced_block')  # 글은 안쪽 블록이 가진다
 NO_DESCEND = ('child_page', 'child_database')
+CHANGED = '★ '  # 다시 읽었을 때 새로 생기거나 바뀐 줄 표시(추출 LLM이 새 부분을 알아보게)
 
 
 @dataclass
@@ -131,8 +132,19 @@ def _tree(client, block_id, sleep, depth=1):
     return out
 
 
+def unmark(text):
+    return '\n'.join(line[len(CHANGED):] if line.startswith(CHANGED) else line for line in (text or '').split('\n'))
+
+
+def _mark_changes(old, new):
+    """이전 글에 없던 줄 앞에 ★. 무엇이 바뀌었는지 LLM이 알아야 옛 값으로 계기를 다시 만들지 않는다."""
+    before = set(old.split('\n'))
+    return '\n'.join(CHANGED + line if line.strip() and line not in before else line for line in new.split('\n'))
+
+
 def _upsert(sec, title, now):
-    text, counts = redact(sec.text[:KEEP])
+    text, counts = redact(sec.text)  # 가린 뒤 자른다(잘린 자리의 전화번호가 가림을 피하지 않게)
+    text = text[:KEEP]
     heading = redact(f'『{title}』 · {sec.title}')[0][:200]
     at = _parse(sec.at)
     entry = ContextEntry.objects.filter(key=sec.key).first()
@@ -140,8 +152,14 @@ def _upsert(sec, title, now):
         ContextEntry.objects.create(key=sec.key, source=ContextEntry.NOTION, origin=ContextEntry.LIVE, at=at,
                                     heading=heading, text=text, redactions=counts)
         return 1
-    if entry.forgotten or (entry.text == text and entry.heading == heading):
+    old = unmark(entry.text)
+    if entry.forgotten or (old == text and entry.heading == heading):
+        # 내용은 그대로 두고 시각만 따라간다 — 잊은 구역이 90일 정리로 지워졌다가 다음 훑기에 되살아나지 않게,
+        # 안 바뀐 구역이 90일마다 새 기록으로 다시 추출에 가지 않게(edited_at 은 건드리지 않는다)
+        if at > entry.at:
+            ContextEntry.objects.filter(pk=entry.pk).update(at=at)
         return 0
+    text = _mark_changes(old, text)
     entry.text, entry.heading, entry.redactions, entry.at, entry.edited_at = text, heading, counts, at, now
     entry.save(update_fields=['text', 'heading', 'redactions', 'at', 'edited_at', 'updated_at'])
     return 1
@@ -152,16 +170,26 @@ def sync(client, data_source_id, now, sleep=time.sleep):
     보관 일수(90일)보다 오래 안 고친 구역은 넣지 않는다 — 정리했다가 다시 넣는 반복을 막는다."""
     cutoff = now - timedelta(days=settings.CONTEXT['RETENTION_DAYS'])
     published_after = (now.date() - timedelta(days=365)).isoformat()
-    changed = 0
+    changed, failed = 0, []
     for page in client.query_pages(data_source_id, published_after):
         sleep(PAUSE)
-        top = []
-        for b in _children(client, page['id'], sleep):
-            sub = _tree(client, b['id'], sleep) if b.get('has_children') and b.get('type') not in NO_DESCEND else []
-            top.append((b, sub))
-        title = page_title(page)
-        for sec in [props_section(page)] + sections(page, top):
-            if sec is None or _parse(sec.at) < cutoff:
-                continue
-            changed += _upsert(sec, title, now)
+        try:  # 페이지 하나의 오류가 그 뒤 페이지를 막지 않게
+            changed += _sync_page(client, page, cutoff, now, sleep)
+        except Exception as e:
+            failed.append(f'{page_title(page) or page.get("id")}: {type(e).__name__}: {e}')
+    if failed:
+        raise RuntimeError(f'노션 페이지 {len(failed)}개 읽기 실패(나머지 {changed}구역은 반영) — {failed[0]}')
+    return changed
+
+
+def _sync_page(client, page, cutoff, now, sleep):
+    top = []
+    for b in _children(client, page['id'], sleep):
+        sub = _tree(client, b['id'], sleep) if b.get('has_children') and b.get('type') not in NO_DESCEND else []
+        top.append((b, sub))
+    title, changed = page_title(page), 0
+    for sec in [props_section(page)] + sections(page, top):
+        if sec is None or _parse(sec.at) < cutoff:
+            continue
+        changed += _upsert(sec, title, now)
     return changed
