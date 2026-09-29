@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from marketing.models import (BookProfile, Briefing, CopyNote, Draft, DraftMessage, FundingSnapshot, HookDate,
-                              Proposal, SalesSnapshot, Signal, WatchQuery)
+                              Proposal, SalesSnapshot, Signal, SocialPost, SocialRun, WatchQuery)
 
 
 @admin.register(SalesSnapshot)
@@ -27,6 +27,18 @@ class ProposalAdmin(admin.ModelAdmin):
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('created_at', 'proposal', 'channel', 'version', 'status', 'posted_at')
     list_filter = ('channel', 'status')
+
+
+@admin.register(SocialRun)
+class SocialRunAdmin(admin.ModelAdmin):
+    list_display = ('started_at', 'platform', 'purpose', 'state', 'cost_usd', 'error')
+    list_filter = ('platform', 'state')
+
+
+@admin.register(SocialPost)
+class SocialPostAdmin(admin.ModelAdmin):
+    list_display = ('posted_at', 'platform', 'account', 'group_key', 'judged_at', 'signal')
+    list_filter = ('platform', 'account')
 
 
 for model in (BookProfile, Briefing, CopyNote, DraftMessage, FundingSnapshot, Signal, WatchQuery):

@@ -52,8 +52,8 @@ class HookDate(BaseModel):
 
 
 class Signal(models.Model):
-    NEWS, SELECTION = 'news', 'selection'
-    kind = models.CharField(max_length=20, choices=((NEWS, '저자 소식'), (SELECTION, '공공 선정')))
+    NEWS, SELECTION, SOCIAL = 'news', 'selection', 'social'
+    kind = models.CharField(max_length=20, choices=((NEWS, '저자 소식'), (SELECTION, '공공 선정'), (SOCIAL, '운영진 SNS')))
     key = models.CharField(max_length=200, unique=True)
     book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL)
     title = models.CharField(max_length=500)
@@ -166,3 +166,53 @@ class SelectionAnnouncement(models.Model):
     withdrawal = models.BooleanField(default=False, help_text='철회·취소 공고')
     matched = models.PositiveSmallIntegerField(default=0, help_text='찾은 한티재 책 수')
     scanned_at = models.DateTimeField(auto_now_add=True)
+
+
+class SocialRun(models.Model):
+    """Apify 실행 한 번. Apify를 부르기 전에 먼저 만든다(워커가 죽어도 같은 시도를 되풀이하지 않게)."""
+    FACEBOOK, INSTAGRAM = 'facebook', 'instagram'
+    NORMAL, FIRST, DEEP, MANUAL = 'normal', 'first', 'deep', 'manual'
+    STARTING, RUNNING, SUCCEEDED, FAILED, SKIPPED = 'starting', 'running', 'succeeded', 'failed', 'skipped'
+    platform = models.CharField(max_length=20, choices=((FACEBOOK, '페이스북'), (INSTAGRAM, '인스타그램')))
+    purpose = models.CharField(max_length=10, default=NORMAL, help_text='normal·first(첫 실행)·deep(틈 보충)·manual')
+    accounts = models.JSONField(default=list, blank=True, help_text='역할 키 목록')
+    limit = models.PositiveSmallIntegerField(default=5, help_text='계정당 글 수')
+    apify_run_id = models.CharField(max_length=50, blank=True)
+    dataset_id = models.CharField(max_length=50, blank=True)
+    state = models.CharField(max_length=10, default=STARTING)
+    apify_status = models.CharField(max_length=20, blank=True)
+    error = models.CharField(max_length=300, blank=True)
+    cap_usd = models.DecimalField(max_digits=6, decimal_places=3)
+    cost_usd = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True)
+    stats = models.JSONField(default=dict, blank=True, help_text='계정별 items·valid·errors·new·known·reached·gap·status')
+    started_at = models.DateTimeField()
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ('-started_at',)
+
+
+class SocialPost(models.Model):
+    """운영진 개인 계정의 글 하나. 계정 주소는 저장하지 않고, 본문은 보관 기간이 지나면 지운다(social.prune)."""
+    platform = models.CharField(max_length=20)
+    account = models.CharField(max_length=20, help_text='역할 키(editor·ceo)')
+    post_id = models.CharField(max_length=100)
+    url = models.URLField(max_length=1000)
+    posted_at = models.DateTimeField()
+    text = models.TextField(blank=True, help_text='본인이 쓴 말')
+    shared = models.JSONField(default=dict, blank=True, help_text='공유 원문: url, text, author, posted_at')
+    link = models.JSONField(default=dict, blank=True, help_text='외부 링크: url, title, source')
+    group_key = models.CharField(max_length=300, blank=True, db_index=True)
+    first_run = models.ForeignKey(SocialRun, null=True, blank=True, related_name='+', on_delete=models.SET_NULL)
+    first_seen = models.DateTimeField()
+    last_seen = models.DateTimeField()
+    judged_at = models.DateTimeField(null=True, blank=True)
+    verdict = models.JSONField(default=dict, blank=True)
+    signal = models.ForeignKey(Signal, null=True, blank=True, related_name='social_posts', on_delete=models.SET_NULL)
+    text_cleared_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('platform', 'post_id')
+
+    def full_text(self):
+        return '\n'.join(t for t in (self.text, self.shared.get('text', ''), self.link.get('title', '')) if t)
