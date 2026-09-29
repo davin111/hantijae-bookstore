@@ -14,6 +14,7 @@ from marketing.models import BookProfile, Proposal, SalesSnapshot, Signal
 from marketing.sales import latest
 from marketing.text import title_key, won_display
 from marketing.timeutil import kst_today, week_start
+from web.models import Notice
 
 KIND_LABEL = {'hook': '기념일', 'fund': '진행 중 펀딩', 'news': '저자 소식', 'surge': '판매 지수 급등',
               'blog': '블로그 글 없음', 'noreview': '리뷰 없음', 'selection': '공공 선정'}
@@ -108,14 +109,19 @@ def news_candidates(now, days=14):
 
 
 def selection_candidates(now, days=14):
-    """새로 확인한 공공 선정(철회·옛 발표 제외). 알림 띠를 올렸는지 운영진이 알 수 있게 요약에 적는다."""
+    """새로 확인한 공공 선정(철회·옛 발표 제외) 중 첫 화면 알림이 실제로 떠 있는 것만 후보로 올린다.
+    제목만 맞은 것(알림이 아직 미리보기)이나 운영진이 내린 알림은 확정된 선정처럼 브리핑에 보이면 안 된다."""
     unused = Q(used_at__isnull=True) | Q(proposal__briefing__week_start=week_start(kst_today(now)))
     qs = (Signal.objects.filter(unused, kind=Signal.SELECTION, relevant=True, found_at__gte=now - timedelta(days=days),
                                 book__isnull=False).select_related('book').distinct())
+    notice_ids = [s.detail.get('notice_id') for s in qs if s.detail.get('notice_id')]
+    posted_ids = set(Notice.objects.filter(id__in=notice_ids, state=Notice.POSTED).values_list('id', flat=True))
     out = []
     for s in qs:
-        note = ' ― 첫 화면 알림을 올렸음' if s.detail.get('posted') else ''
-        out.append(Candidate(id=f'selection:{s.id}', kind='selection', books=[s.book], summary=f'{s.title} 선정{note}',
+        if s.detail.get('notice_id') not in posted_ids:
+            continue
+        out.append(Candidate(id=f'selection:{s.id}', kind='selection', books=[s.book],
+                             summary=f'{s.title} 선정 ― 첫 화면 알림이 떠 있음',
                              facts={'url': s.url, 'date': s.happens_on.isoformat() if s.happens_on else ''},
                              urgency=3, signal=s))
     return out
