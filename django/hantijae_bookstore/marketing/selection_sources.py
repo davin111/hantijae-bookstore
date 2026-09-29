@@ -1,5 +1,6 @@
 """공공 선정 발표 출처(스펙 §5, 조사 .claude/docs/signals/2026-09-29/selection-sources.md).
 스캐너마다 처음 보는 발표(seen에 없는 key)만 Announcement로 돌려준다. 대조는 selections.py가 한다."""
+import logging
 import re
 import urllib.parse
 from dataclasses import dataclass, field
@@ -8,6 +9,8 @@ from typing import List, Optional
 
 from marketing.doctext import document_text
 from marketing.text import title_key
+
+log = logging.getLogger('intake')
 
 FRESH_DAYS = 60   # 이보다 오래된 발표는 기록만 한다(첫 실행 때 옛 공고로 알림이 쏟아지지 않게)
 SPACING = 1.5
@@ -81,12 +84,16 @@ def scan_kpipa(today, seen, get_text, get_bytes, sleep):
         if key in seen or not is_selection_title(title):
             continue
         view = KPIPA_VIEW.format(no=no)
-        sleep(SPACING)
-        files = [f for f in kpipa_files(get_text(view)) if f[1].lower().endswith(('.pdf', '.xlsx'))]
-        lists = [f for f in files if '목록' in f[1]] or files   # 공고문·총평은 한글 글꼴이 깨져 대조에 쓸모없다
-        out.append(Announcement('kpipa', key, kpipa_label(title), view, posted,
-                                posted >= today - timedelta(days=FRESH_DAYS),
-                                _download_texts(lists, get_bytes, sleep), is_withdrawal(title)))
+        try:
+            sleep(SPACING)
+            files = [f for f in kpipa_files(get_text(view)) if f[1].lower().endswith(('.pdf', '.xlsx'))]
+            lists = [f for f in files if '목록' in f[1]] or files   # 공고문·총평은 한글 글꼴이 깨져 대조에 쓸모없다
+            out.append(Announcement('kpipa', key, kpipa_label(title), view, posted,
+                                    posted >= today - timedelta(days=FRESH_DAYS),
+                                    _download_texts(lists, get_bytes, sleep), is_withdrawal(title)))
+        except Exception:
+            log.warning('selection post failed: %s', view, exc_info=True)
+            continue
     return out
 
 
@@ -133,13 +140,17 @@ def scan_tkpf(today, seen, get_text, get_bytes, sleep):
         if key in seen:
             continue
         view = TKPF_VIEW.format(no=no)
-        sleep(SPACING)
-        html = get_text(view)
-        posted = tkpf_posted(html)
-        files = [f for f in tkpf_files(html) if f[1].lower().endswith('.xlsx')]
-        fresh = bool(posted and posted >= today - timedelta(days=FRESH_DAYS))
-        out.append(Announcement('tkpf', key, tkpf_label(title), view, posted, fresh,
-                                _download_texts(files, get_bytes, sleep), is_withdrawal(title)))
+        try:
+            sleep(SPACING)
+            html = get_text(view)
+            posted = tkpf_posted(html)
+            files = [f for f in tkpf_files(html) if f[1].lower().endswith('.xlsx')]
+            fresh = bool(posted and posted >= today - timedelta(days=FRESH_DAYS))
+            out.append(Announcement('tkpf', key, tkpf_label(title), view, posted, fresh,
+                                    _download_texts(files, get_bytes, sleep), is_withdrawal(title)))
+        except Exception:
+            log.warning('selection post failed: %s', view, exc_info=True)
+            continue
     return out
 
 

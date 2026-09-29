@@ -82,6 +82,16 @@ class KpipaScanTest(SimpleTestCase):
         with self.assertRaises(RuntimeError):
             scan_kpipa(date(2026, 9, 30), set(), lambda _: '<html>바뀐 형식</html>', FILES.__getitem__, no_sleep)
 
+    def test_broken_post_is_skipped_and_the_rest_still_read(self):
+        def raising_get_bytes(u):
+            if u == LIST_FILE:
+                raise ValueError('boom')
+            return FILES[u]
+
+        with self.assertLogs('intake', level='WARNING'):
+            anns = scan_kpipa(date(2026, 9, 30), set(), PAGES.__getitem__, raising_get_bytes, no_sleep)
+        self.assertEqual([a.key for a in anns], ['kpipa:2133'])
+
 
 TKPF_LIST_HTML = """<a href="/contents/readCountN.php?no=143&cp=1&searchSelect=&searchText=">2026년 하반기 올해의 청소년 교양도서 선정ㆍ보급사업 신청 안내</a>
 <a href="/contents/readCountN.php?no=137&cp=1&searchSelect=&searchText=">제159차 2026년 상반기 올해의 청소년 교양도서 선정ㆍ보급사업 선정 결과 발표</a>"""
@@ -130,6 +140,25 @@ class TkpfTest(SimpleTestCase):
     def test_unreadable_list_page_raises(self):
         with self.assertRaises(RuntimeError):
             scan_tkpf(date(2026, 6, 1), set(), lambda _: '<html>바뀐 형식</html>', None, no_sleep)
+
+    def test_broken_post_is_skipped_and_the_rest_still_read(self):
+        xlsx_name2 = '202611/1778483519674099_2026년 하반기 올해의 청소년 교양도서 목록(우수선정도서)_공개용.xlsx'
+        view_html2 = f"""<div class="date">2026.11.05</div>
+<a href="/contents/download.php?filename={xlsx_name2}">목록</a>"""
+        list_html = ('<a href="/contents/readCountN.php?no=137&cp=1">제159차 2026년 상반기 올해의 청소년 교양도서 '
+                    '선정ㆍ보급사업 선정 결과 발표</a>\n<a href="/contents/readCountN.php?no=140&cp=1">제160차 2026년 '
+                    '하반기 올해의 청소년 교양도서 선정ㆍ보급사업 선정 결과 발표</a>')
+        pages = {TKPF_LIST: list_html, TKPF_VIEW.format(no='137'): TKPF_VIEW_HTML,
+                TKPF_VIEW.format(no='140'): view_html2}
+
+        def raising_get_bytes(u):
+            if u == XLSX_URL:
+                raise ValueError('boom')
+            return tiny_xlsx(['무궁화호를 위하여'], ['9791192455808'])
+
+        with self.assertLogs('intake', level='WARNING'):
+            anns = scan_tkpf(date(2026, 6, 1), set(), pages.__getitem__, raising_get_bytes, no_sleep)
+        self.assertEqual([a.key for a in anns], ['tkpf:140'])
 
 
 NAS_HTML = """<ul class="data__list">
