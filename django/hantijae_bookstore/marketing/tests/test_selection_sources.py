@@ -49,6 +49,10 @@ class KpipaParseTest(SimpleTestCase):
     def test_selection_titles_only(self):
         self.assertEqual([is_selection_title(t) for _, t, _ in kpipa_posts(KPIPA_LIST_HTML)], [True, True, False])
 
+    def test_beneficiary_jury_and_appeal_notices_are_not_selections(self):
+        self.assertEqual(is_selection_title('2026년 문학나눔 수혜기관 선정 결과'), False)
+        self.assertEqual(is_selection_title('2026년 세종도서 교양부문 이의신청 처리 결과 안내'), False)
+
     def test_label(self):
         self.assertEqual(kpipa_label('2026년 세종도서 교양부문 선정 결과 공고'), '2026년 세종도서 교양부문')
         self.assertEqual(kpipa_label('2026년 문학나눔 도서 보급 사업 도서 선정 결과 공고'), '2026년 문학나눔')

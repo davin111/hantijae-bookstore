@@ -46,6 +46,7 @@ def _download_texts(files, get_bytes, sleep):
 KPIPA_LIST = 'https://www.kpipa.or.kr/p/g1_2?sca=%EA%B2%B0%EA%B3%BC%EA%B3%B5%EA%B3%A0'
 KPIPA_VIEW = 'https://www.kpipa.or.kr/p/g1_2/{no}'
 KPIPA_PROGRAMS = ('세종도서', '문학나눔')
+NOT_SELECTION = ('수혜기관', '심사위원', '이의신청')   # 선정 결과가 아닌 결과공고(수혜 기관 명단·심사위원 위촉·이의신청 처리 등)
 _KPIPA_ROW = re.compile(r"href='https://www\.kpipa\.or\.kr/p/g1_2/(\d+)[^']*' class='list-subject'>(.*?)</a>"
                         r".*?<div class=\"fz-date\">(\d{2})\.(\d{2})\.(\d{2})\.</div>", re.S)
 _KPIPA_FILE = re.compile(r'<a href="(https://www\.kpipa\.or\.kr/p/download/g1_2/\d+/\d+/)" class="view_file_download">'
@@ -66,6 +67,8 @@ def is_withdrawal(title):
 
 
 def is_selection_title(title):
+    if any(p in title for p in NOT_SELECTION):
+        return False
     return any(p in title for p in KPIPA_PROGRAMS) and ('결과' in title or is_withdrawal(title))
 
 
