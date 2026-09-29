@@ -308,3 +308,15 @@ class SweepAndDigestTest(TestCase):
                      '⚠️ 노션 읽기 실패: HTTPError'):
             self.assertIn(part, text)
         self.assertNotIn('+ 『나는 산속으로 더 깊이 들어간다』 날짜 없음 저자 활동 — 저자 입원', text)
+
+
+class PhotoAskTest(TestCase):
+    def test_photo_ask_sends_jpeg_attachments(self):
+        class Recorder:
+            def complete(self, system, user, attachments=()):
+                self.attachments = list(attachments)
+                return '{"items": []}'
+        llm = Recorder()
+        self.assertEqual(M.photo_ask(llm)('sys', 'user', [b'a', b'b']), {'items': []})
+        self.assertEqual([(a.kind, a.media_type, a.data) for a in llm.attachments],
+                         [('image', 'image/jpeg', b'a'), ('image', 'image/jpeg', b'b')])

@@ -17,7 +17,7 @@ from django.db.models import Count, Q
 from books.models import Book
 from context.models import ContextEntry
 from context.redact import redact
-from intake.llm import complete_json
+from intake.llm import Attachment, complete_json
 from marketing.moment_dates import date_supported
 from marketing.models import MomentScan, Proposal, Signal, SignalEvidence
 from marketing.prompts import MOMENT_SYSTEM, build_moment_user
@@ -549,3 +549,12 @@ def digest(report, now):
                  + (f' · 남은 기록 {report.left}줄은 다음에' if report.left else ''))
     lines += [f'⚠️ {e}' for e in report.errors]
     return clip('\n'.join(lines), DIGEST_LIMIT)
+
+
+# ---- 사진 읽기 연결 ----
+def photo_ask(llm):
+    """context.photos.read_pending 에 넘길 LLM 호출(사진은 image/jpeg 첨부로)."""
+    def ask(system, user, images):
+        return complete_json(llm, system, user,
+                             [Attachment('image', 'image/jpeg', data, f'{i}.jpg') for i, data in enumerate(images, 1)])
+    return ask
