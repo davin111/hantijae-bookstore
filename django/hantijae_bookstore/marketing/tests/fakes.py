@@ -119,3 +119,32 @@ def make_post(post_id, platform='facebook', account='editor', text='', posted_at
                                      first_seen=extra.pop('first_seen', posted_at), last_seen=posted_at,
                                      group_key=group_key if group_key is not None else f'post:{platform}:{post_id}',
                                      **extra)
+
+
+class FakeApify:
+    """start_run 답(차례로), get_run 답(차례로), 데이터셋 내용. 답이 예외면 던진다. 남은 답이 없으면 IndexError."""
+
+    def __init__(self, starts=(), polls=(), datasets=None):
+        self.starts, self.polls, self.datasets = list(starts), list(polls), dict(datasets or {})
+        self.started, self.aborted = [], []
+
+    @staticmethod
+    def _next(queue):
+        r = queue.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    def start_run(self, actor, run_input, **kw):
+        self.started.append((actor, run_input, kw))
+        return self._next(self.starts)
+
+    def get_run(self, run_id):
+        return self._next(self.polls)
+
+    def abort_run(self, run_id):
+        self.aborted.append(run_id)
+        return {}
+
+    def dataset_items(self, dataset_id, limit=500):
+        return self.datasets[dataset_id]

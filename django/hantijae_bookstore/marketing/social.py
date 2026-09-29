@@ -5,18 +5,39 @@
 - 0건·오류만·필수 필드 빠짐 → 그 계정은 실패
 - 받은 글이 모두 처음 보는 글이고 한도만큼 찼다 → 틈(사이에 놓친 글이 있을 수 있음) → 20건으로 한 번 더"""
 import json
-from datetime import timedelta
+import logging
+from datetime import datetime, time, timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.db.models import Max
 
 from intake.models import WorkerState
 from marketing import social_judge
+from marketing.apify import FINAL, Apify, ApifyAuthError, ApifyError
 from marketing.models import SocialPost, SocialRun
-from marketing.social_parse import FACEBOOK, parse_facebook, parse_instagram
+from marketing.social_parse import FACEBOOK, INSTAGRAM, parse_facebook, parse_instagram
+from marketing.timeutil import KST, kst_now, week_start
 
-OK_KEY = 'marketing_social_ok'   # {"facebook:editor": ISO 시각} — 정상으로 받은 계정만 갱신한다
-BASELINE_DAYS = 30               # 이보다 오래된 글은 '본 글'로만 두고 판정하지 않는다
+log = logging.getLogger('intake')
+OK_KEY = 'marketing_social_ok'          # {"facebook:editor": ISO 시각} — 정상으로 받은 계정만 갱신한다
+SWITCH_KEY = 'marketing_social'         # 'on'일 때만 돈다(배포 직후엔 꺼져 있음)
+ALERTS_KEY = 'marketing_social_alerts'  # {알림 종류: 도장} — 같은 종류는 기간·날짜마다 한 번
+BASELINE_DAYS = 30                      # 이보다 오래된 글은 '본 글'로만 두고 판정하지 않는다
+
+ACTORS = {FACEBOOK: 'apify~facebook-posts-scraper', INSTAGRAM: 'apify~instagram-post-scraper'}
+PLATFORM_KO = {FACEBOOK: '페이스북', INSTAGRAM: '인스타'}
+PERIOD_KO = {FACEBOOK: '오늘', INSTAGRAM: '이번 주'}
+STATUS_KO = {'empty': '0건', 'error': '오류만', 'malformed': '형식 바뀜'}
+SOCIAL_AT = (6, 20)                     # 공공 선정(06:10) 다음, 저자 소식(06:30)·브리핑(07:00) 앞
+NORMAL_LIMIT, DEEP_LIMIT = 5, 20        # 계정당 글 수: 평소 / 첫 실행·틈 보충
+CAPS = {(FACEBOOK, False): Decimal('0.15'), (FACEBOOK, True): Decimal('0.40'),
+        (INSTAGRAM, False): Decimal('0.10'), (INSTAGRAM, True): Decimal('0.20')}  # (플랫폼, 20건 실행?) → 상한
+RUN_TIMEOUT, WAIT_SECONDS, GIVE_UP = 180, 45, timedelta(minutes=15)
+MAX_ATTEMPTS = {FACEBOOK: 2, INSTAGRAM: 3}
+RETRY_GAP = {FACEBOOK: timedelta(hours=2), INSTAGRAM: timedelta(hours=20)}
+MONTHLY_BUDGET_USD = Decimal('3.00')
+REGULAR = (SocialRun.NORMAL, SocialRun.FIRST)
 
 
 def config():
@@ -86,3 +107,209 @@ def store(run, items, accounts, now):
     run.stats, run.state, run.finished_at = stats, SocialRun.SUCCEEDED, now
     run.save(update_fields=['stats', 'state', 'finished_at'])
     return new
+
+
+# ---- 일정 ----
+
+def period_start(platform, now):
+    """페북은 그날 0시, 인스타는 그 주 월요일 0시(KST)."""
+    day = kst_now(now).date()
+    return datetime.combine(day if platform == FACEBOOK else week_start(day), time.min, tzinfo=KST)
+
+
+def _period_runs(platform, now):
+    return list(SocialRun.objects.filter(platform=platform, started_at__gte=period_start(platform, now))
+                .order_by('started_at', 'id'))
+
+
+def month_spent(now):
+    """이번 달(KST) 쓴 돈. 실제 청구액을 모르면(진행 중 등) 상한으로 센다."""
+    start = datetime.combine(kst_now(now).date().replace(day=1), time.min, tzinfo=KST)
+    total = Decimal('0')
+    for run in SocialRun.objects.filter(started_at__gte=start).exclude(state=SocialRun.SKIPPED):
+        total += run.cost_usd if run.cost_usd is not None else run.cap_usd
+    return total
+
+
+def ok_roles(runs):
+    return {r for run in runs if run.state == SocialRun.SUCCEEDED
+            for r, s in run.stats.items() if s.get('status') == 'ok'}
+
+
+def gap_roles(runs):
+    out = []
+    for run in runs:
+        if run.state == SocialRun.SUCCEEDED and run.purpose in REGULAR:
+            out += [r for r, s in run.stats.items() if s.get('gap') and r not in out]
+    return out
+
+
+def next_run(platform, accounts, now):
+    """이번 기간에 시작할 실행 (purpose, 역할 목록, 계정당 글 수). 없으면 None."""
+    runs = _period_runs(platform, now)
+    if any(r.state in (SocialRun.STARTING, SocialRun.RUNNING) for r in runs):
+        return None
+    good = ok_roles(runs)
+    todo = [a['role'] for a in accounts if a.get(platform) and a['role'] not in good]
+    regular = [r for r in runs if r.purpose in REGULAR]
+    if todo and len(regular) < MAX_ATTEMPTS[platform] and (
+            not regular or now - regular[-1].started_at >= RETRY_GAP[platform]):
+        if any(not SocialPost.objects.filter(platform=platform, account=r).exists() for r in todo):
+            return SocialRun.FIRST, todo, DEEP_LIMIT
+        return SocialRun.NORMAL, todo, NORMAL_LIMIT
+    gaps = gap_roles(runs)
+    if gaps and not any(r.purpose == SocialRun.DEEP for r in runs):
+        return SocialRun.DEEP, gaps, DEEP_LIMIT
+    return None
+
+
+def build_input(platform, roles, accounts, limit):
+    by_role = {a['role']: a for a in accounts}
+    if platform == FACEBOOK:
+        return {'startUrls': [{'url': by_role[r]['facebook']} for r in roles], 'resultsLimit': limit,
+                'captionText': False}
+    return {'username': [by_role[r]['instagram'] for r in roles], 'resultsLimit': limit,
+            'dataDetailLevel': 'basicData', 'skipPinnedPosts': True}
+
+
+# ---- 알림 ----
+
+def alert_once(deps, kind, stamp, text):
+    sent = dict(WorkerState.get(ALERTS_KEY) or {})
+    if sent.get(kind) == stamp:
+        return False
+    sent[kind] = stamp
+    WorkerState.put(ALERTS_KEY, sent)
+    deps.bot.notify_admin(text)
+    return True
+
+
+def _names(accounts, roles):
+    names = labels(accounts)
+    return '·'.join(names.get(r, r) for r in roles)
+
+
+def alert_failures(deps, platform, accounts, now):
+    """이번 기간 시도를 다 썼는데 정상으로 못 받은 계정이 있으면 한 번 알린다(예산으로 건너뛴 것은 예산 알림이 대신)."""
+    runs = _period_runs(platform, now)
+    regular = [r for r in runs if r.purpose in REGULAR]
+    if (len(regular) < MAX_ATTEMPTS[platform] or any(r.state in (SocialRun.STARTING, SocialRun.RUNNING) for r in runs)
+            or all(r.state == SocialRun.SKIPPED for r in regular)):
+        return
+    good = ok_roles(runs)
+    bad = [a['role'] for a in accounts if a.get(platform) and a['role'] not in good]
+    if not bad:
+        return
+    last = regular[-1]
+    why = last.error or ', '.join(f'{labels(accounts).get(r, r)} {STATUS_KO.get(s.get("status"), s.get("status"))}'
+                                  for r, s in last.stats.items() if s.get('status') != 'ok')
+    alert_once(deps, f'fail:{platform}', period_start(platform, now).date().isoformat(),
+               f'⚠️ SNS 수집: {PERIOD_KO[platform]} {PLATFORM_KO[platform]}({_names(accounts, bad)}) 수집이 '
+               f'{len(regular)}번 모두 실패했어요 — {why}. /mk 로 상태를 볼 수 있어요')
+
+
+def alert_gaps(deps, platform, accounts, now):
+    for run in _period_runs(platform, now):
+        still = [r for r, s in run.stats.items() if s.get('gap')] if run.purpose == SocialRun.DEEP else []
+        if run.state == SocialRun.SUCCEEDED and still:
+            alert_once(deps, f'gap:{platform}', period_start(platform, now).date().isoformat(),
+                       f'ℹ️ SNS 수집: {_names(accounts, still)} {PLATFORM_KO[platform]} 글을 {run.limit}건 받아도 '
+                       f'지난번 글까지 닿지 못했어요. 사이에 글이 아주 많았거나 고정 글이 섞였을 수 있어요')
+
+
+# ---- 실행 ----
+
+def fail(run, now, error, cost=None):
+    run.state, run.error, run.finished_at = SocialRun.FAILED, error[:300], now
+    fields = ['state', 'error', 'finished_at']
+    if cost is not None:
+        run.cost_usd = cost
+        fields.append('cost_usd')
+    run.save(update_fields=fields)
+
+
+def finish_if_done(deps, client, run, data, accounts, now):
+    """끝난 실행이면 청구액을 적고 결과를 저장·판정한다. 새 글 목록(끝나지 않았거나 실패면 None)."""
+    status = data.get('status', '')
+    if status not in FINAL:
+        return None
+    usage = data.get('usageTotalUsd')
+    run.apify_status = status
+    run.cost_usd = Decimal(str(usage)).quantize(Decimal('0.001')) if usage is not None else run.cap_usd
+    run.save(update_fields=['apify_status', 'cost_usd'])
+    if status != 'SUCCEEDED':
+        fail(run, now, f'Apify {status}')
+        return None
+    try:
+        items = client.dataset_items(run.dataset_id or data.get('defaultDatasetId', ''))
+    except ApifyError as e:
+        fail(run, now, f'결과 읽기 실패: {e}')
+        return None
+    new = store(run, items, accounts, now)
+    if new:
+        social_judge.judge_pending(deps.llm, now, labels(accounts))
+    return new
+
+
+def start(deps, client, platform, purpose, roles, limit, accounts, now):
+    """'했다'를 먼저 적고(SocialRun) Apify를 부른다. 월 예산을 넘으면 부르지 않는다."""
+    cap = CAPS[(platform, limit > NORMAL_LIMIT)]
+    run = SocialRun.objects.create(platform=platform, purpose=purpose, accounts=list(roles), limit=limit,
+                                   cap_usd=cap, started_at=now)
+    if month_spent(now) > MONTHLY_BUDGET_USD:
+        run.state, run.error, run.finished_at = SocialRun.SKIPPED, '월 예산 초과', now
+        run.save(update_fields=['state', 'error', 'finished_at'])
+        alert_once(deps, 'budget', kst_now(now).strftime('%Y-%m'),
+                   f'⚠️ SNS 수집이 이번 달 예산(${MONTHLY_BUDGET_USD})에 닿아 멈췄어요. 다음 달 1일에 다시 시작해요')
+        return run
+    try:
+        data = client.start_run(ACTORS[platform], build_input(platform, roles, accounts, limit), timeout=RUN_TIMEOUT,
+                                max_items=limit * len(roles), max_charge_usd=float(cap), wait=WAIT_SECONDS)
+    except ApifyAuthError as e:
+        fail(run, now, f'인증 거절: {e}', cost=Decimal('0'))
+        alert_once(deps, 'auth', kst_now(now).date().isoformat(),
+                   '⚠️ Apify가 토큰을 거절했어요(401/403). Secrets Manager의 APIFY_TOKEN을 확인해 주세요')
+        return run
+    except ApifyError as e:
+        fail(run, now, f'시작 실패: {e}', cost=Decimal('0'))
+        return run
+    run.apify_run_id, run.dataset_id, run.state = data.get('id', ''), data.get('defaultDatasetId', ''), SocialRun.RUNNING
+    run.save(update_fields=['apify_run_id', 'dataset_id', 'state'])
+    finish_if_done(deps, client, run, data, accounts, now)
+    return run
+
+
+def poll(deps, client, platform, accounts, now):
+    """진행 중인 실행 확인. 15분이 지나도 안 끝나면 중단을 요청하고 실패로 둔다."""
+    for run in SocialRun.objects.filter(platform=platform, state__in=(SocialRun.STARTING, SocialRun.RUNNING)):
+        if now - run.started_at > GIVE_UP:
+            if run.apify_run_id:
+                try:
+                    client.abort_run(run.apify_run_id)
+                except ApifyError:
+                    pass
+            fail(run, now, '15분 넘게 끝나지 않음')
+        elif run.state == SocialRun.RUNNING:
+            try:
+                data = client.get_run(run.apify_run_id)
+            except ApifyError as e:  # 잠깐의 네트워크 오류는 다음 바퀴에 다시 본다
+                log.warning('social poll %s: %s', run.apify_run_id, e)
+                continue
+            finish_if_done(deps, client, run, data, accounts, now)
+
+
+def run_due(deps, now, client=None):
+    """워커가 매 바퀴(약 1분) 부른다. 꺼져 있거나 토큰·계정 설정이 없으면 아무것도 하지 않는다."""
+    token, accounts = config()
+    if WorkerState.get(SWITCH_KEY) != 'on' or not token or not accounts:
+        return
+    client = client or Apify(token)
+    local = kst_now(now)
+    due = (local.hour, local.minute) >= SOCIAL_AT
+    for platform in (FACEBOOK, INSTAGRAM):
+        poll(deps, client, platform, accounts, now)
+        plan = next_run(platform, accounts, now) if due else None
+        if plan:
+            start(deps, client, platform, *plan, accounts, now)
+        alert_failures(deps, platform, accounts, now)
+        alert_gaps(deps, platform, accounts, now)
