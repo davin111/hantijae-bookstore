@@ -7,16 +7,20 @@ from typing import Any, Dict, List, Optional
 from django.db.models import Max, Q
 
 from books.models import Book
+from intake.models import WorkerState
 from marketing.funding import ends_on, is_stalled, live_campaigns
 from marketing.hooks import upcoming
 from marketing.kit import blog_has
 from marketing.models import BookProfile, Proposal, SalesSnapshot, Signal
+from marketing.moments import TYPE_LABEL, find_book
 from marketing.sales import latest
 from marketing.text import title_key, won_display
 from marketing.timeutil import kst_today, week_start
 
 KIND_LABEL = {'hook': '기념일', 'fund': '진행 중 펀딩', 'news': '저자 소식', 'surge': '판매 지수 급등',
-              'blog': '블로그 글 없음', 'noreview': '리뷰 없음'}
+              'blog': '블로그 글 없음', 'noreview': '리뷰 없음', 'moment': '대화 속 계기'}
+# 판매 지수 급등의 원인 가설로 붙일 만한 대화 속 계기
+ROOM_TALK_TYPES = ('group', 'stock', 'author', 'media', 'issue', 'selection')
 # 새 계기가 없는 후보는 같은 책을 3주 안에 다시 제안하지 않는다
 NEEDS_REST = ('blog', 'noreview', 'surge')
 
@@ -107,6 +111,76 @@ def news_candidates(now, days=14):
     return out
 
 
+def moment_books(s):
+    """계기의 책들. 책을 못 찾았던 계기(book_hint)는 그사이 DB에 들어온 책과 다시 맞춰 보고, 맞으면 저장한다."""
+    ids = s.detail.get('book_ids') or ([s.book_id] if s.book_id else [])
+    by_id = {b.id: b for b in Book.objects.filter(id__in=ids)}
+    books = [by_id[i] for i in ids if i in by_id]
+    if not books and s.detail.get('book_hint'):
+        b = find_book(s.detail['book_hint'])
+        if b:
+            s.book, s.detail = b, {**s.detail, 'book_ids': [b.id], 'book_hint': ''}
+            s.save(update_fields=['book', 'detail'])
+            books = [b]
+    return books
+
+
+def moment_candidates(today, now):
+    """대화 속 계기. 앞으로 21일 안, 끝난 지 7일 안(후기), 날짜 없이 14일(신간 예고 30일) 안에 찾은 것."""
+    out = []
+    unused = Q(used_at__isnull=True) | Q(proposal__briefing__week_start=week_start(today))
+    qs = Signal.objects.filter(unused, kind=Signal.MOMENT, relevant=True, sensitive=False).distinct().order_by('id')
+    for s in qs:
+        d = s.detail
+        if d.get('status') == 'cancelled' or d.get('promoted'):
+            continue
+        day, left = s.happens_on, None
+        if day:
+            left = (day - today).days
+            if not -7 <= left <= 21:
+                continue
+        elif s.found_at < now - timedelta(days=30 if d.get('type') == 'upcoming' else 14):
+            continue
+        books = moment_books(s)
+        if not books:
+            continue
+        label = TYPE_LABEL.get(d.get('type'), '계기')
+        when = f'{day.month}월 {day.day}일 ' if day else ''
+        summary = f'{when}{label}: {s.title} ― {d.get("summary", "")}'.rstrip(' ―')
+        if d.get('date_unverified'):
+            summary += f' (날짜 확인 필요: {d.get("date_text", "")})'
+        if left is not None and left < 0:
+            summary += ' (끝난 일 — 후기 글 후보)'
+        out.append(Candidate(id=f'moment:{s.id}', kind='moment', books=books, summary=summary,
+                             facts={'date': day.isoformat() if day else '', 'type': label, 'status': d.get('status', ''),
+                                    'place': d.get('place', ''), 'days_left': left},
+                             urgency=3 if left is not None and 0 <= left <= 7 else 2, signal=s))
+    return out
+
+
+def with_moments(cands, moments, now):
+    """겹침 정리: 진행 중 펀딩·선정 소식과 같은 책의 계기는 빼고, 급등 후보에는 같은 책 계기를 원인 가설로 붙인다."""
+    fund_books = {b.id for c in cands if c.kind == 'fund' for b in c.books}
+    selected = set(Signal.objects.filter(kind='selection', book__isnull=False, found_at__gte=now - timedelta(days=30))
+                   .values_list('book_id', flat=True))
+    keep = []
+    for m in moments:
+        kind, ids = m.signal.detail.get('type'), {b.id for b in m.books}
+        if (kind == 'funding' and ids & fund_books) or (kind == 'selection' and ids & selected):
+            continue
+        keep.append(m)
+    for surge in [c for c in cands if c.kind == 'surge' and c.signal is None]:
+        book_id = surge.books[0].id
+        talk = next((m for m in keep if m.signal.detail.get('type') in ROOM_TALK_TYPES
+                     and book_id in {b.id for b in m.books} and m.signal.found_at >= now - timedelta(days=14)), None)
+        if talk:
+            surge.summary += f' ― 방에서 나온 이야기: {talk.signal.title}'
+            surge.facts['room'] = talk.signal.title
+            surge.signal = talk.signal
+            keep.remove(talk)
+    return cands + keep
+
+
 def surge_candidates(today):
     last = SalesSnapshot.objects.filter(date__lte=today).aggregate(d=Max('date'))['d']
     if not last:
@@ -173,4 +247,6 @@ def select(cands, today, now, limit=12):
 def gather(today, now, posts):
     cands = (hook_candidates(today) + funding_candidates(today, now) + news_candidates(now) + surge_candidates(today)
              + blog_gap_candidates(today, posts) + noreview_candidates(today))
+    if WorkerState.get('moment_mode', 'off') == 'live':
+        cands = with_moments(cands, moment_candidates(today, now), now)
     return select(cands, today, now)

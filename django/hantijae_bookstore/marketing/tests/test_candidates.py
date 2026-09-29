@@ -85,3 +85,76 @@ class CandidateTest(TestCase):
         c = C.Candidate(id='x', kind='hook', books=[self.sibwol], summary='10월 1일', facts={'n': 376}, urgency=1)
         self.assertTrue(any('41편' in t for t in c.allowed_texts()))
         self.assertEqual(c.as_prompt()['books'], ['『시월, 곡비의 노래』 10월문학회 시선집'])
+
+
+class MomentCandidateTest(TestCase):
+    def setUp(self):
+        from intake.models import WorkerState
+        WorkerState.put('moment_mode', 'live')
+        self.book = make_book(title='내란 앞에서', published=date(2026, 7, 17), isbn='979-11-92455-89-1', author='김해원')
+
+    def moment(self, title, day=None, found=None, **detail):
+        s = Signal.objects.create(kind=Signal.MOMENT, key=f'moment:{title}', book=detail.pop('book', self.book),
+                                  title=title, happens_on=day, relevant=detail.get('status') != 'cancelled',
+                                  sensitive=detail.pop('sensitive', False),
+                                  detail={'type': 'author', 'status': 'planned', 'summary': '요약',
+                                          'book_ids': [self.book.id], **detail})
+        if found:
+            Signal.objects.filter(pk=s.pk).update(found_at=found)
+        return s
+
+    def ids(self):
+        return [c.signal.title for c in C.moment_candidates(TODAY, NOW)]
+
+    def test_date_window_and_recap(self):
+        self.moment('앞으로 사흘', day=TODAY + timedelta(days=3))
+        self.moment('22일 뒤', day=TODAY + timedelta(days=22))
+        self.moment('어제 끝남', day=TODAY - timedelta(days=1))
+        self.moment('8일 전', day=TODAY - timedelta(days=8))
+        cands = {c.signal.title: c for c in C.moment_candidates(TODAY, NOW)}
+        self.assertEqual(set(cands), {'앞으로 사흘', '어제 끝남'})
+        near = cands['앞으로 사흘']
+        self.assertEqual((near.kind, near.books, near.urgency, near.facts['days_left']), ('moment', [self.book], 3, 3))
+        self.assertEqual(near.summary, '10월 1일 저자 활동: 앞으로 사흘 ― 요약')
+        self.assertIn('끝난 일 — 후기 글 후보', cands['어제 끝남'].summary)
+
+    def test_undated_windows_and_exclusions(self):
+        self.moment('최근', found=NOW - timedelta(days=13))
+        self.moment('오래됨', found=NOW - timedelta(days=15))
+        self.moment('신간 예고', found=NOW - timedelta(days=25), type='upcoming')
+        self.moment('취소', status='cancelled')
+        self.moment('이미 올림', promoted=True)
+        self.moment('민감', sensitive=True)
+        self.moment('날짜 모름', date_unverified=True, date_text='10월 중순')
+        self.assertEqual(set(self.ids()), {'최근', '신간 예고', '날짜 모름'})
+        vague = next(c for c in C.moment_candidates(TODAY, NOW) if c.signal.title == '날짜 모름')
+        self.assertIn('(날짜 확인 필요: 10월 중순)', vague.summary)
+
+    def test_book_hint_is_matched_later(self):
+        s = self.moment('예고', book=None, book_ids=[], book_hint='무궁화호를 위하여')
+        self.assertEqual(self.ids(), [])
+        later = make_book(title='무궁화호를 위하여', isbn='979-11-00000-99-1', author=None)
+        self.assertEqual(self.ids(), ['예고'])
+        s.refresh_from_db()
+        self.assertEqual((s.book, s.detail['book_ids'], s.detail['book_hint']), (later, [later.id], ''))
+
+    def test_only_in_live_mode(self):
+        from intake.models import WorkerState
+        self.moment('앞으로', day=TODAY + timedelta(days=3))
+        self.assertIn('moment:', ' '.join(c.id for c in C.gather(TODAY, NOW, [])))
+        WorkerState.put('moment_mode', 'admin_only')
+        self.assertNotIn('moment:', ' '.join(c.id for c in C.gather(TODAY, NOW, [])))
+
+    def test_overlaps_with_funding_selection_and_surge(self):
+        fund = C.Candidate(id='fund:1', kind='fund', books=[self.book], summary='펀딩', facts={}, urgency=3)
+        surge = C.Candidate(id='surge:1', kind='surge', books=[self.book], summary='판매 지수가 올랐음', facts={}, urgency=2)
+        m_fund = self.moment('펀딩 오픈', type='funding')
+        m_sel = self.moment('세종도서', type='selection')
+        m_group = self.moment('단체 주문 200권', type='group')
+        Signal.objects.create(kind='selection', key='sel:1', book=self.book, title='세종도서 선정')
+        moments = [c for c in C.moment_candidates(TODAY, NOW)]
+        out = C.with_moments([fund, surge], moments, NOW)
+        self.assertEqual([c.id for c in out], ['fund:1', 'surge:1'])
+        self.assertIn('방에서 나온 이야기: 단체 주문 200권', surge.summary)
+        self.assertEqual((surge.facts['room'], surge.signal), ('단체 주문 200권', m_group))
+        self.assertFalse({m_fund.id, m_sel.id} & {c.signal.id for c in out if c.signal})
