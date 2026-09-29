@@ -548,3 +548,35 @@ class AdminCommandTest(TestCase):
         b.refresh_from_db()
         self.assertEqual(b.chat_id, GROUP)
         self.assertEqual(self.run_cmd('/brief'), '이번 주 브리핑은 이미 보냈어요')
+
+
+class MomentCommandTest(TestCase):
+    def setUp(self):
+        self.tg, self.host = FakeTG(), FakeHost()
+        self.m = Marketing(self.tg, FakeLLM({'new': []}), self.host)
+
+    def last(self):
+        return self.tg.sent('send')[-1]['text']
+
+    def test_status_and_modes(self):
+        self.m.admin_command(ADMIN, '/moment', '', now=DAY)
+        self.assertIn('moment_mode=off midweek_mode=off', self.last())
+        self.assertIn('추출 안 된 기록 0줄', self.last())
+        self.m.admin_command(ADMIN, '/moment', 'admin_only', now=DAY)
+        self.m.admin_command(ADMIN, '/moment', 'midweek live', now=DAY)
+        self.assertEqual((WorkerState.get('moment_mode'), WorkerState.get('midweek_mode')), ('admin_only', 'live'))
+        self.m.admin_command(ADMIN, '/moment', 'midweek sometimes', now=DAY)
+        self.assertIn('사용법: /moment', self.last())
+        self.assertEqual(WorkerState.get('midweek_mode'), 'live')
+
+    def test_list_and_now(self):
+        from marketing.models import Signal
+        self.m.admin_command(ADMIN, '/moment', 'list', now=DAY)
+        self.assertEqual(self.last(), '열린 계기가 없어요')
+        Signal.objects.create(kind=Signal.MOMENT, key='moment:x', title='강연', detail={'type': 'author', 'status': 'planned'})
+        self.m.admin_command(ADMIN, '/moment', 'list', now=DAY)
+        self.assertIn('[author/planned] 날짜 없음 (책 없음) 강연', self.last())
+        with mock.patch('marketing.moments.daily', return_value=__import__('marketing.moments', fromlist=['Report']).Report()) as daily:
+            self.m.admin_command(ADMIN, '/moment', 'now', now=DAY)
+        daily.assert_called_once()
+        self.assertEqual(self.last(), '새로 찾은 계기가 없어요')

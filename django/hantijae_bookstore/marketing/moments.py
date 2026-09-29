@@ -8,7 +8,7 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import List
 
 from django.conf import settings
@@ -20,11 +20,12 @@ from context import notion as context_notion, photos as context_photos
 from context.models import ContextEntry
 from context.redact import redact
 from intake.llm import Attachment, complete_json
+from intake.models import WorkerState
 from marketing.moment_dates import date_supported
 from marketing.models import MomentScan, Proposal, Signal, SignalEvidence
 from marketing.prompts import MOMENT_SYSTEM, build_moment_user
 from marketing.text import clip, foreign_numbers, title_key
-from marketing.timeutil import KST, kst_today
+from marketing.timeutil import KST, kst_today, week_start
 
 log = logging.getLogger('intake')
 TYPES = ('author', 'event', 'group', 'selection', 'funding', 'media', 'issue', 'stock', 'upcoming')
@@ -587,3 +588,19 @@ def daily(deps, now, since=None, until=None, notion=True, photos=True, max_chunk
     entries = [e for e in pending_entries()
                if (since is None or e.at >= since) and (until is None or e.at < until)]
     return run(deps.llm, now, report=report, entries=entries, max_chunks=max_chunks, dry_run=dry_run)
+
+
+def status_text(today, now):
+    week_ago = now - timedelta(days=7)
+    monday = datetime.combine(week_start(today), time.min, tzinfo=KST)
+    midweek_sent = (Proposal.objects.filter(kind=Proposal.NOW, sent_at__gte=monday)
+                    .values('message_id').distinct().count())
+    return '\n'.join([
+        f"moment_mode={WorkerState.get('moment_mode', 'off')} midweek_mode={WorkerState.get('midweek_mode', 'off')}",
+        f"마지막 계기 잡기 {WorkerState.get('moment_last_run', '-')} · 주중 만들기 {WorkerState.get('midweek_last_build', '-')}",
+        f'열린 계기 {len(open_moments(today, now))}개 · 최근 7일 새 계기 '
+        f'{Signal.objects.filter(kind=Signal.MOMENT, found_at__gte=week_ago).count()}개',
+        f'최근 7일 사진 읽음 {ContextEntry.objects.filter(media_read_at__gte=week_ago).count()}장 · 노션 구역 '
+        f'{ContextEntry.objects.filter(source=ContextEntry.NOTION, forgotten=False).count()}개',
+        f'추출 안 된 기록 {len(pending_entries())}줄 · 이번 주 주중 제안 {midweek_sent}번',
+    ])

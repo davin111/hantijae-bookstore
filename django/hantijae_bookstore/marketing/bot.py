@@ -3,6 +3,7 @@ import io
 import logging
 import re
 from datetime import date, datetime
+from types import SimpleNamespace
 
 from django.utils import timezone
 from PIL import Image
@@ -12,7 +13,7 @@ from intake.llm import LLMError, complete_json
 from intake.models import TelegramChat, WorkerState
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
-from marketing import messages, midweek
+from marketing import messages, midweek, moments
 from marketing.hooks import add_hook, upcoming
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
@@ -21,14 +22,16 @@ from marketing.timeutil import KST, in_quiet_hours, kst_today, week_start
 from web.blog import fetch_rss, parse_rss
 
 log = logging.getLogger('intake')
-COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch')
+COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch', '/moment')
 MODES = ('off', 'admin_only', 'live')
 KIT_DAILY_CAP = 2
 KIT_SEND_MAX_FAILURES = 3  # 이 횟수에 닿으면 관리자에게 알리고 더는 자동으로 시도하지 않는다
 BUILDING = '만들고 있어요. 몇 분 걸려요.'
 USAGE = ('사용법: /mk off|admin_only|live · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
          '/hook <MM-DD> <이름> | <책1>, <책2> · /hook list · /quiet <제목 일부> <YYYY-MM-DD> [이유] · /quiet list · '
-         '/watch <이름> · /watch list · /watch off <번호>')
+         '/watch <이름> · /watch list · /watch off <번호> · /moment')
+MOMENT_USAGE = ('사용법: /moment off|admin_only|live · /moment midweek off|admin_only|live · /moment now (지금 한 번, 몇 분) · '
+                '/moment list')
 
 
 def cover_jpeg(book):
@@ -321,7 +324,7 @@ class Marketing:
     def admin_command(self, chat_id, cmd, arg, now=None):
         now = now or timezone.now()
         handler = {'/mk': self._mk, '/brief': self._brief, '/kit': self._kit, '/hook': self._hook,
-                   '/quiet': self._quiet, '/watch': self._watch}[cmd]
+                   '/quiet': self._quiet, '/watch': self._watch, '/moment': self._moment}[cmd]
         self.tg.send_message(chat_id, handler(chat_id, (arg or '').strip(), now, kst_today(now)) or '완료')
 
     def _mk(self, chat_id, arg, now, today):
@@ -335,6 +338,24 @@ class Marketing:
         week = '없음' if not b else ('보냄' if b.sent_at else f'미발송 {b.items.count()}건')
         return '\n'.join([f'mode={self.mode()}', *[f'{k}={WorkerState.get(k)}' for k in keys],
                           f'pending_kits={pending}', f'this_week_briefing={week}', USAGE])
+
+    def _moment(self, chat_id, arg, now, today):
+        parts = arg.split()
+        if len(parts) == 2 and parts[0] == 'midweek' and parts[1] in MODES:
+            WorkerState.put('midweek_mode', parts[1])
+            return f'midweek_mode={parts[1]}'
+        if arg in MODES:
+            WorkerState.put('moment_mode', arg)
+            return f'moment_mode={arg}'
+        if arg == 'now':
+            self.tg.send_message(chat_id, BUILDING)
+            deps = SimpleNamespace(tg=self.tg, llm=self.llm, notion=getattr(self.host, 'notion', None))
+            report = moments.daily(deps, now)
+            return moments.digest(report, now) or '새로 찾은 계기가 없어요'
+        if arg == 'list':
+            opens = moments.open_moments(today, now)[:15]
+            return '\n'.join(moments.open_line(s) for s in opens) or '열린 계기가 없어요'
+        return moments.status_text(today, now) + '\n' + MOMENT_USAGE
 
     def _brief(self, chat_id, arg, now, today):
         b = Briefing.objects.filter(week_start=week_start(today)).first()
