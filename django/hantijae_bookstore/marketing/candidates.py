@@ -13,6 +13,8 @@ from marketing.hooks import upcoming
 from marketing.kit import blog_has
 from marketing.models import BookProfile, Proposal, SalesSnapshot, Signal
 from marketing.sales import latest
+from marketing.social_judge import mentions_day
+from marketing.social_parse import share_key
 from marketing.text import loose_key, similarity, title_key, won_display
 from marketing.timeutil import kst_today, week_start
 from web.models import Notice
@@ -199,7 +201,8 @@ def select(cands, today, now, limit=12):
 
 # ---- 운영진 개인 SNS(marketing.social·social_judge가 만든 Signal(kind=social)) ----
 
-SNS_UPCOMING_DAYS, SNS_AFTER_DAYS, SNS_FOUND_DAYS, SNS_PRESS_MAX = 21, 10, 14, 5
+SNS_UPCOMING_DAYS, SNS_AFTER_DAYS, SNS_FOUND_DAYS, SNS_PRESS_MAX, SNS_OFFICIAL_LOOKBACK = 21, 10, 14, 5, 14
+OFFICIAL_PAGE = 'facebook.com/hantijae/'  # 한티재 공식 페북 페이지 주소(share_key 모양)
 PRESS_CATEGORIES = ('review', 'press', 'author_news')
 CHANNEL_LABEL = {'blog': '블로그', 'instagram': '인스타', 'facebook': '페이스북 페이지'}
 PLATFORM_LABEL = {'facebook': '페이스북', 'instagram': '인스타'}
@@ -231,24 +234,32 @@ def _needles(s):
 
 
 def official_status(s, blog, meta_posts):
-    """공식 채널마다 True(이미 있음)·False(없음)·None(못 읽음). 못 읽은 채널을 '없다'고 하지 않는다."""
+    """공식 채널마다 True(이미 있음)·False(없음)·None(못 읽음). 못 읽은 채널을 '없다'고 하지 않는다.
+    개인 글 게시일 14일 전부터의 공식 글과 견준다. 날짜 있는 행사는 그 날짜를 말한 공식 글만 '있음'."""
     try:
-        since = date.fromisoformat(s.detail.get('posted_on', '')) - timedelta(days=3)
+        posted = date.fromisoformat(s.detail.get('posted_on', ''))
     except ValueError:
-        since = kst_today(s.found_at) - timedelta(days=3)
+        posted = kst_today(s.found_at)
+    since = posted - timedelta(days=SNS_OFFICIAL_LOOKBACK)
     needles = _needles(s)
     mine = list(s.social_posts.exclude(text='').values_list('text', flat=True))
+    ev = s.detail.get('event') or {}
+    on = date.fromisoformat(ev['on']) if ev.get('on') else None
 
     def hit(text, day):
         if day is not None and day < since:
             return False
-        key = loose_key(text)
-        return any(n in key for n in needles) or any(similarity(text, m) >= 0.6 for m in mine)
+        named = any(n in loose_key(text) for n in needles)
+        if on:
+            return mentions_day(text, on) and (named or not needles)
+        return named or any(similarity(text, m) >= 0.6 for m in mine)
 
     out = {'blog': None if blog is None else any(hit(p.title, getattr(p, 'date', None)) for p in blog)}
     for ch in ('instagram', 'facebook'):
         rows = meta_posts.get(ch)
         out[ch] = None if rows is None else any(hit(r.text, kst_today(r.posted_at)) for r in rows)
+    if any(share_key(u).startswith(OFFICIAL_PAGE) for u in s.detail.get('shared_urls') or []):
+        out['facebook'] = True  # 공식 페이지 글을 공유한 것이면 페이지에는 이미 있다
     return out
 
 
@@ -273,7 +284,11 @@ def social_candidates(today, now, posts, fetch=None):
         facts = {'who': sns_where(s), 'url': s.url, 'posted': d.get('posted_on', '')}
         if d.get('titles'):
             facts['not_on_site'] = d['titles']
-        if d.get('category') in PRESS_CATEGORIES:
+        ev = d.get('event') or {}
+        on = date.fromisoformat(ev['on']) if ev.get('on') else None
+        if on and not today - timedelta(days=SNS_AFTER_DAYS) <= on <= today + timedelta(days=SNS_UPCOMING_DAYS):
+            continue  # 너무 먼 행사(가까워지면 다시 후보) 또는 지난 지 오래된 행사
+        if d.get('category') in PRESS_CATEGORIES and not on:
             press.append((s, books))
             continue
         if meta_posts is None:
@@ -281,8 +296,6 @@ def social_candidates(today, now, posts, fetch=None):
         status = official_status(s, posts, meta_posts)
         facts['official'] = {CHANNEL_LABEL[c]: {True: '있음', False: '없음', None: '모름'}[v] for c, v in status.items()}
         note = _official_note(status)
-        ev = d.get('event') or {}
-        on = date.fromisoformat(ev['on']) if ev.get('on') else None
         name = ev.get('name') or '행사'
         if on and today <= on <= today + timedelta(days=SNS_UPCOMING_DAYS):
             left = (on - today).days
@@ -301,6 +314,7 @@ def social_candidates(today, now, posts, fetch=None):
                                  summary=f'{d.get("summary", "")} ― {sns_where(s)}에 올린 글' + (f', {note}' if note else ''),
                                  facts=facts, urgency=2, signal=s))
     if press:
+        press.sort(key=lambda x: (x[0].happens_on or date.min, x[0].id), reverse=True)  # 최근 것부터
         picked = press[:SNS_PRESS_MAX]
         books = []
         for _, bs in picked:
@@ -322,6 +336,8 @@ def merge_fund_posts(funds, sns):
             titles = [loose_key(t) for t in c.signal.detail.get('titles') or [] if len(loose_key(t)) >= 4]
             fund = next((f for f in funds if set(f.books) & set(c.books)
                          or any(t in loose_key(f.summary) for t in titles)), None)
+            if fund is None and not c.books and not titles and len(funds) == 1:
+                fund = funds[0]  # 책 제목 없이 '펀딩 참여 부탁'만 한 글 → 진행 중인 펀딩이 하나뿐이면 그것
             if fund:
                 fund.facts.setdefault('personal_posts', []).append(
                     f'{c.signal.detail.get("posted_on", "")} {sns_where(c.signal)}')

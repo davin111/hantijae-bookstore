@@ -25,6 +25,20 @@ class GroupTest(TestCase):
                        posted_at=T0 + timedelta(minutes=5))
         self.assertEqual(assign_group(ig), 'post:facebook:fb1')
 
+    def test_share_of_a_colleagues_post_joins_it_either_order(self):
+        orig = make_post('o1', account='ceo', text='원글', posted_at=T0)
+        orig.url = 'https://www.facebook.com/ceo.test/posts/pfbidAAA'
+        orig.save()
+        share = make_post('s1', shared={'url': 'https://www.facebook.com/ceo.test/posts/pfbidAAA?__cft__=z', 'text': '원글'},
+                          group_key='')
+        self.assertEqual(assign_group(share), 'post:facebook:o1')
+        share2 = make_post('s2', shared={'url': 'https://www.facebook.com/ceo.test/posts/pfbidBBB', 'text': '원글2'},
+                           group_key='share:facebook.com/ceo.test/posts/pfbidBBB')
+        later = make_post('o2', account='ceo', text='원글2', group_key='')
+        later.url = 'https://www.facebook.com/ceo.test/posts/pfbidBBB'
+        later.save()
+        self.assertEqual(assign_group(later), share2.group_key)
+
     def test_far_apart_or_short_posts_stay_alone(self):
         make_post('fb1', account='ceo', text=BODY, posted_at=T0)
         make_post('fb2', text='좋은 아침', posted_at=T0)
@@ -116,6 +130,14 @@ class JudgeTest(TestCase):
         signals = J.judge_pending(llm, NOW, LABELS)
         self.assertEqual(len({s.id for s in signals}), 1)
         self.assertEqual(Signal.objects.get().detail['who'], ['대표', '편집장'])
+
+    def test_funding_posts_about_the_same_book_are_one_signal(self):
+        self.post('1', text='『바람의 책』 북펀드에 함께해 주세요')
+        self.post('2', account='ceo', text='다음 책 『바람의 책』 펀딩이 열렸어요, 많은 참여를')
+        llm = FakeLLM({'items': [verdict(0, category='funding', books=['바람의 책']),
+                                 verdict(1, category='funding', books=['바람의 책'])]})
+        J.judge_pending(llm, NOW, LABELS)
+        self.assertEqual(Signal.objects.get().detail['who'], ['편집장', '대표'])
 
     def test_llm_omission_leaves_post_pending(self):
         self.post('1', text='『농부, 짠한 형』')

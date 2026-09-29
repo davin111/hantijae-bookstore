@@ -86,10 +86,10 @@ class SocialCandidateTest(TestCase):
     def test_press_signals_become_one_candidate(self):
         a = sns('p1', category='press', books=[self.rainbow], summary='저자 인터뷰')
         b = sns('p2', category='review', books=[self.farmer], summary='독자 서평')
-        [c] = C.social_candidates(TODAY, NOW, [], fetch=boom)
-        self.assertEqual((c.id, c.kind, c.signal, c.more_signals), ('sns_press:2026-09-28', 'sns_press', a, [b]))
-        self.assertEqual(c.books, [self.rainbow, self.farmer])
-        self.assertEqual(c.summary, '운영진이 최근 공유한 서평·기사 ― 저자 인터뷰 / 독자 서평')
+        [c] = C.social_candidates(TODAY, NOW, [], fetch=boom)  # 최근 것부터(같은 날이면 나중에 찾은 것부터)
+        self.assertEqual((c.id, c.kind, c.signal, c.more_signals), ('sns_press:2026-09-28', 'sns_press', b, [a]))
+        self.assertEqual(c.books, [self.farmer, self.rainbow])
+        self.assertEqual(c.summary, '운영진이 최근 공유한 서평·기사 ― 독자 서평 / 저자 인터뷰')
 
     def test_funding_post_merges_into_fund_candidate(self):
         FundingCampaign.objects.create(platform='aladin', external_id='3013', url='u', title='농부, 짠한 형',
@@ -117,7 +117,7 @@ class SocialCandidateTest(TestCase):
         b.refresh_from_db()
         self.assertIsNotNone(a.used_at)
         self.assertIsNotNone(b.used_at)
-        self.assertEqual(brief.items.get().extra, {'signals': [b.id]})
+        self.assertEqual(brief.items.get().extra, {'signals': [a.id]})
 
     def test_context_lines_reach_prompt(self):
         sns('n1', category='new_book', books=[self.farmer], summary='『농부, 짠한 형』 출간')
@@ -126,3 +126,33 @@ class SocialCandidateTest(TestCase):
         user = llm.calls[0][1]
         self.assertIn('<참고: 운영진이 최근 개인 SNS에 올린 한티재 소식(후보 아님)>', user)
         self.assertIn('2026-09-25 대표님 개인 페이스북: 『농부, 짠한 형』 출간', user)
+
+    def test_dated_event_wins_over_press_category(self):
+        s = sns('q1', category='author_news', event={'on': '2026-10-02', 'name': '저자 모임 부스', 'place': ''})
+        [c] = C.social_candidates(TODAY, NOW, [], fetch=unknown)
+        self.assertEqual((c.kind, c.signal), ('sns_event', s))
+
+    def test_official_lookback_and_shared_official_page(self):
+        s = sns('f2', category='funding', titles=['바람의 책'], posted_on='2026-09-25')
+        s.detail = {**s.detail, 'shared_urls': ['https://www.facebook.com/hantijae/posts/pfbidX']}
+        s.save()
+        old_ig = [OfficialPost('instagram', datetime(2026, 9, 18, 1, 0, tzinfo=timezone.utc), '『바람의 책』 펀딩', 'u')]
+        status = C.official_status(s, None, {'instagram': old_ig, 'facebook': []})
+        self.assertEqual(status, {'blog': None, 'instagram': True, 'facebook': True})
+
+    def test_event_is_on_official_only_when_the_day_is_mentioned(self):
+        s = sns('e2', books=[self.rainbow], event={'on': '2026-10-03', 'name': '북토크', 'place': ''})
+        when = datetime(2026, 9, 26, 1, 0, tzinfo=timezone.utc)
+        other_day = {'instagram': [OfficialPost('instagram', when, '『무지개를 변호하다』 새 리뷰', 'u')], 'facebook': None}
+        that_day = {'instagram': [OfficialPost('instagram', when, '10월 3일 『무지개를 변호하다』 북토크', 'u')], 'facebook': None}
+        self.assertFalse(C.official_status(s, None, other_day)['instagram'])
+        self.assertTrue(C.official_status(s, None, that_day)['instagram'])
+
+    def test_untitled_funding_post_joins_the_only_live_fund(self):
+        FundingCampaign.objects.create(platform='aladin', external_id='3013', url='u', title='농부, 짠한 형',
+                                       publisher='한티재', starts_at=NOW - timedelta(days=10),
+                                       ends_at=datetime(2026, 10, 12, 0, 0, tzinfo=KST), is_ours=True)
+        s = sns('f3', category='funding', summary='펀딩 참여 부탁')
+        cands = C.gather(TODAY, NOW, posts=[])
+        self.assertFalse(any(c.signal == s for c in cands))
+        self.assertEqual(next(c for c in cands if c.kind == 'fund').facts['personal_posts'], ['2026-09-25 대표님 개인 페이스북'])

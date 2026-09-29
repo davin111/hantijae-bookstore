@@ -24,10 +24,23 @@ def _long_enough(text):
     return len(re.sub(r'\s+', '', text or '')) >= MIN_TEXT
 
 
+def _posts_at(key):
+    """주소의 묶음 열쇠(share_key)가 key인 저장된 글."""
+    path = key.split('/', 1)[1] if '/' in key else key
+    return [p for p in SocialPost.objects.filter(url__contains=path).exclude(group_key='').order_by('first_seen', 'id')
+            if share_key(p.url) == key]
+
+
 def assign_group(post):
-    """새 글의 묶음 열쇠. 같은 원문 공유 → ±3일 안의 거의 같은 글(페북·인스타 복사) → 자기 자신."""
+    """새 글의 묶음 열쇠. 같은 원문 공유(운영진끼리 서로의 글을 공유한 것 포함) → ±3일 안의 거의 같은 글
+    (페북·인스타 복사) → 자기 자신. 공유와 원글 중 어느 쪽이 먼저 저장돼도 같은 묶음이 되게 양쪽에서 찾는다."""
     if post.shared.get('url'):
-        return 'share:' + share_key(post.shared['url'])
+        key = share_key(post.shared['url'])
+        original = [p for p in _posts_at(key) if p.pk != post.pk]
+        return original[0].group_key if original else 'share:' + key
+    shared_me = SocialPost.objects.filter(group_key='share:' + share_key(post.url)).exclude(pk=post.pk)
+    if shared_me.exists():
+        return 'share:' + share_key(post.url)
     if _long_enough(post.text):
         near = (SocialPost.objects.filter(posted_at__gte=post.posted_at - SAME_POST_WINDOW,
                                           posted_at__lte=post.posted_at + SAME_POST_WINDOW)
@@ -125,18 +138,30 @@ def add_source(sig, post, role_labels):
     sig.save(update_fields=['detail'])
 
 
-def same_event(v, now):
-    """같은 날 같은 책(또는 비슷한 이름)의 행사 신호가 30일 안에 있으면 그것."""
+SAME_SUBJECT = ('funding', 'new_book')  # 같은 책의 펀딩·출간 글은 여러 번 올라와도 사건 하나
+
+
+def same_subject(v, now):
+    """30일 안에 같은 사건의 신호가 있으면 그것: 날짜 있는 행사는 같은 날 + (같은 책 또는 비슷한 이름),
+    펀딩·신간은 같은 분류 + (같은 책 또는 같은 미등록 제목)."""
     ev = v['event'] or {}
-    if v['category'] != 'event' or not ev.get('on'):
+    recent = Signal.objects.filter(kind=Signal.SOCIAL, found_at__gte=now - timedelta(days=SAME_EVENT_DAYS))
+    if ev.get('on'):
+        for s in recent.filter(happens_on=date.fromisoformat(ev['on'])):
+            other = s.detail.get('event') or {}
+            if set(s.detail.get('books') or []) & set(v['books']):
+                return s
+            if ev.get('name') and other.get('name') and similarity(ev['name'], other['name']) >= SAME_EVENT_NAME:
+                return s
         return None
-    on = date.fromisoformat(ev['on'])
-    for s in Signal.objects.filter(kind=Signal.SOCIAL, happens_on=on, found_at__gte=now - timedelta(days=SAME_EVENT_DAYS)):
-        other = s.detail.get('event') or {}
-        if set(s.detail.get('books') or []) & set(v['books']):
-            return s
-        if ev.get('name') and other.get('name') and similarity(ev['name'], other['name']) >= SAME_EVENT_NAME:
-            return s
+    if v['category'] in SAME_SUBJECT and (v['books'] or v['titles']):
+        titles = {loose_key(t) for t in v['titles']}
+        for s in recent.order_by('found_at', 'id'):
+            if s.detail.get('category') != v['category'] or (s.detail.get('event') or {}).get('on'):
+                continue
+            if (set(s.detail.get('books') or []) & set(v['books'])
+                    or titles & {loose_key(t) for t in s.detail.get('titles') or []}):
+                return s
     return None
 
 
@@ -158,8 +183,8 @@ def _new_signal(post, v, role_labels):
 
 
 def attach(post, v, now, role_labels):
-    """관련 글을 신호에 잇는다: 같은 행사 신호 → 같은 묶음 신호 → 새 신호."""
-    sig = same_event(v, now) or Signal.objects.filter(key=_key(post.group_key)).first()
+    """관련 글을 신호에 잇는다: 같은 사건 신호 → 같은 묶음 신호 → 새 신호."""
+    sig = same_subject(v, now) or Signal.objects.filter(key=_key(post.group_key)).first()
     if sig:
         add_source(sig, post, role_labels)
     else:
