@@ -325,6 +325,29 @@ class ContextRecordTest(TestCase):
         self.assertEqual((entry.message_id, entry.forgotten, entry.text), (1, True, ''))
         self.assertEqual(self.tg.texts()[-1], '기록에서 지웠어요. 텔레그램 메시지는 직접 지워 주세요.')
 
+    def test_forget_drops_moments_built_on_that_message(self):
+        from marketing.models import Signal, SignalEvidence
+        self.on()
+        bot = self.bot()
+        bot.handle_update(msg(GROUP, '금요일 강연', date=DATE))
+        s = Signal.objects.create(kind=Signal.MOMENT, key='moment:x', title='강연', detail={'type': 'author'})
+        SignalEvidence.objects.create(signal=s, entry=ContextEntry.objects.get())
+        forget = msg(GROUP, '/잊어', reply_to=1, date=DATE)
+        forget['message']['message_id'] = 2
+        bot.handle_update(forget)
+        self.assertFalse(Signal.objects.exists())
+
+    def test_forget_reply_survives_moment_drop_failure(self):
+        self.on()
+        bot = self.bot()
+        bot.handle_update(msg(GROUP, '지울 글', date=DATE))
+        forget = msg(GROUP, '/잊어', reply_to=1, date=DATE)
+        forget['message']['message_id'] = 2
+        with mock.patch('marketing.moments.drop_for_entries', side_effect=RuntimeError('db')):
+            bot.handle_update(forget)
+        self.assertEqual(self.tg.texts()[-1], '기록에서 지웠어요. 텔레그램 메시지는 직접 지워 주세요.')
+        self.assertTrue(ContextEntry.objects.get().forgotten)
+
     def test_forget_on_draft_card_is_not_an_edit_request(self):
         bot = self.bot({'changes': [{'field': 'subtitle', 'new_value': 'x'}], 'questions': []})
         bot.handle_update(msg(GROUP, '/잊어', reply_to=777))

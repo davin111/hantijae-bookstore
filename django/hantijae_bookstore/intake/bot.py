@@ -16,6 +16,7 @@ from intake.llm import LLMError
 from intake.models import BookDraft, FundingCampaign, IntakeSource, PendingPatch, ReviewItem, TelegramChat, WorkerState
 from intake.notion import fill_notion_row
 from intake.publish import PublishBlocked, publish
+from marketing import moments
 from marketing.bot import COMMANDS as MARKETING_COMMANDS, Marketing
 from web.models import Notice
 
@@ -207,8 +208,12 @@ class Bot:
         reply = msg.get('reply_to_message')
         if not reply:
             text = '지울 메시지에 답장으로 /잊어 라고 적어 주세요. 잘 안 되면 개발자에게 말씀해 주세요.'
-        elif context_record.forget(chat_id, reply['message_id'], sent_at=_sent_at(reply)):
+        elif ids := context_record.forget(chat_id, reply['message_id'], sent_at=_sent_at(reply)):
             text = '기록에서 지웠어요. 텔레그램 메시지는 직접 지워 주세요.'
+            try:  # 그 메시지를 근거로 한 계기도 바로 지운다. 실패하면 새벽 정리가 다시 한다
+                moments.drop_for_entries(ids)
+            except Exception:
+                log.exception('moment drop after forget failed')
         else:
             text = '찾지 못했어요. 예전 대화라면 개발자에게 말씀해 주세요.'
         self.tg.send_message(chat_id, text, reply_to=msg['message_id'])
