@@ -1,9 +1,9 @@
-from datetime import date
+from datetime import date, datetime, timezone as dt_tz
 
 from django.db import IntegrityError
 from django.test import TestCase
 
-from marketing.models import BookProfile, Draft, HookDate, SalesSnapshot
+from marketing.models import BookProfile, Draft, HookDate, Proposal, SalesSnapshot, Signal
 from marketing.tests.fakes import make_book
 
 
@@ -44,3 +44,28 @@ class DraftTest(TestCase):
     def test_label_is_korean_channel_name(self):
         self.assertEqual(Draft(channel=Draft.INSTAGRAM).label, '인스타 글')
         self.assertEqual(Draft(channel=Draft.LINKS).label, '서점 링크 공지')
+
+
+class MomentModelTest(TestCase):
+    def setUp(self):
+        from context.models import ContextEntry
+        self.entry = ContextEntry.objects.create(key='tg:1:1', at=datetime(2026, 9, 29, 2, 0, tzinfo=dt_tz.utc), text='강연')
+
+    def test_evidence_and_scan_follow_the_record(self):
+        from django.db import IntegrityError, transaction
+        from marketing.models import MomentScan, SignalEvidence
+        s = Signal.objects.create(kind=Signal.MOMENT, key='moment:a', title='강연')
+        SignalEvidence.objects.create(signal=s, entry=self.entry)
+        MomentScan.objects.create(entry=self.entry, changed_at=self.entry.changed_at)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            SignalEvidence.objects.create(signal=s, entry=self.entry)
+        self.assertEqual(list(s.evidence.values_list('entry_id', flat=True)), [self.entry.id])
+        self.entry.delete()
+        self.assertFalse(SignalEvidence.objects.exists())
+        self.assertFalse(MomentScan.objects.exists())
+        self.assertTrue(Signal.objects.filter(pk=s.pk).exists())
+
+    def test_midweek_proposal_kind(self):
+        p = Proposal.objects.create(kind=Proposal.NOW, headline='『책』 ― 금요일 강연')
+        self.assertEqual(p.get_kind_display(), '주중 제안')
+        self.assertEqual(Signal(kind=Signal.MOMENT).get_kind_display(), '대화 속 계기')

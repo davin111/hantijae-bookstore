@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from marketing.models import (BookProfile, Briefing, CopyNote, Draft, DraftMessage, FundingSnapshot, HookDate,
-                              Proposal, SalesSnapshot, Signal, WatchQuery)
+                              Proposal, SalesSnapshot, Signal, SignalEvidence, WatchQuery)
 
 
 @admin.register(SalesSnapshot)
@@ -29,5 +29,19 @@ class DraftAdmin(admin.ModelAdmin):
     list_filter = ('channel', 'status')
 
 
-for model in (BookProfile, Briefing, CopyNote, DraftMessage, FundingSnapshot, Signal, WatchQuery):
+class SignalEvidenceInline(admin.TabularInline):
+    model = SignalEvidence
+    raw_id_fields = ('entry',)
+    extra = 0
+
+
+@admin.register(Signal)
+class SignalAdmin(admin.ModelAdmin):
+    list_display = ('found_at', 'kind', 'book', 'title', 'happens_on', 'relevant', 'sensitive', 'used_at')
+    list_filter = ('kind', 'relevant', 'sensitive')
+    search_fields = ('title',)
+    inlines = (SignalEvidenceInline,)
+
+
+for model in (BookProfile, Briefing, CopyNote, DraftMessage, FundingSnapshot, WatchQuery):
     admin.site.register(model)

@@ -52,8 +52,8 @@ class HookDate(BaseModel):
 
 
 class Signal(models.Model):
-    NEWS = 'news'
-    kind = models.CharField(max_length=20, choices=((NEWS, '저자 소식'),))
+    NEWS, MOMENT = 'news', 'moment'
+    kind = models.CharField(max_length=20, choices=((NEWS, '저자 소식'), (MOMENT, '대화 속 계기')))
     key = models.CharField(max_length=200, unique=True)
     book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL)
     title = models.CharField(max_length=500)
@@ -64,6 +64,22 @@ class Signal(models.Model):
     relevant = models.BooleanField(default=False)
     sensitive = models.BooleanField(default=False)
     used_at = models.DateTimeField(null=True, blank=True)
+
+
+class SignalEvidence(models.Model):
+    """계기(kind=moment)의 근거 기록. 기록이 90일 정리로 지워지면 연결도 같이 지워진다.
+    JSON 목록이 아니라 모델인 이유: '이 기록을 근거로 한 계기'를 SQLite(테스트)에서도 조회할 수 있어야 한다."""
+    signal = models.ForeignKey(Signal, related_name='evidence', on_delete=models.CASCADE)
+    entry = models.ForeignKey('context.ContextEntry', related_name='+', on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ('signal', 'entry')
+
+
+class MomentScan(models.Model):
+    """이 기록의 이 버전(changed_at)까지 계기 추출에 넣었다는 표시. 조각 단위로 일부만 성공해도 빠뜨리거나 두 번 넣지 않게."""
+    entry = models.OneToOneField('context.ContextEntry', related_name='+', on_delete=models.CASCADE)
+    changed_at = models.DateTimeField()
 
 
 class Briefing(models.Model):
@@ -77,9 +93,9 @@ class Briefing(models.Model):
 
 
 class Proposal(BaseModel):
-    KIT, BRIEF_ITEM = 'kit', 'brief_item'
+    KIT, BRIEF_ITEM, NOW = 'kit', 'brief_item', 'now'
     PROPOSED, SHOWN, ACTED, SKIPPED = 'proposed', 'shown', 'acted', 'skipped'
-    kind = models.CharField(max_length=20, choices=((KIT, '신간 홍보 묶음'), (BRIEF_ITEM, '브리핑 항목')))
+    kind = models.CharField(max_length=20, choices=((KIT, '신간 홍보 묶음'), (BRIEF_ITEM, '브리핑 항목'), (NOW, '주중 제안')))
     book = models.ForeignKey(Book, null=True, blank=True, related_name='marketing_proposals', on_delete=models.CASCADE)
     signal = models.ForeignKey(Signal, null=True, blank=True, on_delete=models.SET_NULL)
     briefing = models.ForeignKey(Briefing, null=True, blank=True, related_name='items', on_delete=models.CASCADE)
