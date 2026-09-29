@@ -1,12 +1,17 @@
-from datetime import date
+import json
+from datetime import date, datetime, timedelta
+from types import SimpleNamespace
 from unittest import mock
 
 from django.test import TestCase
 
+from intake.models import WorkerState
 from marketing.models import SelectionAnnouncement, Signal
 from marketing.selection_sources import Announcement
-from marketing.selections import collect
-from marketing.tests.fakes import make_book
+from marketing.selections import Found, announce, collect, notice_message, run_scan, _track_failures
+from marketing.tests.fakes import FakeTG, make_book
+from marketing.timeutil import KST
+from web.models import Notice
 
 TODAY = date(2026, 9, 30)
 
@@ -72,3 +77,112 @@ class CollectTest(TestCase):
         self.assertEqual(failed, [])
         self.assertEqual(len(found), 1)
         self.assertEqual(SelectionAnnouncement.objects.count(), 1)
+
+
+NOW = datetime(2026, 9, 30, 6, 10, tzinfo=KST)
+
+
+class FakeMarketing:
+    def __init__(self, mode, chat):
+        self._mode, self._chat = mode, chat
+
+    def mode(self):
+        return self._mode
+
+    def target_chat(self):
+        return self._chat
+
+
+def make_deps(mode='live', chat=-100):
+    notes = []
+    bot = SimpleNamespace(tg=FakeTG(), marketing=FakeMarketing(mode, chat), notes=notes, notify_admin=notes.append)
+    return SimpleNamespace(bot=bot)
+
+
+class AnnounceTest(TestCase):
+    def setUp(self):
+        self.book = make_book(title='무궁화호를 위하여', published=date(2026, 3, 16),
+                              isbn='979-11-92455-80-8  03300', author='하승우')
+
+    def found(self, how='isbn', **kw):
+        a = ann(**kw)
+        sig = Signal.objects.create(kind=Signal.SELECTION, key=f'selection:{a.key}:{self.book.id}', book=self.book,
+                                    title=a.label, url=a.url, detail={'match': how}, relevant=True)
+        return Found(sig, how, a)
+
+    def test_isbn_hit_in_live_mode_posts_notice_and_sends_card(self):
+        deps = make_deps()
+        notice = announce(deps, self.found(), NOW)
+        self.assertEqual((notice.state, notice.message, notice.link_label, notice.created_by),
+                         (Notice.POSTED, '『무궁화호를 위하여』 2026년 세종도서 교양부문 선정', '책 보기', '공공 선정 자동 감지'))
+        self.assertTrue(notice.link_url.endswith(f'/book={self.book.id}'))
+        self.assertEqual(notice.ends_at, NOW + timedelta(days=30))
+        card = deps.bot.tg.sent('send')[0]
+        self.assertEqual(card['chat'], -100)
+        self.assertIn('사이트 첫 화면에 알림을 올렸어요', card['text'])
+        self.assertIn('ntoff:', json.dumps(card['buttons']))
+        notice.refresh_from_db()
+        self.assertEqual((notice.chat_id, notice.message_id), (-100, 1001))
+        self.assertTrue(Signal.objects.get().detail['posted'])
+
+    def test_title_hit_makes_draft_card_not_posted(self):
+        deps = make_deps()
+        notice = announce(deps, self.found(how='title'), NOW)
+        self.assertEqual(notice.state, Notice.DRAFT)
+        card = deps.bot.tg.sent('send')[0]
+        self.assertIn('제목으로 찾았어요', card['text'])
+        self.assertIn('ntpub:', json.dumps(card['buttons']))
+
+    def test_admin_only_mode_never_posts(self):
+        self.assertEqual(announce(make_deps(mode='admin_only', chat=7), self.found(), NOW).state, Notice.DRAFT)
+
+    def test_no_chat_still_creates_notice_without_card(self):
+        deps = make_deps(chat=None)
+        announce(deps, self.found(), NOW)
+        self.assertEqual(deps.bot.tg.sent(), [])
+
+    def test_notice_message_clips_long_title(self):
+        msg = notice_message('아주 긴 제목 ' * 10, '2026년 세종도서 교양부문')
+        self.assertLessEqual(len(msg), 60)
+        self.assertTrue(msg.endswith('』 2026년 세종도서 교양부문 선정'))
+        self.assertIn('…』', msg)
+
+    def test_run_scan_skips_old_and_alerts_withdrawal(self):
+        deps = make_deps()
+        fresh, old = self.found(key='kpipa:1'), self.found(key='kpipa:2', fresh=False)
+        gone = self.found(key='kpipa:3', withdrawal=True, label='2026년 문학나눔')
+        with mock.patch('marketing.selections.collect', return_value=([fresh, old, gone], [])):
+            run_scan(deps, TODAY, NOW)
+        self.assertEqual(Notice.objects.count(), 1)
+        self.assertEqual(len(deps.bot.notes), 1)
+        self.assertIn('2026년 문학나눔', deps.bot.notes[0])
+        self.assertIn('『무궁화호를 위하여』', deps.bot.notes[0])
+
+    def test_failure_streak_alerts_once_on_third_day(self):
+        deps = make_deps()
+        for _ in range(4):
+            _track_failures(deps, ['nl'])
+        self.assertEqual(len([n for n in deps.bot.notes if '국립중앙도서관' in n and '3일째' in n]), 1)
+        _track_failures(deps, [])
+        self.assertEqual(WorkerState.get('selection_fail_nl'), 0)
+
+    def test_announce_failure_sends_one_card_and_alerts_on_other(self):
+        deps = make_deps()
+        fresh1, fresh2 = self.found(key='kpipa:1'), self.found(key='kpipa:2')
+        call_count = [0]
+        original_send = deps.bot.tg.send_message
+
+        def failing_send(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError('Telegram down')
+            return original_send(*args, **kwargs)
+
+        deps.bot.tg.send_message = failing_send
+        with mock.patch('marketing.selections.collect', return_value=([fresh1, fresh2], [])):
+            with self.assertLogs('marketing', level='WARNING') as logs:
+                run_scan(deps, TODAY, NOW)
+        self.assertEqual(Notice.objects.count(), 2)
+        self.assertEqual(len(deps.bot.tg.sent('send')), 1)
+        admin_notes = [n for n in deps.bot.notes if '알림을 보내지 못했어요' in n and '무궁화호를 위하여' in n]
+        self.assertEqual(len(admin_notes), 1)

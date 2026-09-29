@@ -3,13 +3,21 @@ ISBN으로 맞으면 첫 화면 알림 띠에 바로 올리고(live 모드), 제
 import logging
 import time
 from dataclasses import dataclass
+from datetime import timedelta
 
+from intake import messages, notices
+from intake.models import WorkerState
 from marketing.http import http_get, http_get_bytes
 from marketing.models import SelectionAnnouncement, Signal
 from marketing.selection_match import match_books, our_books
 from marketing.selection_sources import SCANNERS, Announcement
+from web.models import Notice
+from web.pages import absolute_url
 
-log = logging.getLogger('intake')
+log = logging.getLogger('marketing')
+
+NOTICE_DAYS = 30
+FAIL_ALERT_DAYS = 3
 
 
 @dataclass
@@ -59,3 +67,68 @@ def collect(today, get_text=http_get, get_bytes=http_get_bytes, sleep=time.sleep
     if failed and len(failed) == len(SCANNERS):
         raise RuntimeError('공공 선정 발표를 한 곳도 읽지 못했어요: ' + ', '.join(failed))
     return found, failed
+
+
+def notice_message(title, label):
+    """『제목』 ○○ 선정 — 알림 띠 한 줄(60자) 안에 들게 제목을 줄인다."""
+    tail = f' {label} 선정'
+    room = notices.MAX_LEN - len(tail) - 2   # 낫표 두 글자
+    name = title if len(title) <= room else title[:max(room - 1, 1)].rstrip() + '…'
+    return f'『{name}』{tail}'
+
+
+def announce(deps, found, now):
+    """ISBN으로 맞고 live 모드면 바로 게시, 아니면 미리보기(DRAFT). 카드는 모드에 맞는 방(target_chat)으로."""
+    m = deps.bot.marketing
+    book, ann = found.signal.book, found.announcement
+    post = found.how == 'isbn' and m.mode() == 'live'
+    notice = Notice.objects.create(
+        message=notice_message(book.title, ann.label), link_url=absolute_url(f'/book={book.id}'),
+        link_label='책 보기', starts_at=now, ends_at=now + timedelta(days=NOTICE_DAYS),
+        state=Notice.POSTED if post else Notice.DRAFT, created_by='공공 선정 자동 감지')
+    Signal.objects.filter(pk=found.signal.pk).update(
+        detail={**found.signal.detail, 'notice_id': notice.id, 'posted': post})
+    chat = m.target_chat()
+    if not chat:
+        return notice
+    if post:
+        head = f'🏅 {ann.label} 선정 — 『{book.title}』\n사이트 첫 화면에 알림을 올렸어요. 발표: {ann.url}'
+    else:
+        how = ' (ISBN이 아니라 제목으로 찾았어요)' if found.how == 'title' else ''
+        head = (f'🏅 {ann.label} 선정 도서로 보여요 — 『{book.title}』{how}\n'
+                f'발표를 확인하고 첫 화면에 올릴까요? 발표: {ann.url}')
+    sent = deps.bot.tg.send_message(chat, messages.notice_card(notice, head=head),
+                                    buttons=messages.notice_buttons(notice))
+    notices.attach_message(notice, chat, sent['message_id'])
+    return notice
+
+
+def _track_failures(deps, failed):
+    """같은 출처가 사흘 연속 실패하면(페이지 형식이 바뀌었을 수 있다) 관리자에게 한 번 알린다."""
+    for sid, name, _scan in SCANNERS:
+        key = f'selection_fail_{sid}'
+        if sid not in failed:
+            WorkerState.put(key, 0)
+            continue
+        streak = (WorkerState.get(key) or 0) + 1
+        WorkerState.put(key, streak)
+        if streak == FAIL_ALERT_DAYS:
+            deps.bot.notify_admin(f'⚠️ 공공 선정: {name} 발표를 {streak}일째 읽지 못했어요. '
+                                  f'페이지 형식이 바뀌었는지 확인해 주세요')
+
+
+def run_scan(deps, today, now, **collect_kwargs):
+    found, failed = collect(today, **collect_kwargs)
+    _track_failures(deps, failed)
+    for f in found:
+        try:
+            if f.announcement.withdrawal:
+                deps.bot.notify_admin(f'⚠️ {f.announcement.label} 철회·취소 공고 목록에 『{f.signal.book.title}』 포함 — '
+                                      f'확인해 주세요: {f.announcement.url}')
+            elif f.announcement.fresh:
+                announce(deps, f, now)
+        except Exception:
+            log.warning('selection announce failed: %s', f.signal.key, exc_info=True)
+            deps.bot.notify_admin(f'⚠️ 공공 선정: 『{f.signal.book.title}』 알림을 보내지 못했어요 — '
+                                  f'확인해 주세요: {f.announcement.url}')
+    return found
