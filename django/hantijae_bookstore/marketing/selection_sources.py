@@ -135,3 +135,67 @@ def scan_tkpf(today, seen, get_text, get_bytes, sleep):
         out.append(Announcement('tkpf', key, tkpf_label(title), view, posted, fresh,
                                 _download_texts(files, get_bytes, sleep), is_withdrawal(title)))
     return out
+
+
+# ---- 대한민국학술원 우수학술도서 (연 1회, 출판사 검색) ----
+NAS_URL = ('https://www.nas.go.kr/page/59725ab6-21c4-11ec-8e17-001e6746f4e8?search_type=PLSCMPN_NM&search_text='
+           + urllib.parse.quote('한티재'))
+_NAS_ITEM = re.compile(r'<div class="data__books_year">(\d{4})</div>.*?<strong class="books__name">(.*?)</strong>'
+                       r'.*?<span>출판사명</span>\s*<em>(.*?)</em>.*?<span>저자명</span>\s*<em>(.*?)</em>', re.S)
+
+
+def nas_rows(html):
+    return [(int(y), clean(t), clean(p), clean(a)) for y, t, p, a in _NAS_ITEM.findall(html)]
+
+
+def scan_nas(today, seen, get_text, get_bytes, sleep):
+    out = []
+    for year, title, publisher, author in nas_rows(get_text(NAS_URL)):
+        key = f'nas:{year}:{title_key(title)}'[:200]
+        if key in seen or '한티재' not in publisher:
+            continue
+        out.append(Announcement('nas', key, f'{year}년 학술원 우수학술도서', NAS_URL, None, year >= today.year,
+                                [f'{title} {author} {publisher}']))
+    return out
+
+
+# ---- 국립중앙도서관 사서추천도서 (월 단위, 출판사 검색, 약 850KB) ----
+NL_URL = ('https://www.nl.go.kr/NL/contents/N20500000000.do?schFld=3&schStr=' + urllib.parse.quote('한티재')
+          + '&viewCount=80')
+_NL_ITEM = re.compile(r"fn_goView\('(\d+)'\).*?<span class=\"date\">([\d.]+)</span>"
+                      r".*?<strong\s+class=\"title\"\s+title=\"([^\"]*)\""
+                      r".*?<dd class=\"author\">(.*?)</dd>.*?<dd class=\"publisher\">(.*?)</dd>", re.S)
+
+
+def nl_rows(html):
+    rows, ids = [], set()
+    for rid, when, title, author, publisher in _NL_ITEM.findall(html):
+        if rid in ids:
+            continue
+        ids.add(rid)
+        rows.append((rid, when, clean(title), clean(author), clean(publisher)))
+    return rows
+
+
+def months_ago(when, today):
+    parts = [p for p in (when or '').split('.') if p]
+    if len(parts) < 2:
+        return 999
+    y, m = int(parts[0]), int(parts[1])
+    return (today.year - y) * 12 + today.month - m
+
+
+def scan_nl(today, seen, get_text, get_bytes, sleep):
+    out = []
+    for rid, when, title, author, publisher in nl_rows(get_text(NL_URL)):
+        key = f'nl:{rid}'
+        if key in seen or '한티재' not in publisher:
+            continue
+        out.append(Announcement('nl', key, f'국립중앙도서관 사서추천도서({when})', NL_URL, None,
+                                months_ago(when, today) <= 2, [f'{title} {author} {publisher}']))
+    return out
+
+
+# 선정 감지가 매일 도는 출처(아이디, 관리자 알림에 쓸 이름, 스캐너)
+SCANNERS = [('kpipa', '출판진흥원 결과공고', scan_kpipa), ('tkpf', '청소년 교양도서', scan_tkpf),
+            ('nas', '학술원 우수학술도서', scan_nas), ('nl', '국립중앙도서관 사서추천도서', scan_nl)]

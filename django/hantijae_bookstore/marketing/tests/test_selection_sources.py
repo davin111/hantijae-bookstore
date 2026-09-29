@@ -3,9 +3,10 @@ from datetime import date
 
 from django.test import SimpleTestCase
 
-from marketing.selection_sources import (KPIPA_LIST, KPIPA_VIEW, TKPF_LIST, TKPF_VIEW, is_selection_title, kpipa_files,
-                                         kpipa_label, kpipa_posts, scan_kpipa, scan_tkpf, tkpf_files, tkpf_label,
-                                         tkpf_posted, tkpf_posts)
+from marketing.selection_sources import (KPIPA_LIST, KPIPA_VIEW, TKPF_LIST, TKPF_VIEW, NAS_URL, NL_URL, SCANNERS,
+                                         is_selection_title, kpipa_files, kpipa_label, kpipa_posts, scan_kpipa,
+                                         scan_tkpf, tkpf_files, tkpf_label, tkpf_posted, tkpf_posts, nas_rows,
+                                         scan_nas, nl_rows, scan_nl, months_ago)
 from marketing.tests.fakes import tiny_pdf, tiny_xlsx
 
 KPIPA_LIST_HTML = """<ul class="fz-list">
@@ -121,3 +122,52 @@ class TkpfTest(SimpleTestCase):
         anns = scan_tkpf(date(2026, 6, 1), set(), pages.__getitem__,
                          lambda u: tiny_xlsx(['책'], ['9791111111111']), no_sleep)
         self.assertTrue(anns[0].withdrawal)
+
+
+NAS_HTML = """<ul class="data__list">
+<li class="data__item"><div class="data__contents"><div class="data__cell classify--books"><div class="data__books_year">2026</div></div>
+<div class="data__cell"><div class="data__books_info"><span class="books__field">사회과학/법학</span>
+<strong class="books__name">내란 앞에서 : 한 헌법학자의 일지</strong><ul><li><span>출판사명</span> <em>도서출판 한티재</em></li>
+<li><span>저자명</span> <em>김해원 저</em></li></ul></div></div></div></li>
+<li class="data__item"><div class="data__contents"><div class="data__cell classify--books"><div class="data__books_year">2024</div></div>
+<div class="data__cell"><div class="data__books_info"><strong class="books__name">도심재생의 미래</strong><ul>
+<li><span>출판사명</span> <em>한티재</em></li><li><span>저자명</span> <em>이권희 저</em></li></ul></div></div></div></li>
+</ul>"""
+
+NL_ITEM_HTML = """<li class="uccst14_item"><a href="#none" onclick="fn_goView('20260728101010000100')">
+<div class="inner"><div class="cont"><div class="bx"><div class="title_inner">
+<span class="date">2026.8</span> <span class="category">사회과학</span> <strong
+	class="title"
+	title="무궁화호를 위하여 : 기차가 멈추는 곳">
+	무궁화호를 위하여 : 기차가 멈추는 곳</strong></div>
+<div class="info_inner"><dl><dt>지은이</dt><dd class="author">하승우</dd><dt>출판사</dt><dd class="publisher">한티재</dd>
+</dl></div></div></div></div></a></li>
+"""
+NL_HTML = NL_ITEM_HTML * 2   # 사이트는 썸네일·목록 두 번 그린다
+
+
+class NasNlTest(SimpleTestCase):
+    def test_nas_rows(self):
+        self.assertEqual(nas_rows(NAS_HTML)[0], (2026, '내란 앞에서 : 한 헌법학자의 일지', '도서출판 한티재', '김해원 저'))
+
+    def test_scan_nas_marks_only_this_year_fresh(self):
+        anns = scan_nas(date(2026, 9, 30), set(), {NAS_URL: NAS_HTML}.__getitem__, None, no_sleep)
+        self.assertEqual([(a.key, a.fresh) for a in anns],
+                         [('nas:2026:내란앞에서:한헌법학자의일지', True), ('nas:2024:도심재생의미래', False)])
+        self.assertEqual(anns[0].label, '2026년 학술원 우수학술도서')
+        self.assertIn('한티재', anns[0].texts[0])
+
+    def test_nl_rows_dedupe_and_scan(self):
+        self.assertEqual(len(nl_rows(NL_HTML)), 1)
+        anns = scan_nl(date(2026, 9, 30), set(), {NL_URL: NL_HTML}.__getitem__, None, no_sleep)
+        self.assertEqual([(a.key, a.label, a.fresh) for a in anns],
+                         [('nl:20260728101010000100', '국립중앙도서관 사서추천도서(2026.8)', True)])
+        self.assertEqual(scan_nl(date(2026, 9, 30), {'nl:20260728101010000100'}, {NL_URL: NL_HTML}.__getitem__,
+                                 None, no_sleep), [])
+
+    def test_months_ago(self):
+        self.assertEqual([months_ago('2026.8', date(2026, 9, 30)), months_ago('2025.12', date(2026, 2, 1)),
+                          months_ago('', date(2026, 2, 1))], [1, 2, 999])
+
+    def test_scanners_registry(self):
+        self.assertEqual([s[0] for s in SCANNERS], ['kpipa', 'tkpf', 'nas', 'nl'])
