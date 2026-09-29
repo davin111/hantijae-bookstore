@@ -79,6 +79,16 @@ class StoreTest(TestCase):
         self.assertEqual(run.stats['editor']['status'], 'malformed')
         self.assertNotIn('facebook:editor', WorkerState.get(social.OK_KEY) or {})
 
+    def test_same_post_in_both_accounts_or_twice_is_stored_once(self):
+        run = make_run(limit=5)
+        shared = fb_item('7', text='공동 글', time=iso(NOW))
+        items = [shared, dict(shared), {**shared, 'inputUrl': 'https://www.facebook.com/ceo.test',
+                                        'facebookUrl': 'https://www.facebook.com/ceo.test'}]
+        new = social.store(run, items, SOCIAL_ACCOUNTS, NOW)
+        self.assertEqual([p.post_id for p in new], ['7'])
+        run.refresh_from_db()
+        self.assertEqual((run.state, run.stats['ceo']['known'], run.stats['ceo']['status']), ('succeeded', 1, 'ok'))
+
     def test_known_posts_are_not_duplicated(self):
         make_post('1', posted_at=NOW - timedelta(days=1))
         run = make_run(accounts=('editor',))
@@ -206,10 +216,38 @@ class RunTest(TestCase):
     def test_stuck_run_is_aborted_after_15_minutes(self):
         make_run(apify_run_id='r9', started_at=NOW - timedelta(minutes=16))
         self.seed_known()
-        client = FakeApify(starts=[done('d1')], datasets={'d1': both_accounts('a', NOW)})
+        client = FakeApify(starts=[done('d1')], polls=[{'id': 'r9', 'status': 'RUNNING'}],
+                           datasets={'d1': both_accounts('a', NOW)})
         social.run_due(Deps(), NOW, client=client)
         self.assertEqual(client.aborted, ['r9'])
         self.assertEqual(SocialRun.objects.get(apify_run_id='r9').state, 'failed')
+
+    def test_late_check_keeps_an_already_finished_run(self):
+        make_run(apify_run_id='r9', dataset_id='d9', started_at=NOW - timedelta(minutes=40))
+        self.seed_known()
+        client = FakeApify(polls=[done('d9', run_id='r9')], datasets={'d9': both_accounts('a', NOW)})
+        social.run_due(Deps(), NOW, client=client)
+        self.assertEqual(client.aborted, [])
+        self.assertEqual(SocialRun.objects.get(apify_run_id='r9').state, 'succeeded')
+        self.assertEqual(client.started, [])  # 두 계정 모두 받았으니 새 실행 없음
+
+    def test_first_run_only_for_accounts_never_seen(self):
+        make_post('k-ceo', account='ceo', posted_at=NOW - timedelta(days=3))
+        client = FakeApify(starts=[done('d1'), done('d2', run_id='r2')],
+                           datasets={'d1': [fb_item('e1', text='a', time=iso(NOW))],
+                                     'd2': [fb_item('c1', account='ceo.test', text='b', time=iso(NOW))]})
+        social.run_due(Deps(), NOW, client=client)
+        social.run_due(Deps(), NOW + timedelta(minutes=1), client=client)
+        self.assertEqual([(r.purpose, r.accounts, r.limit) for r in SocialRun.objects.order_by('id')],
+                         [('first', ['editor'], 20), ('normal', ['ceo'], 5)])
+
+    def test_switched_on_without_config_alerts_once_a_day(self):
+        deps = Deps()
+        with override_settings(MARKETING={'APIFY_TOKEN': 'tok', 'SOCIAL_ACCOUNTS': '[{broken'}):
+            social.run_due(deps, NOW, client=FakeApify())
+            social.run_due(deps, NOW + timedelta(hours=1), client=FakeApify())
+        self.assertEqual(len(deps.notes), 1)
+        self.assertIn('SOCIAL_ACCOUNTS', deps.notes[0])
 
     def test_failed_status_keeps_cost(self):
         self.seed_known()

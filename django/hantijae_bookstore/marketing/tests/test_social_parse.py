@@ -57,3 +57,10 @@ class ParseTest(SimpleTestCase):
             self.assertEqual(parse_time(v), utc)
         self.assertIsNone(parse_time('어제'))
         self.assertIsNone(parse_time(None))
+
+    def test_share_key_keeps_ids_in_the_query(self):
+        self.assertEqual(share_key('https://www.facebook.com/photo/?fbid=123&set=a.1'), 'facebook.com/photo?fbid=123')
+        self.assertNotEqual(share_key('https://www.facebook.com/photo/?fbid=1'), share_key('https://www.facebook.com/photo/?fbid=2'))
+        self.assertEqual(share_key('https://m.facebook.com/permalink.php?story_fbid=9&amp;id=7'),
+                         'facebook.com/permalink.php?story_fbid=9&id=7')
+        self.assertEqual(share_key('https://www.facebook.com/watch/?v=55&ref=x'), 'facebook.com/watch?v=55')

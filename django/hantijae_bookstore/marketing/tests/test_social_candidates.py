@@ -7,7 +7,7 @@ from intake.models import FundingCampaign
 from marketing import candidates as C
 from marketing.briefing import build_weekly
 from marketing.meta import OfficialPost
-from marketing.models import Signal
+from marketing.models import BookProfile, Signal
 from marketing.tests.fakes import FakeLLM, make_book
 from marketing.timeutil import KST
 
@@ -156,3 +156,10 @@ class SocialCandidateTest(TestCase):
         cands = C.gather(TODAY, NOW, posts=[])
         self.assertFalse(any(c.signal == s for c in cands))
         self.assertEqual(next(c for c in cands if c.kind == 'fund').facts['personal_posts'], ['2026-09-25 대표님 개인 페이스북'])
+
+    def test_quiet_book_review_stays_out_of_the_press_bundle(self):
+        BookProfile.objects.create(book=self.rainbow, quiet_until=date(2026, 10, 31))
+        sns('p1', category='press', books=[self.rainbow], summary='저자 인터뷰')
+        b = sns('p2', category='review', books=[self.farmer], summary='독자 서평')
+        [c] = C.social_candidates(TODAY, NOW, [], fetch=boom)
+        self.assertEqual((c.signal, c.more_signals, c.summary), (b, [], '운영진이 최근 공유한 서평·기사 ― 독자 서평'))

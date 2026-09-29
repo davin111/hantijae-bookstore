@@ -313,6 +313,8 @@ def social_candidates(today, now, posts, fetch=None):
             out.append(Candidate(id=f'sns:{s.id}', kind='sns_repost', books=books,
                                  summary=f'{d.get("summary", "")} ― {sns_where(s)}에 올린 글' + (f', {note}' if note else ''),
                                  facts=facts, urgency=2, signal=s))
+    quiet = set(BookProfile.objects.filter(quiet_until__gte=today).values_list('book_id', flat=True))
+    press = [(s, bs) for s, bs in press if not ({b.id for b in bs} & quiet or set(s.detail.get('books') or []) & quiet)]
     if press:
         press.sort(key=lambda x: (x[0].happens_on or date.min, x[0].id), reverse=True)  # 최근 것부터
         picked = press[:SNS_PRESS_MAX]

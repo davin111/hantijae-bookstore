@@ -94,10 +94,11 @@ def store(run, items, accounts, now):
     stats, new = {}, []
     for role in run.accounts:
         c = parsed.counts.get(role) or {'items': 0, 'valid': 0, 'errors': 0}
-        mine = [p for p in parsed.posts if p.account == role]
-        seen = SocialPost.objects.filter(platform=run.platform, account=role)
-        newest = seen.aggregate(m=Max('posted_at'))['m']
-        known = set(seen.filter(post_id__in=[p.post_id for p in mine]).values_list('post_id', flat=True))
+        mine = list({p.post_id: p for p in parsed.posts if p.account == role}.values())  # 한 결과 안 중복 제거
+        newest = SocialPost.objects.filter(platform=run.platform, account=role).aggregate(m=Max('posted_at'))['m']
+        # 같은 글이 두 운영진 결과에 함께 올 수 있다(공동 글·태그) → 계정과 상관없이 이미 저장한 글은 '아는 글'
+        known = set(SocialPost.objects.filter(platform=run.platform, post_id__in=[p.post_id for p in mine])
+                    .values_list('post_id', flat=True))
         status = account_status(c)
         reached = (newest is None or bool(known) or len(mine) < run.limit
                    or (bool(mine) and min(p.posted_at for p in mine) <= newest))
@@ -155,11 +156,12 @@ def next_run(platform, accounts, now):
         return None
     good = ok_roles(runs)
     todo = [a['role'] for a in accounts if a.get(platform) and a['role'] not in good]
-    regular = [r for r in runs if r.purpose in REGULAR]
-    if todo and len(regular) < MAX_ATTEMPTS[platform] and (
-            not regular or now - regular[-1].started_at >= RETRY_GAP[platform]):
-        if any(not SocialPost.objects.filter(platform=platform, account=r).exists() for r in todo):
-            return SocialRun.FIRST, todo, DEEP_LIMIT
+    fresh = [r for r in todo if not SocialPost.objects.filter(platform=platform, account=r).exists()]
+    if fresh and not any(r.purpose == SocialRun.FIRST for r in runs):  # 처음 보는 계정만 20건(기준선), 기간에 한 번
+        return SocialRun.FIRST, fresh, DEEP_LIMIT
+    normal = [r for r in runs if r.purpose == SocialRun.NORMAL]
+    if todo and len(normal) < MAX_ATTEMPTS[platform] and (
+            not normal or now - normal[-1].started_at >= RETRY_GAP[platform]):
         return SocialRun.NORMAL, todo, NORMAL_LIMIT
     gaps = gap_roles(runs)
     if gaps and not any(r.purpose == SocialRun.DEEP for r in runs):
@@ -196,7 +198,7 @@ def _names(accounts, roles):
 def alert_failures(deps, platform, accounts, now):
     """이번 기간 시도를 다 썼는데 정상으로 못 받은 계정이 있으면 한 번 알린다(예산으로 건너뛴 것은 예산 알림이 대신)."""
     runs = _period_runs(platform, now)
-    regular = [r for r in runs if r.purpose in REGULAR]
+    regular = [r for r in runs if r.purpose == SocialRun.NORMAL]
     if (len(regular) < MAX_ATTEMPTS[platform] or any(r.state in (SocialRun.STARTING, SocialRun.RUNNING) for r in runs)
             or all(r.state == SocialRun.SKIPPED for r in regular)):
         return
@@ -287,7 +289,15 @@ def poll(deps, client, platform, accounts, now):
     """진행 중인 실행 확인. 15분이 지나도 안 끝나면 중단을 요청하고 실패로 둔다."""
     for run in SocialRun.objects.filter(platform=platform, state__in=(SocialRun.STARTING, SocialRun.RUNNING)):
         if now - run.started_at > GIVE_UP:
-            if run.apify_run_id:
+            data = {}
+            if run.apify_run_id:  # 워커가 오래 멈췄다 돌아온 경우 이미 끝난 실행일 수 있다 → 결과를 버리지 않는다
+                try:
+                    data = client.get_run(run.apify_run_id)
+                except ApifyError:
+                    data = {}
+                if data.get('status') in FINAL:
+                    finish_if_done(deps, client, run, data, accounts, now)
+                    continue
                 try:
                     client.abort_run(run.apify_run_id)
                 except ApifyError:
@@ -305,7 +315,11 @@ def poll(deps, client, platform, accounts, now):
 def run_due(deps, now, client=None):
     """워커가 매 바퀴(약 1분) 부른다. 꺼져 있거나 토큰·계정 설정이 없으면 아무것도 하지 않는다."""
     token, accounts = config()
-    if WorkerState.get(SWITCH_KEY) != 'on' or not token or not accounts:
+    if WorkerState.get(SWITCH_KEY) != 'on':
+        return
+    if not token or not accounts:
+        alert_once(deps, 'config', kst_now(now).date().isoformat(),
+                   '⚠️ SNS 수집이 켜져 있는데 APIFY_TOKEN 또는 SOCIAL_ACCOUNTS 설정이 없거나 깨졌어요. /mk 로 확인해 주세요')
         return
     client = client or Apify(token)
     local = kst_now(now)

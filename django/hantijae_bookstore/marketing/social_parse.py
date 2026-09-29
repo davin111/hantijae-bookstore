@@ -56,13 +56,19 @@ def fb_key(url):
     return key
 
 
+ID_PARAMS = ('fbid', 'story_fbid', 'id', 'v')  # photo/?fbid=…, permalink.php?story_fbid=…&id=…, watch/?v=…
+
+
 def share_key(url):
-    """공유 원문 주소 → 묶음 열쇠. 추적 인자와 www·m 차이를 없앤다(pfbid는 대소문자를 가리므로 그대로)."""
+    """공유 원문 주소 → 묶음 열쇠. 추적 인자와 www·m 차이를 없애되 글을 가리키는 인자(ID_PARAMS)는 남긴다
+    (pfbid는 대소문자를 가리므로 그대로)."""
     parts = urllib.parse.urlsplit((url or '').strip())
     host = parts.netloc.lower()
     for prefix in ('www.', 'm.', 'web.'):
         host = host.removeprefix(prefix)
-    return host + parts.path.rstrip('/')
+    query = urllib.parse.parse_qs(parts.query.replace('&amp;', '&'))
+    ids = '&'.join(f'{k}={query[k][0]}' for k in ID_PARAMS if query.get(k))
+    return host + parts.path.rstrip('/') + (f'?{ids}' if ids else '')
 
 
 def _counts(roles):

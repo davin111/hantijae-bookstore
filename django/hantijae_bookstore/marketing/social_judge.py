@@ -149,6 +149,8 @@ def same_subject(v, now):
     if ev.get('on'):
         for s in recent.filter(happens_on=date.fromisoformat(ev['on'])):
             other = s.detail.get('event') or {}
+            if other.get('on') != ev['on']:  # 같은 날 올라온 행사 아닌 글(신간·서평)과는 합치지 않는다
+                continue
             if set(s.detail.get('books') or []) & set(v['books']):
                 return s
             if ev.get('name') and other.get('name') and similarity(ev['name'], other['name']) >= SAME_EVENT_NAME:
@@ -211,8 +213,9 @@ def judge_pending(llm, now, role_labels):
                    .order_by('first_seen', 'id'))
     touched, reps = [], {}
     for p in pending:
-        rep = (SocialPost.objects.filter(group_key=p.group_key, judged_at__isnull=False)
-               .exclude(pk=p.pk).order_by('first_seen', 'id').first())
+        judged = (SocialPost.objects.filter(group_key=p.group_key, judged_at__isnull=False)
+                  .exclude(pk=p.pk).order_by('first_seen', 'id'))
+        rep = next((j for j in judged if not j.verdict.get('baseline')), None)  # 기준선 글은 판정한 게 아니다
         if rep:
             touched += _follow(p, rep, now, role_labels)
         elif p.group_key not in reps:

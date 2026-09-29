@@ -1,5 +1,7 @@
 import hashlib
 import hmac
+
+import requests
 from datetime import datetime, timezone
 
 from django.test import SimpleTestCase, override_settings
@@ -19,7 +21,8 @@ class FakeGet:
         body = self.replies[url.rsplit('/', 2)[-2]]
         if isinstance(body, Exception):
             raise body
-        return type('R', (), {'raise_for_status': lambda self: None, 'json': lambda self: body})()
+        status = body.pop('_status', 200) if isinstance(body, dict) else 200
+        return type('R', (), {'status_code': status, 'json': lambda self: body})()
 
 
 @override_settings(MARKETING=CFG)
@@ -46,3 +49,11 @@ class MetaTest(SimpleTestCase):
         with override_settings(MARKETING={}):
             self.assertEqual(meta.official_posts(SINCE, get=get), {'facebook': None, 'instagram': None})
         self.assertEqual(get.calls, [])
+
+    def test_errors_never_log_the_token(self):
+        get = FakeGet({'111': {'_status': 400}, '222': requests.ConnectionError('url: /v26.0/222/media?access_token=ptok')})
+        with self.assertLogs('intake', level='WARNING') as logs:
+            self.assertEqual(meta.official_posts(SINCE, get=get), {'facebook': None, 'instagram': None})
+        self.assertEqual(logs.output, ['WARNING:intake:meta facebook posts: HTTP 400',
+                                       'WARNING:intake:meta instagram media: ConnectionError'])
+        self.assertNotIn('ptok', ' '.join(logs.output))

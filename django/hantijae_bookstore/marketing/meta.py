@@ -28,11 +28,19 @@ def proof(token, secret):
     return hmac.new(secret.encode(), token.encode(), hashlib.sha256).hexdigest()
 
 
+class MetaError(Exception):
+    """주소(토큰이 들어 있음)를 담지 않은 오류. requests의 오류 문구는 주소를 그대로 담으므로 쓰지 않는다."""
+
+
 def _rows(get, path, params, cfg):
     token = cfg['META_PAGE_TOKEN']
-    res = get(f'{GRAPH}/{path}', params={**params, 'access_token': token,
-                                         'appsecret_proof': proof(token, cfg['META_APP_SECRET'])}, timeout=20)
-    res.raise_for_status()
+    try:
+        res = get(f'{GRAPH}/{path}', params={**params, 'access_token': token,
+                                             'appsecret_proof': proof(token, cfg['META_APP_SECRET'])}, timeout=20)
+    except requests.RequestException as e:
+        raise MetaError(type(e).__name__) from None
+    if res.status_code >= 400:
+        raise MetaError(f'HTTP {res.status_code}')
     return res.json().get('data', [])
 
 
@@ -48,8 +56,8 @@ def official_posts(since, get=requests.get):
                                                                'since': int(since.timestamp()), 'limit': 50}, cfg)
             out['facebook'] = [OfficialPost('facebook', parse_time(r.get('created_time')), r.get('message') or '',
                                             r.get('permalink_url') or '') for r in rows if parse_time(r.get('created_time'))]
-        except Exception as e:  # 한 채널 실패는 '모름'으로 두고 넘어간다
-            log.warning('meta facebook posts: %s', e)
+        except Exception as e:  # 한 채널 실패는 '모름'으로 두고 넘어간다(로그에는 종류·상태 코드만)
+            log.warning('meta facebook posts: %s', e if isinstance(e, MetaError) else type(e).__name__)
     if cfg.get('META_IG_USER_ID'):
         try:
             rows = _rows(get, f'{cfg["META_IG_USER_ID"]}/media', {'fields': 'caption,timestamp,permalink', 'limit': 50},
@@ -58,5 +66,5 @@ def official_posts(since, get=requests.get):
                                   r.get('permalink') or '') for r in rows if parse_time(r.get('timestamp'))]
             out['instagram'] = [p for p in posts if p.posted_at >= since]
         except Exception as e:
-            log.warning('meta instagram media: %s', e)
+            log.warning('meta instagram media: %s', e if isinstance(e, MetaError) else type(e).__name__)
     return out

@@ -139,6 +139,22 @@ class JudgeTest(TestCase):
         J.judge_pending(llm, NOW, LABELS)
         self.assertEqual(Signal.objects.get().detail['who'], ['편집장', '대표'])
 
+    def test_event_does_not_merge_into_same_day_non_event(self):
+        self.post('1', text='『무지개를 변호하다』 서평이 실렸어요')
+        J.judge_pending(FakeLLM({'items': [verdict(category='review', books=['무지개를 변호하다'])]}), NOW, LABELS)
+        self.post('2', account='ceo', text='오늘 9월 29일 『무지개를 변호하다』 북토크')
+        J.judge_pending(FakeLLM({'items': [verdict(category='event', books=['무지개를 변호하다'],
+                                                   event={'date': '2026-09-29', 'name': '북토크', 'place': ''})]}),
+                        NOW, LABELS)
+        self.assertEqual(sorted(s.detail['category'] for s in Signal.objects.all()), ['event', 'review'])
+
+    def test_baseline_post_is_not_a_representative(self):
+        make_post('old', text='원문', group_key='share:x', judged_at=NOW, verdict={'baseline': True},
+                  posted_at=NOW - timedelta(days=40))
+        self.post('new', text='『농부, 짠한 형』 다시 공유', group_key='share:x')
+        [s] = J.judge_pending(FakeLLM({'items': [verdict(category='funding', books=['농부, 짠한 형'])]}), NOW, LABELS)
+        self.assertEqual(s.book, self.farmer)
+
     def test_llm_omission_leaves_post_pending(self):
         self.post('1', text='『농부, 짠한 형』')
         J.judge_pending(FakeLLM({'items': []}), NOW, LABELS)
