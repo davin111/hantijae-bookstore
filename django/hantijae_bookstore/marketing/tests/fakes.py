@@ -108,3 +108,14 @@ def fb_item(post_id, account='editor.test', text='', time='2026-09-29T02:35:04.0
 def ig_item(post_id, owner='ceo_ig', caption='', ts='2026-09-18T09:15:24.000Z', **extra):
     return {'id': post_id, 'url': f'https://www.instagram.com/p/{post_id}/', 'timestamp': ts, 'caption': caption,
             'ownerUsername': owner, **extra}
+
+
+def make_post(post_id, platform='facebook', account='editor', text='', posted_at=None, group_key=None, **extra):
+    from datetime import datetime, timezone
+    from marketing.models import SocialPost
+    posted_at = posted_at or datetime(2026, 9, 18, 9, 10, tzinfo=timezone.utc)
+    return SocialPost.objects.create(platform=platform, account=account, post_id=post_id,
+                                     url=f'https://example.com/{platform}/{post_id}', posted_at=posted_at, text=text,
+                                     first_seen=extra.pop('first_seen', posted_at), last_seen=posted_at,
+                                     group_key=group_key if group_key is not None else f'post:{platform}:{post_id}',
+                                     **extra)
