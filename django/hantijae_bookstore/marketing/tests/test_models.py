@@ -46,6 +46,36 @@ class DraftTest(TestCase):
         self.assertEqual(Draft(channel=Draft.LINKS).label, '서점 링크 공지')
 
 
+class SelectionModelTest(TestCase):
+    def test_selection_kind_and_announcement_record(self):
+        from marketing.models import SelectionAnnouncement, Signal
+        self.assertEqual(Signal.SELECTION, 'selection')
+        self.assertIn(('selection', '공공 선정'), Signal._meta.get_field('kind').choices)
+        a = SelectionAnnouncement.objects.create(key='kpipa:2145', source='kpipa', label='2026년 세종도서 교양부문',
+                                                 url='https://www.kpipa.or.kr/p/g1_2/2145')
+        self.assertEqual((a.matched, a.withdrawal, a.posted_on), (0, False, None))
+
+
+class SocialModelTest(TestCase):
+    def test_social_post_unique_per_platform_and_full_text(self):
+        from datetime import datetime, timezone
+        from django.db import transaction
+        from marketing.models import SocialPost
+        now = datetime(2026, 9, 29, 21, 20, tzinfo=timezone.utc)
+        kw = dict(account='editor', posted_at=now, first_seen=now, last_seen=now)
+        p = SocialPost.objects.create(platform='facebook', post_id='1', url='https://example.com/f/1', text='덧붙임',
+                                      shared={'text': '원문'}, link={'title': '기사 제목'}, **kw)
+        self.assertEqual(p.full_text(), '덧붙임\n원문\n기사 제목')
+        SocialPost.objects.create(platform='instagram', post_id='1', url='https://example.com/i/1', **kw)
+        with transaction.atomic(), self.assertRaises(IntegrityError):
+            SocialPost.objects.create(platform='facebook', post_id='1', url='https://example.com/f/1b', **kw)
+
+    def test_signal_has_social_kind(self):
+        from marketing.models import Signal
+        self.assertEqual(Signal.SOCIAL, 'social')
+        self.assertIn(('social', '운영진 SNS'), Signal._meta.get_field('kind').choices)
+
+
 class MomentModelTest(TestCase):
     def setUp(self):
         from context.models import ContextEntry

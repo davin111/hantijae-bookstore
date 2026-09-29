@@ -4,8 +4,8 @@ from types import SimpleNamespace
 from django.test import SimpleTestCase
 
 from marketing import prompts
-from marketing.text import (clip, fix_title_marks, foreign_numbers, is_acknowledgement, title_key, unverified_quotes,
-                            won_display)
+from marketing.text import (clip, fix_title_marks, foreign_numbers, is_acknowledgement, loose_key, similarity, title_key,
+                            unverified_quotes, won_display)
 from marketing.timeutil import in_quiet_hours, kst_today, week_start
 
 
@@ -60,6 +60,15 @@ class TextTest(SimpleTestCase):
         for text in ('짧게요', '첫 줄이 너무 길어요', '좋네요 근데 해시태그 줄여 주세요', '좋은데 첫 줄만 바꿔 주세요',
                      '해시태그 빼 주세요', '네 그런데 제목을 바꿔요', '좋네요' * 8):
             self.assertFalse(is_acknowledgement(text), text)
+
+
+class CompareTest(SimpleTestCase):
+    def test_loose_key_and_similarity(self):
+        self.assertEqual(loose_key('『농부, 짠한 형』 '), '농부짠한형')
+        self.assertEqual(loose_key('Hello 1'), 'hello1')
+        self.assertEqual(similarity('가 나 다', '가나다'), 1.0)
+        self.assertEqual(similarity('', '가'), 0.0)
+        self.assertLess(similarity('북토크 안내입니다', '오늘 저녁 반찬'), 0.5)
 
 
 class PromptTest(SimpleTestCase):

@@ -1,6 +1,8 @@
 """마케팅 비서 LLM 프롬프트. VOICE는 .claude/docs/marketing/voice-guide.md를 줄인 것이다(운영진 지적이 쌓이면 여기에 반영)."""
 import json
 
+from marketing.timeutil import KST
+
 VOICE = """[한티재 말투]
 - 도서출판 한티재는 대구의 작은 출판사입니다. 조용하고 솔직한 편집자의 목소리로 씁니다. 판촉하지 않습니다.
 - 과장('최고의', '필독서', '역대급'), 거창한 수사, 착한 척·다정한 척하는 말, 어려운 말은 쓰지 않습니다.
@@ -28,14 +30,16 @@ BRIEFING_SYSTEM = VOICE + '\n\n' + f"""당신은 한티재 운영진에게 이�
 후보 목록에서 이번 주에 할 만한 것을 최대 3개 고르고, 항목마다 바로 쓸 수 있는 글 하나를 씁니다.
 고르는 기준(앞의 것이 우선):
 1. 이번 주에 해야 효과가 있는 것(마감·기념일이 가깝다).
-2. 한티재에서 효과가 확인된 방식: 계기(기념일·저자 소식·대화 속 계기)로 책 다시 알리기, 펀딩 막바지 알리기, 후원자·단체에 부탁하기.
+2. 한티재에서 효과가 확인된 방식: 계기(기념일·저자 소식·공공 선정·대화 속 계기)로 책 다시 알리기, 펀딩 막바지 알리기, 후원자·단체에 부탁하기.
 3. 돈이 들지 않는 것. 유료 광고는 제안하지 않습니다.
 - 운영진이 정한 SNS 원칙: 주 2회 이상 올리고, 신간이 없어도 구간 도서를 소개합니다. 그래서 항목 가운데 적어도 2개는 바로 올릴 수 있는 인스타 글로 씁니다(후보가 모자라면 예외).
 - 같은 책을 두 항목에 넣지 않습니다.
 - 숫자는 후보에 적힌 표기 그대로만 씁니다. 후보에 없는 숫자를 만들지 마세요.
 - memorial이 true인 후보는 알리기만 하고, 구매·주문·할인·링크를 권하지 않습니다.
 - kind가 '대화 속 계기'인 후보는 운영진이 방에서 이미 말한 일입니다. reason을 새 소식처럼 쓰지 말고 '방에서 말씀하신 ○○, 글을 준비해 뒀어요'처럼 씁니다. summary에 '끝난 일'이 있으면 후기 글로 쓰고, '날짜 확인 필요'가 있으면 글에 날짜를 쓰지 않습니다.
-- headline은 『책 제목』 ― 계기 한 줄, reason은 운영진에게 하는 말로 두 문장 이내(쉬운 존댓말).
+- 운영진 SNS 후보(다가오는 행사·행사 후기·공식 채널로 옮겨 싣기·서평·기사 모음)는 운영진이 이미 개인 계정에 올린 것입니다. 같은 사실을 한티재 공식 채널용으로 새로 쓰고, 개인적인 이야기와 다른 사람의 이름·연락처는 빼며, 운영진의 글을 그대로 베끼지 않습니다. books가 비어 있으면 facts의 not_on_site 제목을 그대로 씁니다. 서평·기사 모음은 블로그 모음 글이나 서점 리뷰 부탁으로 씁니다.
+- '참고' 블록은 후보가 아닙니다. 운영진이 이미 충분히 알린 책은 같은 내용을 되풀이하지 말고 다른 각도를 고릅니다. 그 블록의 숫자는 쓰지 않습니다.
+- headline은 『책 제목』 ― 계기 한 줄(책이 없는 후보는 행사·소식 이름 ― 계기), reason은 운영진에게 하는 말로 두 문장 이내(쉬운 존댓말).
 JSON 객체 하나만 출력하세요:
 {{"items": [{{"candidate_id": "후보 id", "headline": "『제목』 ― 계기", "reason": "...",
    "draft": {{"channel": "instagram|blog|letter", "title": "글 제목(없으면 빈 문자열)", "body": "글"}}}}],
@@ -52,6 +56,21 @@ NEWS_FILTER_SYSTEM = f"""당신은 기사 제목 목록을 보고 한티재 책�
 - sensitive: 부고·사고·재난·재판·질병·사생활처럼 홍보에 쓰면 안 되는 소식인지.
 JSON 객체 하나만 출력하세요:
 {{"items": [{{"id": 기사 번호, "same_person": true, "evidence": "근거", "relevant": true, "sensitive": false, "summary": "한 줄 요약(쉬운 말)"}}]}}"""
+
+SOCIAL_JUDGE_SYSTEM = f"""당신은 도서출판 한티재 운영진(편집장·대표)이 개인 SNS에 올린 글을 보고, 한티재의 책·저자·행사·펀딩과 직접 관련 있는지 판정하는 도우미입니다. {NO_WEB} 글은 쓰지 않습니다.
+글마다 판정합니다:
+- relevant: 한티재 책(아래 목록에 있거나 한티재에서 곧 나올 책), 한티재 저자, 한티재가 열거나 함께하는 행사, 펀딩, 한티재 책의 서평·기사와 직접 닿으면 true. 저자의 일상 글을 공유했더라도 한티재 책이나 활동 이야기가 없으면 false.
+- private: 가족·건강·개인 일상처럼 사생활 이야기인지.
+- sensitive: 추모·부고·사고·재난·다툼처럼 홍보에 쓰면 안 되는지.
+- category: new_book(신간·출간 소식) | event(북토크·강연·행사) | funding(북펀드·텀블벅) | review(독자 서평·추천) | press(기사·방송·인터뷰) | author_news(저자의 다른 소식) | other
+- books: 글에 나온 책 제목을 글에 적힌 그대로. 목록에 없는 책도 적습니다. 없으면 빈 목록.
+- event: 행사 글이면 {{"date": "YYYY-MM-DD"(글에 날짜가 있을 때만. 연도가 없으면 게시일 뒤 가장 가까운 날), "name": "행사 이름", "place": "장소"}}, 아니면 null.
+- summary: 운영진에게 보여 줄 한 문장(쉬운 말). 저자 이름은 써도 되지만 다른 사람의 이름·연락처는 옮기지 않습니다.
+공유한 글이면 '공유한 원문'이 판단의 중심입니다. 원문을 쓴 사람과 공유한 사람을 헷갈리지 마세요.
+JSON 객체 하나만 출력하세요:
+{{"items": [{{"id": 글 번호, "relevant": true, "private": false, "sensitive": false, "category": "event", "books": ["책 제목"], "event": null, "summary": "한 줄"}}]}}"""
+
+PLATFORM_KO = {'facebook': '페이스북', 'instagram': '인스타그램'}
 
 
 MOMENT_SYSTEM = f"""당신은 도서출판 한티재(대구의 작은 출판사) 운영진의 대화와 노션 책 페이지에서 '책을 지금 알릴 계기'를 찾는 도우미입니다. 글은 쓰지 않습니다. {NO_WEB}
@@ -117,13 +136,16 @@ def build_kit_user(book, authors_line, today, blog_exists, hooks=()):
     return '\n'.join(lines)
 
 
-def build_briefing_user(candidates, today, midweek=False):
+def build_briefing_user(candidates, today, context=(), midweek=False):
     ask = ('날짜가 가까운 계기·기념일이라 주중에 따로 알립니다. 후보를 모두 쓰세요(같은 책은 하나만).' if midweek
            else '이번 주 제안을 골라 주세요.')
-    return '\n'.join([
+    lines = [
         f'오늘은 {today.isoformat()}({"월화수목금토일"[today.weekday()]}요일)입니다. {ask}',
         '<후보>', json.dumps([c.as_prompt() for c in candidates], ensure_ascii=False, indent=1), '</후보>',
-    ])
+    ]
+    if context:
+        lines += ['<참고: 운영진이 최근 개인 SNS에 올린 한티재 소식(후보 아님)>', *context, '</참고>']
+    return '\n'.join(lines)
 
 
 def build_rewrite_user(draft, note, source_text):
@@ -141,6 +163,23 @@ def build_news_user(rows):
     for i, name, book_line, a in rows:
         lines.append(f'{i}. 찾은 이름: {name} / 한티재 책: {book_line} / [{a.source}] {a.title} ({a.published})')
     lines.append('</기사>')
+    return '\n'.join(lines)
+
+
+def build_social_user(posts, catalog_lines, role_labels):
+    lines = ['<한티재 도서 목록(제목 | 부제 | 지은이)>', *catalog_lines, '</한티재 도서 목록>', '<글>']
+    for i, p in enumerate(posts):
+        day = p.posted_at.astimezone(KST).date().isoformat()
+        lines.append(f'[{i}] {role_labels.get(p.account, p.account)} · {PLATFORM_KO.get(p.platform, p.platform)} · {day}')
+        if p.text:
+            lines.append('본인 글: ' + p.text[:1500])
+        if p.shared.get('text') or p.shared.get('url'):
+            when = (p.shared.get('posted_at') or '')[:10] or '날짜 모름'
+            lines.append(f'공유한 원문(원작성자 {p.shared.get("author") or "모름"}, {when}): '
+                         + (p.shared.get('text') or '')[:1500])
+        if p.link.get('title'):
+            lines.append(f'링크: {p.link["title"]} 〈{p.link.get("source", "")}〉')
+    lines.append('</글>')
     return '\n'.join(lines)
 
 

@@ -54,6 +54,21 @@ class Deps:
 @mock.patch('marketing.tasks.funding.collect_funding', return_value=0)
 @mock.patch('marketing.tasks.sales.collect_sales', return_value=(0, []))
 class RunDueTest(TestCase):
+    def setUp(self):
+        patcher = mock.patch('marketing.tasks.selections.run_scan', return_value=[])
+        self.selection_scan = patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('marketing.tasks.social.run_due')
+        self.social_step = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_social_step_runs_every_loop_unless_off(self, *_):
+        tasks.run_due(Deps(), datetime(2026, 9, 29, 3, 0, tzinfo=KST))
+        tasks.run_due(Deps(), datetime(2026, 9, 29, 3, 1, tzinfo=KST))
+        self.assertEqual(self.social_step.call_count, 2)
+        tasks.run_due(Deps('off'), datetime(2026, 9, 29, 7, 0, tzinfo=KST))
+        self.assertEqual(self.social_step.call_count, 2)
+
     def test_off_mode_does_nothing(self, sales_, fund_, news_, brief_, kit_):
         tasks.run_due(Deps('off'), datetime(2026, 9, 28, 7, 0, tzinfo=KST))
         for m in (sales_, fund_, news_, brief_, kit_):
@@ -192,6 +207,19 @@ class RunDueTest(TestCase):
         sales_.return_value = (5, [])
         tasks.run_due(deps, datetime(2026, 10, 2, 6, 0, tzinfo=KST))
         self.assertEqual(WorkerState.get('marketing_sales_fail_streak'), 0)
+
+    def test_selection_scan_once_per_day_after_0610(self, *_):
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 29, 6, 9, tzinfo=KST))
+        self.selection_scan.assert_not_called()
+        tasks.run_due(deps, datetime(2026, 9, 29, 6, 10, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 29, 12, 0, tzinfo=KST))
+        self.assertEqual(self.selection_scan.call_count, 1)
+
+    def test_off_mode_skips_selection_scan(self, *_):
+        tasks.run_due(Deps('off'), datetime(2026, 9, 29, 7, 0, tzinfo=KST))
+        self.selection_scan.assert_not_called()
+
 
 
 @mock.patch('marketing.tasks.kit.build_pending', return_value=[])

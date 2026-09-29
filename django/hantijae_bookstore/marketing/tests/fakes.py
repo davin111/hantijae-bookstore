@@ -57,3 +57,94 @@ def make_book(title='나는 산속으로 더 깊이 들어간다', subtitle='최
     if author:
         BookAuthor.objects.create(book=book, author=Author.objects.create(name=author))
     return book
+
+
+def tiny_pdf(text):
+    """영문·숫자 한 줄짜리 최소 PDF. pdf_text 확인용(한글 글꼴은 넣지 않는다)."""
+    stream = f'BT /F1 12 Tf 10 50 Td ({text}) Tj ET'.encode()
+    objs = [b'<< /Type /Catalog /Pages 2 0 R >>', b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 100] /Contents 4 0 R '
+            b'/Resources << /Font << /F1 5 0 R >> >> >>',
+            b'<< /Length %d >>\nstream\n' % len(stream) + stream + b'\nendstream',
+            b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>']
+    out, offsets = b'%PDF-1.4\n', []
+    for i, body in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b'%d 0 obj\n' % i + body + b'\nendobj\n'
+    xref = len(out)
+    out += b'xref\n0 %d\n0000000000 65535 f \n' % (len(objs) + 1)
+    out += b''.join(b'%010d 00000 n \n' % o for o in offsets)
+    out += b'trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n' % (len(objs) + 1, xref)
+    return out
+
+
+def tiny_xlsx(strings, numbers=()):
+    """sharedStrings에 strings, 첫 시트에 숫자 셀 numbers가 든 최소 엑셀."""
+    import io
+    import zipfile
+    ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as z:
+        z.writestr('xl/sharedStrings.xml', f'<sst xmlns="{ns}">' + ''.join(f'<si><t>{s}</t></si>' for s in strings)
+                   + '</sst>')
+        z.writestr('xl/worksheets/sheet1.xml', f'<worksheet xmlns="{ns}"><sheetData><row>'
+                   + ''.join(f'<c><v>{n}</v></c>' for n in numbers) + '</row></sheetData></worksheet>')
+    return buf.getvalue()
+
+
+# ---- 운영진 개인 SNS(지어낸 계정·글. 실제 계정 주소·글은 공개 저장소에 넣지 않는다) ----
+SOCIAL_ACCOUNTS = [
+    {'role': 'editor', 'label': '편집장', 'facebook': 'https://www.facebook.com/editor.test', 'instagram': 'editor_ig'},
+    {'role': 'ceo', 'label': '대표', 'facebook': 'https://www.facebook.com/ceo.test/', 'instagram': 'ceo_ig'},
+]
+
+
+def fb_item(post_id, account='editor.test', text='', time='2026-09-29T02:35:04.000Z', **extra):
+    return {'postId': post_id, 'url': f'https://www.facebook.com/{account}/posts/{post_id}', 'time': time,
+            'text': text, 'inputUrl': f'https://www.facebook.com/{account}',
+            'facebookUrl': f'https://www.facebook.com/{account}', **extra}
+
+
+def ig_item(post_id, owner='ceo_ig', caption='', ts='2026-09-18T09:15:24.000Z', **extra):
+    return {'id': post_id, 'url': f'https://www.instagram.com/p/{post_id}/', 'timestamp': ts, 'caption': caption,
+            'ownerUsername': owner, **extra}
+
+
+def make_post(post_id, platform='facebook', account='editor', text='', posted_at=None, group_key=None, **extra):
+    from datetime import datetime, timezone
+    from marketing.models import SocialPost
+    posted_at = posted_at or datetime(2026, 9, 18, 9, 10, tzinfo=timezone.utc)
+    return SocialPost.objects.create(platform=platform, account=account, post_id=post_id,
+                                     url=f'https://example.com/{platform}/{post_id}', posted_at=posted_at, text=text,
+                                     first_seen=extra.pop('first_seen', posted_at), last_seen=posted_at,
+                                     group_key=group_key if group_key is not None else f'post:{platform}:{post_id}',
+                                     **extra)
+
+
+class FakeApify:
+    """start_run 답(차례로), get_run 답(차례로), 데이터셋 내용. 답이 예외면 던진다. 남은 답이 없으면 IndexError."""
+
+    def __init__(self, starts=(), polls=(), datasets=None):
+        self.starts, self.polls, self.datasets = list(starts), list(polls), dict(datasets or {})
+        self.started, self.aborted = [], []
+
+    @staticmethod
+    def _next(queue):
+        r = queue.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    def start_run(self, actor, run_input, **kw):
+        self.started.append((actor, run_input, kw))
+        return self._next(self.starts)
+
+    def get_run(self, run_id):
+        return self._next(self.polls)
+
+    def abort_run(self, run_id):
+        self.aborted.append(run_id)
+        return {}
+
+    def dataset_items(self, dataset_id, limit=500):
+        return self.datasets[dataset_id]

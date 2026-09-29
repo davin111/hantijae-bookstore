@@ -1,6 +1,7 @@
 """홍보 초안 후처리·검증 (순수 함수)."""
 import re
 import unicodedata
+from difflib import SequenceMatcher
 
 from intake.extract import is_verbatim
 from intake.messages import tg_len
@@ -46,6 +47,19 @@ def clip(text, limit):
 def title_key(title):
     """블로그 글 제목과 책 제목을 비교할 때 쓰는 열쇠(공백·낫표 무시)."""
     return re.sub(r'[\s『』<>〈〉「」]', '', title or '')
+
+
+def loose_key(text):
+    """글자·숫자만 남긴 비교 열쇠(문장부호·공백·낫표 무시, 소문자). 책 제목이 글에 실제로 있는지 볼 때 쓴다."""
+    return re.sub(r'[^0-9A-Za-z가-힣]', '', text or '').lower()
+
+
+def similarity(a, b):
+    """공백을 뺀 두 글이 얼마나 같은지(0~1). 같은 글의 페북·인스타판을 찾는 데 쓴다."""
+    a, b = re.sub(r'\s+', '', a or ''), re.sub(r'\s+', '', b or '')
+    if not a or not b:
+        return 0.0
+    return SequenceMatcher(None, a, b, autojunk=False).ratio()
 
 
 def won_display(n):

@@ -7,7 +7,7 @@ from marketing.candidates import Candidate
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.tests.fakes import FakeLLM, make_book
 from marketing.timeutil import KST
-from web.models import StoreClick
+from web.models import Notice, StoreClick
 
 TODAY = date(2026, 9, 28)
 
@@ -167,6 +167,22 @@ class BuildWeeklyTest(TestCase):
         self.assertEqual(keys[0], [f'blog:{blog_book.id}', f'news:{s.id}'])
         self.assertEqual(keys[1:], [keys[0], keys[0]])
         self.assertEqual(len(llm.calls), 3)
+        s.refresh_from_db()
+        self.assertIsNotNone(s.used_at)
+
+    def test_rebuilding_same_week_keeps_the_selection_item(self):
+        book = make_book(title='무궁화호를 위하여', published=date(2026, 3, 16), isbn='979-11-00000-16-1', author=None)
+        notice = Notice.objects.create(message='x', state=Notice.POSTED)
+        s = Signal.objects.create(kind=Signal.SELECTION, key='selection:kpipa:2145', book=book,
+                                  title='2026년 세종도서 교양부문', relevant=True, happens_on=date(2026, 8, 25),
+                                  detail={'notice_id': notice.id})
+        now = datetime(2026, 9, 28, 7, 0, tzinfo=KST)
+        llm = FakeLLM({'items': [item(f'selection:{s.id}', headline='『무궁화호를 위하여』 ― 2026년 세종도서 교양부문 선정')]})
+        keys = []
+        for _ in range(3):
+            b, _ = build_weekly(llm, TODAY, now, posts=[])
+            keys.append(list(b.items.values_list('candidate_key', flat=True)))
+        self.assertEqual(keys, [[f'selection:{s.id}']] * 3)
         s.refresh_from_db()
         self.assertIsNotNone(s.used_at)
 
