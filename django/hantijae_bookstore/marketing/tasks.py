@@ -6,7 +6,7 @@ from datetime import datetime
 from django.utils import timezone
 
 from intake.models import WorkerState
-from marketing import briefing, funding, kit, news, sales
+from marketing import briefing, funding, kit, news, sales, selections
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
@@ -15,6 +15,7 @@ from marketing.timeutil import kst_now, week_start
 log = logging.getLogger('intake')
 KIT_CHECK_SECONDS = 600
 SALES_AT, NEWS_AT, BRIEF_BUILD_AT, BRIEF_SEND_AT, BRIEF_GIVE_UP_AT = (6, 0), (6, 30), (7, 0), (9, 30), (21, 0)
+SELECTION_AT = (6, 10)   # 판매 지수(06:00) 다음. LLM을 쓰지 않아 07:00 브리핑 만들기 전에 끝난다
 MISSED_NOTE = '⏭️ 이번 주 브리핑을 보내지 못했어요(항목 없음·모드·시간). /mk 로 확인하세요'
 
 
@@ -101,6 +102,10 @@ def _run_due(deps, now):
         WorkerState.put('marketing_last_sales_scan', day)
         _sales_block(deps, today, now)
         _guard(deps, 'funding', now, lambda: funding.collect_funding(today, now))
+
+    if _hm(local) >= SELECTION_AT and WorkerState.get('marketing_last_selection_scan') != day:
+        WorkerState.put('marketing_last_selection_scan', day)
+        _guard(deps, 'selection', now, lambda: selections.run_scan(deps, today, now))
 
     if monday and _hm(local) >= NEWS_AT and WorkerState.get('marketing_last_news_scan') != day:
         WorkerState.put('marketing_last_news_scan', day)

@@ -170,6 +170,21 @@ class BuildWeeklyTest(TestCase):
         s.refresh_from_db()
         self.assertIsNotNone(s.used_at)
 
+    def test_rebuilding_same_week_keeps_the_selection_item(self):
+        book = make_book(title='무궁화호를 위하여', published=date(2026, 3, 16), isbn='979-11-00000-16-1', author=None)
+        s = Signal.objects.create(kind=Signal.SELECTION, key='selection:kpipa:2145', book=book,
+                                  title='2026년 세종도서 교양부문', relevant=True, happens_on=date(2026, 8, 25),
+                                  detail={'posted': True})
+        now = datetime(2026, 9, 28, 7, 0, tzinfo=KST)
+        llm = FakeLLM({'items': [item(f'selection:{s.id}', headline='『무궁화호를 위하여』 ― 2026년 세종도서 교양부문 선정')]})
+        keys = []
+        for _ in range(3):
+            b, _ = build_weekly(llm, TODAY, now, posts=[])
+            keys.append(list(b.items.values_list('candidate_key', flat=True)))
+        self.assertEqual(keys, [[f'selection:{s.id}']] * 3)
+        s.refresh_from_db()
+        self.assertIsNotNone(s.used_at)
+
     def test_overlong_llm_headline_and_title_are_saved_clipped(self):
         book = make_book(title='무지개를 변호하다', published=date(2026, 6, 1), isbn='979-11-00000-14-1', author=None)
         long = '가' * 400

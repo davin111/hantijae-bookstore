@@ -16,7 +16,7 @@ from marketing.text import title_key, won_display
 from marketing.timeutil import kst_today, week_start
 
 KIND_LABEL = {'hook': '기념일', 'fund': '진행 중 펀딩', 'news': '저자 소식', 'surge': '판매 지수 급등',
-              'blog': '블로그 글 없음', 'noreview': '리뷰 없음'}
+              'blog': '블로그 글 없음', 'noreview': '리뷰 없음', 'selection': '공공 선정'}
 # 새 계기가 없는 후보는 같은 책을 3주 안에 다시 제안하지 않는다
 NEEDS_REST = ('blog', 'noreview', 'surge')
 
@@ -107,6 +107,20 @@ def news_candidates(now, days=14):
     return out
 
 
+def selection_candidates(now, days=14):
+    """새로 확인한 공공 선정(철회·옛 발표 제외). 알림 띠를 올렸는지 운영진이 알 수 있게 요약에 적는다."""
+    unused = Q(used_at__isnull=True) | Q(proposal__briefing__week_start=week_start(kst_today(now)))
+    qs = (Signal.objects.filter(unused, kind=Signal.SELECTION, relevant=True, found_at__gte=now - timedelta(days=days),
+                                book__isnull=False).select_related('book').distinct())
+    out = []
+    for s in qs:
+        note = ' ― 첫 화면 알림을 올렸음' if s.detail.get('posted') else ''
+        out.append(Candidate(id=f'selection:{s.id}', kind='selection', books=[s.book], summary=f'{s.title} 선정{note}',
+                             facts={'url': s.url, 'date': s.happens_on.isoformat() if s.happens_on else ''},
+                             urgency=3, signal=s))
+    return out
+
+
 def surge_candidates(today):
     last = SalesSnapshot.objects.filter(date__lte=today).aggregate(d=Max('date'))['d']
     if not last:
@@ -171,6 +185,7 @@ def select(cands, today, now, limit=12):
 
 
 def gather(today, now, posts):
-    cands = (hook_candidates(today) + funding_candidates(today, now) + news_candidates(now) + surge_candidates(today)
-             + blog_gap_candidates(today, posts) + noreview_candidates(today))
+    cands = (hook_candidates(today) + funding_candidates(today, now) + news_candidates(now)
+             + selection_candidates(now) + surge_candidates(today) + blog_gap_candidates(today, posts)
+             + noreview_candidates(today))
     return select(cands, today, now)

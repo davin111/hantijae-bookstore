@@ -85,3 +85,34 @@ class CandidateTest(TestCase):
         c = C.Candidate(id='x', kind='hook', books=[self.sibwol], summary='10월 1일', facts={'n': 376}, urgency=1)
         self.assertTrue(any('41편' in t for t in c.allowed_texts()))
         self.assertEqual(c.as_prompt()['books'], ['『시월, 곡비의 노래』 10월문학회 시선집'])
+
+    def test_selection_candidate_is_urgent_and_carries_label(self):
+        s = Signal.objects.create(kind=Signal.SELECTION, key=f'selection:kpipa:2145:{self.naeran.id}', book=self.naeran,
+                                  title='2026년 세종도서 교양부문', url='https://www.kpipa.or.kr/p/g1_2/2145',
+                                  happens_on=date(2026, 8, 25), detail={'posted': True}, relevant=True)
+        c = C.selection_candidates(NOW)[0]
+        self.assertEqual((c.id, c.kind, c.urgency, c.signal), (f'selection:{s.id}', 'selection', 3, s))
+        self.assertEqual(c.summary, '2026년 세종도서 교양부문 선정 ― 첫 화면 알림을 올렸음')
+        self.assertEqual(C.KIND_LABEL['selection'], '공공 선정')
+        self.assertIn(f'selection:{s.id}', [x.id for x in C.gather(TODAY, NOW, posts=[])])
+
+    def test_irrelevant_selection_signal_is_not_a_candidate(self):
+        Signal.objects.create(kind=Signal.SELECTION, key='selection:old', book=self.naeran, title='2019년 세종도서',
+                              relevant=False)
+        self.assertEqual(C.selection_candidates(NOW), [])
+
+    def test_selection_used_by_an_earlier_week_is_not_proposed_again(self):
+        """한 번 브리핑에 쓴 선정은 다음 주에 다시 제안하지 않는다(NEEDS_REST가 아니므로 used_at이 막는다)."""
+        s = Signal.objects.create(kind=Signal.SELECTION, key='selection:kpipa:1', book=self.naeran,
+                                  title='2026년 세종도서 교양부문', relevant=True, used_at=NOW - timedelta(days=7))
+        last_week = Briefing.objects.create(week_start=date(2026, 9, 21))
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, briefing=last_week, signal=s, headline='h')
+        self.assertEqual(C.selection_candidates(NOW), [])
+
+    def test_selection_used_by_this_weeks_briefing_stays_a_candidate(self):
+        """같은 주 브리핑을 다시 만들 때(gather가 save_briefing보다 먼저 돈다) 선정 항목이 빠지지 않게."""
+        s = Signal.objects.create(kind=Signal.SELECTION, key='selection:kpipa:2', book=self.naeran,
+                                  title='2026년 세종도서 교양부문', relevant=True, used_at=NOW)
+        this_week = Briefing.objects.create(week_start=date(2026, 9, 28))
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, briefing=this_week, signal=s, headline='h')
+        self.assertEqual([c.id for c in C.selection_candidates(NOW)], [f'selection:{s.id}'])
