@@ -148,6 +148,7 @@ class MarketingBotTest(TestCase):
         self.assertIsNotNone(p.sent_at)
         self.assertNotIn('send_fail_day', p.extra)
         self.assertNotIn('send_fail_count', p.extra)
+        self.assertEqual((p.extra['blog_exists'], p.extra['missing_stores']), (False, []))  # 다른 extra 값은 그대로
 
     def test_third_failed_kit_send_notifies_admin_then_stops_trying(self):
         WorkerState.put('marketing_mode', 'live')
@@ -207,17 +208,36 @@ class MarketingBotTest(TestCase):
         self.assertIn('1. 『다른책』 ― 계기2', text)
         self.assertNotIn('계기1', text)
 
-    def test_quiet_book_does_not_override_an_already_acted_item(self):
+    def test_quiet_book_acted_item_kept_acted_but_left_out_of_the_sent_message(self):
+        WorkerState.put('marketing_mode', 'live')
+        other = make_book(title='다른책', isbn='979-11-00000-63-1', author=None)
+        b = Briefing.objects.create(week_start=date(2026, 9, 28))
+        acted = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b, headline='『책』 ― 계기1',
+                                        reason='이유1', rank=1, status=Proposal.ACTED)
+        kept = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=other, briefing=b, headline='『다른책』 ― 계기2',
+                                       reason='이유2', rank=2)
+        BookProfile.objects.create(book=self.book, quiet_until=date(2026, 9, 28))
+        m = self.m()
+        self.assertTrue(m.send_briefing(b, DAY))
+        acted.refresh_from_db()
+        kept.refresh_from_db()
+        self.assertEqual(acted.status, Proposal.ACTED)  # 상태는 그대로 두지만
+        self.assertEqual(kept.status, Proposal.SHOWN)
+        text = self.tg.sent('send')[0]['text']
+        self.assertNotIn('계기1', text)  # 메시지에는 빠진다
+        self.assertIn('1. 『다른책』 ― 계기2', text)
+
+    def test_briefing_not_sent_when_all_items_are_quiet_even_if_one_is_acted(self):
         WorkerState.put('marketing_mode', 'live')
         b = Briefing.objects.create(week_start=date(2026, 9, 28))
         acted = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b, headline='『책』 ― 계기1',
                                         reason='이유1', rank=1, status=Proposal.ACTED)
         BookProfile.objects.create(book=self.book, quiet_until=date(2026, 9, 28))
         m = self.m()
-        self.assertTrue(m.send_briefing(b, DAY))
+        self.assertFalse(m.send_briefing(b, DAY))
+        self.assertEqual(self.tg.sent('send'), [])
         acted.refresh_from_db()
         self.assertEqual(acted.status, Proposal.ACTED)
-        self.assertIn('1. 『책』 ― 계기1', self.tg.sent('send')[0]['text'])
 
     def test_briefing_not_sent_when_all_items_are_quiet(self):
         WorkerState.put('marketing_mode', 'live')
@@ -347,6 +367,13 @@ class AdminCommandTest(TestCase):
 
     def test_quiet_no_note_when_book_not_in_this_week_briefing(self):
         reply = self.run_cmd('/quiet', '산속으로 2026-11-30 저자 사정', now=DAY)
+        self.assertFalse(reply.endswith('빼고 보낼게요'))
+
+    def test_quiet_no_note_when_date_is_in_the_past(self):
+        """/quiet 책 <지난 날짜>는 보류를 끝내는 쪽이라, 브리핑에서 뺄 것도 없다."""
+        b = Briefing.objects.create(week_start=date(2026, 9, 28))
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b, headline='h', reason='r', rank=1)
+        reply = self.run_cmd('/quiet', '산속으로 2026-09-01 저자 사정', now=DAY)
         self.assertFalse(reply.endswith('빼고 보낼게요'))
 
     def test_hook_add_and_list(self):

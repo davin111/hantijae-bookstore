@@ -150,11 +150,12 @@ class RunDueTest(TestCase):
         deps = Deps()
         deps.bot.marketing.send_pending_kits = mock.Mock(side_effect=RuntimeError('telegram down'))
         t = datetime(2026, 9, 29, 12, 0, tzinfo=KST)
-        tasks.run_due(deps, t)
-        tasks.run_due(deps, t.replace(hour=13))
-        self.assertEqual(len([n for n in deps.bot.notes if '마케팅 kit_send 실패' in n]), 1)
-        tasks.run_due(deps, t + timedelta(days=1))
-        self.assertEqual(len([n for n in deps.bot.notes if '마케팅 kit_send 실패' in n]), 2)
+        with self.assertLogs('intake', level='ERROR'):
+            tasks.run_due(deps, t)
+            tasks.run_due(deps, t.replace(hour=13))
+            self.assertEqual(len([n for n in deps.bot.notes if '마케팅 kit_send 실패' in n]), 1)
+            tasks.run_due(deps, t + timedelta(days=1))
+            self.assertEqual(len([n for n in deps.bot.notes if '마케팅 kit_send 실패' in n]), 2)
 
     def test_kit_build_reads_blog_only_when_a_book_is_buildable(self, sales_, fund_, news_, brief_, kit_):
         deps = Deps()

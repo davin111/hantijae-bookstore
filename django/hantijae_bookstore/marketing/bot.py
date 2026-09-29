@@ -136,8 +136,11 @@ class Marketing:
         proposal.extra = {**proposal.extra, 'send_fail_day': today_iso, 'send_fail_count': count}
         proposal.save(update_fields=['extra', 'updated_at'])
         if count == KIT_SEND_MAX_FAILURES:
-            self.host.notify_admin(f'⚠️ 『{proposal.book.title}』 홍보 묶음 카드를 3번 보내지 못했어요. '
-                                   f'확인한 뒤 /kit send {proposal.id} 로 보내 주세요')
+            try:  # 이 알림 자체가 실패해도 원래 보내기 실패 예외는 그대로 올라가야 한다
+                self.host.notify_admin(f'⚠️ 『{proposal.book.title}』 홍보 묶음 카드를 3번 보내지 못했어요. '
+                                       f'확인한 뒤 /kit send {proposal.id} 로 보내 주세요')
+            except Exception:
+                log.exception('marketing kit %s 3rd-failure admin notice failed', proposal.id)
 
     @staticmethod
     def _day_start(now):
@@ -178,20 +181,21 @@ class Marketing:
         today = kst_today(now)
         quiet_books = set(BookProfile.objects.filter(quiet_until__gte=today, book_id__in=[i.book_id for i in items if i.book_id])
                           .values_list('book_id', flat=True))
-        def is_quiet_drop(i):  # 이미 ACTED로 확정된 항목은 책이 나중에 보류돼도 그대로 둔다(운영진 결정 보존)
-            return bool(i.book_id and i.book_id in quiet_books and i.status != Proposal.ACTED)
-        active = [i for i in items if not is_quiet_drop(i)]
-        if not active:  # 전부 보류 중이거나 애초에 항목이 없으면 지금의 '항목 없음' 경로와 같다
+
+        def is_quiet(i):
+            return bool(i.book_id and i.book_id in quiet_books)
+        shown = [i for i in items if not is_quiet(i)]  # 보류 중인 책 항목은 상태와 무관하게 메시지에서 뺀다
+        if not shown:  # 전부 보류 중이거나 애초에 항목이 없으면 지금의 '항목 없음' 경로와 같다
             return False
-        if record:
-            dropped_ids = [i.id for i in items if is_quiet_drop(i)]
-            if dropped_ids:
-                Proposal.objects.filter(pk__in=dropped_ids).update(status=Proposal.SKIPPED)
-        sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, active, briefing.measure),
-                                    buttons=messages.briefing_buttons(briefing, active))
+        # 이미 ACTED로 확정된 항목은 메시지에서는 빠지지만(위) 상태는 그대로 둔다(운영진 결정 보존)
+        to_skip = [i for i in items if is_quiet(i) and i.status != Proposal.ACTED]
+        sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, shown, briefing.measure),
+                                    buttons=messages.briefing_buttons(briefing, shown))
         if record:
             briefing.chat_id, briefing.message_id, briefing.sent_at, briefing.mode = chat, sent['message_id'], now, self.mode()
             briefing.save(update_fields=['chat_id', 'message_id', 'sent_at', 'mode'])
+            if to_skip:  # 보내기 전에 미리 SKIPPED로 적어 두면 보내기가 실패했을 때도 그대로 남는다 — 보낸 뒤에만 적는다
+                Proposal.objects.filter(pk__in=[i.id for i in to_skip]).update(status=Proposal.SKIPPED)
             # 운영진이 이미 관리자 방 사본에서 누른 ACTED/SKIPPED 결정은 검수 방으로 넘길 때도 덮지 않는다
             Proposal.objects.filter(briefing=briefing, status__in=(Proposal.PROPOSED, Proposal.SHOWN)).update(status=Proposal.SHOWN)
             Proposal.objects.filter(briefing=briefing).update(chat_id=chat)
@@ -391,7 +395,8 @@ class Marketing:
             return _narrow(books)
         BookProfile.objects.update_or_create(book=books[0], defaults={'quiet_until': until,
                                                                       'quiet_reason': (m.group(3) or '')[:200]})
-        return f'『{books[0].title}』 {until}까지 홍보 제안을 쉬어요' + self._quiet_briefing_note(books[0], today)
+        note = self._quiet_briefing_note(books[0], today) if until >= today else ''  # 과거 날짜는 보류를 끝내는 쪽이라 뺄 게 없다
+        return f'『{books[0].title}』 {until}까지 홍보 제안을 쉬어요' + note
 
     def _quiet_briefing_note(self, book, today):
         """이번 주 브리핑이 아직 검수 방으로 나가지 않았고 이 책 항목이 들어 있으면 한 줄 덧붙인다(B에서 보낼 때 뺀다)."""
