@@ -92,3 +92,47 @@ class RecordTest(TestCase):
                                     at=datetime.fromtimestamp(DATE, tz=timezone.utc))
         self.assertTrue(forget(GROUP, 77, sent_at=datetime.fromtimestamp(DATE, tz=timezone.utc)))
         self.assertEqual(ContextEntry.objects.get(key=f'tgx:{GROUP}:500').text, '')
+
+
+class MomentFieldsTest(TestCase):
+    def test_forget_returns_ids_and_clears_media_text_and_heading(self):
+        e = record_telegram(tg_msg(text=None, photo=[{'file_id': 'big'}], caption='포스터'))
+        ContextEntry.objects.filter(pk=e.pk).update(media_text='[포스터] 10월 17일 강연', heading='머리')
+        self.assertEqual(forget(GROUP, 10), [e.pk])
+        e.refresh_from_db()
+        self.assertEqual((e.forgotten, e.text, e.media_text, e.heading, e.file_id), (True, '', '', '', ''))
+        self.assertEqual(forget(GROUP, 11), [])
+
+    def test_edit_with_new_photo_resets_reading(self):
+        record_telegram(tg_msg(text=None, photo=[{'file_id': 'old'}], caption='포스터'))
+        ContextEntry.objects.update(media_text='[포스터] 옛 글', media_read_at=datetime.fromtimestamp(DATE, tz=timezone.utc))
+        e = apply_edit(tg_msg(text=None, photo=[{'file_id': 'new'}], caption='포스터', edit_date=DATE + 60))
+        self.assertEqual((e.file_id, e.media_text, e.media_read_at), ('new', '', None))
+
+    def test_edit_caption_keeps_reading(self):
+        record_telegram(tg_msg(text=None, photo=[{'file_id': 'same'}], caption='포스터'))
+        read_at = datetime.fromtimestamp(DATE, tz=timezone.utc)
+        ContextEntry.objects.update(media_text='[포스터] 글', media_read_at=read_at)
+        e = apply_edit(tg_msg(text=None, photo=[{'file_id': 'same'}], caption='포스터 고침', edit_date=DATE + 60))
+        self.assertEqual((e.text, e.media_text, e.media_read_at), ('포스터 고침', '[포스터] 글', read_at))
+
+    def test_admin_forget_action_clears_media_text(self):
+        from context.admin import ContextEntryAdmin
+        from django.contrib.admin.sites import AdminSite
+        record_telegram(tg_msg(text='글'))
+        ContextEntry.objects.update(media_text='[포스터] 글', heading='머리')
+        ContextEntryAdmin(ContextEntry, AdminSite()).forget_selected(None, ContextEntry.objects.all())
+        e = ContextEntry.objects.get()
+        self.assertEqual((e.forgotten, e.text, e.media_text, e.heading), (True, '', '', ''))
+
+    def test_changed_at_and_is_image(self):
+        at = datetime.fromtimestamp(DATE, tz=timezone.utc)
+        e = ContextEntry.objects.create(key='k', at=at, media='photo', file_id='f')
+        self.assertEqual(e.changed_at, e.created_at)
+        later = e.created_at.replace(year=e.created_at.year + 1)
+        e.media_read_at = later
+        self.assertEqual(e.changed_at, later)
+        self.assertTrue(e.is_image)
+        doc = ContextEntry(key='d', at=at, media='document', media_name='포스터.PNG')
+        pdf = ContextEntry(key='p', at=at, media='document', media_name='공문.pdf')
+        self.assertEqual((doc.is_image, pdf.is_image), (True, False))
