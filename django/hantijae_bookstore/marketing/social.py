@@ -23,6 +23,8 @@ log = logging.getLogger('intake')
 OK_KEY = 'marketing_social_ok'          # {"facebook:editor": ISO 시각} — 정상으로 받은 계정만 갱신한다
 SWITCH_KEY = 'marketing_social'         # 'on'일 때만 돈다(배포 직후엔 꺼져 있음)
 ALERTS_KEY = 'marketing_social_alerts'  # {알림 종류: 도장} — 같은 종류는 기간·날짜마다 한 번
+ON_SINCE_KEY = 'marketing_social_on_since'  # 켠 시각(한 번도 성공 못 한 계정의 '오래됨' 기준)
+DAILY_KEY = 'marketing_social_daily'
 BASELINE_DAYS = 30                      # 이보다 오래된 글은 '본 글'로만 두고 판정하지 않는다
 
 ACTORS = {FACEBOOK: 'apify~facebook-posts-scraper', INSTAGRAM: 'apify~instagram-post-scraper'}
@@ -37,6 +39,8 @@ RUN_TIMEOUT, WAIT_SECONDS, GIVE_UP = 180, 45, timedelta(minutes=15)
 MAX_ATTEMPTS = {FACEBOOK: 2, INSTAGRAM: 3}
 RETRY_GAP = {FACEBOOK: timedelta(hours=2), INSTAGRAM: timedelta(hours=20)}
 MONTHLY_BUDGET_USD = Decimal('3.00')
+STALE_AFTER = {FACEBOOK: timedelta(days=3), INSTAGRAM: timedelta(days=10)}
+KEEP_IRRELEVANT, KEEP_RELEVANT, KEEP_ROWS = timedelta(days=14), timedelta(days=90), timedelta(days=180)
 REGULAR = (SocialRun.NORMAL, SocialRun.FIRST)
 
 
@@ -313,3 +317,71 @@ def run_due(deps, now, client=None):
             start(deps, client, platform, *plan, accounts, now)
         alert_failures(deps, platform, accounts, now)
         alert_gaps(deps, platform, accounts, now)
+    if due and WorkerState.get(DAILY_KEY) != local.date().isoformat():
+        WorkerState.put(DAILY_KEY, local.date().isoformat())
+        daily(deps, accounts, now)
+
+
+# ---- 매일 점검·보관 ----
+
+def daily(deps, accounts, now):
+    """하루 한 번: 오래된 성공 알림 → 책 나중 연결 → 보관 기간 지난 본문 지우기 → 못 한 판정 다시.
+    판정(LLM)이 실패해도 앞의 일은 끝나 있게 맨 뒤에 둔다."""
+    check_health(deps, accounts, now)
+    social_judge.link_later(now)
+    prune(now)
+    social_judge.judge_pending(deps.llm, now, labels(accounts))
+
+
+def check_health(deps, accounts, now):
+    """마지막 성공이 오래된 계정(페북 3일, 인스타 10일). 실행 실패·빈 결과·차단 등 어떤 경로로 멈추든 여기서 드러난다."""
+    ok, since = WorkerState.get(OK_KEY) or {}, WorkerState.get(ON_SINCE_KEY)
+    lines = []
+    for platform in (FACEBOOK, INSTAGRAM):
+        for a in accounts:
+            last = ok.get(f'{platform}:{a["role"]}')
+            base = last or since
+            if a.get(platform) and base and now - datetime.fromisoformat(base) > STALE_AFTER[platform]:
+                when = kst_now(datetime.fromisoformat(last)).strftime('%m-%d') if last else '없음'
+                lines.append(f'· {a.get("label") or a["role"]} {PLATFORM_KO[platform]}: 마지막 성공 {when}')
+    if lines:
+        alert_once(deps, 'stale', kst_now(now).date().isoformat(),
+                   '⚠️ SNS 수집이 한동안 성공하지 못했어요 — Apify 결과가 비었거나 막혔을 수 있어요\n'
+                   + '\n'.join(lines) + '\n/mk 로 최근 실행 이유를 볼 수 있어요')
+
+
+def prune(now):
+    """개인 글 보관: 관련 없는 글 본문 14일, 관련 글 90일, 행 180일."""
+    blank = {'text': '', 'shared': {}, 'link': {}, 'text_cleared_at': now}
+    SocialPost.objects.filter(text_cleared_at__isnull=True, signal__isnull=True,
+                              first_seen__lt=now - KEEP_IRRELEVANT).update(**blank)
+    SocialPost.objects.filter(text_cleared_at__isnull=True, signal__isnull=False,
+                              first_seen__lt=now - KEEP_RELEVANT).update(**blank)
+    SocialPost.objects.filter(first_seen__lt=now - KEEP_ROWS).delete()
+    SocialRun.objects.filter(started_at__lt=now - KEEP_ROWS).delete()
+
+
+# ---- 관리자 ----
+
+def switch(value, now):
+    """/mk social on|off. 그 밖에는 상태."""
+    if value in ('on', 'off'):
+        WorkerState.put(SWITCH_KEY, value)
+        if value == 'on':
+            WorkerState.put(ON_SINCE_KEY, now.isoformat())
+        return f'social={value}'
+    return '\n'.join(status_lines(now))
+
+
+def status_lines(now):
+    token, accounts = config()
+    lines = [f'social={WorkerState.get(SWITCH_KEY) or "off"}']
+    missing = [name for name, v in (('APIFY_TOKEN', token), ('SOCIAL_ACCOUNTS', accounts)) if not v]
+    if missing:
+        lines.append('social_missing=' + ','.join(missing))
+    lines += [f'social_ok[{k}]={v[:16]}' for k, v in sorted((WorkerState.get(OK_KEY) or {}).items())]
+    lines.append(f'social_month_usd={month_spent(now)}/{MONTHLY_BUDGET_USD}')
+    last = SocialRun.objects.order_by('-started_at', '-id').first()
+    if last:
+        lines.append(f'social_last_run={last.platform} {last.purpose} {last.state} {last.error}'.strip())
+    return lines

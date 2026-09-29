@@ -12,7 +12,7 @@ from intake.llm import LLMError, complete_json
 from intake.models import TelegramChat, WorkerState
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
-from marketing import messages
+from marketing import messages, social
 from marketing.hooks import add_hook, upcoming
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
@@ -26,7 +26,7 @@ MODES = ('off', 'admin_only', 'live')
 KIT_DAILY_CAP = 2
 KIT_SEND_MAX_FAILURES = 3  # 이 횟수에 닿으면 관리자에게 알리고 더는 자동으로 시도하지 않는다
 BUILDING = '만들고 있어요. 몇 분 걸려요.'
-USAGE = ('사용법: /mk off|admin_only|live · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
+USAGE = ('사용법: /mk off|admin_only|live · /mk social on|off · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
          '/hook <MM-DD> <이름> | <책1>, <책2> · /hook list · /quiet <제목 일부> <YYYY-MM-DD> [이유] · /quiet list · '
          '/watch <이름> · /watch list · /watch off <번호>')
 
@@ -299,6 +299,8 @@ class Marketing:
         self.tg.send_message(chat_id, handler(chat_id, (arg or '').strip(), now, kst_today(now)) or '완료')
 
     def _mk(self, chat_id, arg, now, today):
+        if arg.split()[:1] == ['social']:
+            return social.switch(arg[len('social'):].strip(), now)
         if arg in MODES:
             WorkerState.put('marketing_mode', arg)
             return f'marketing_mode={arg}'
@@ -308,7 +310,7 @@ class Marketing:
                 'marketing_last_kit_check')
         week = '없음' if not b else ('보냄' if b.sent_at else f'미발송 {b.items.count()}건')
         return '\n'.join([f'mode={self.mode()}', *[f'{k}={WorkerState.get(k)}' for k in keys],
-                          f'pending_kits={pending}', f'this_week_briefing={week}', USAGE])
+                          f'pending_kits={pending}', f'this_week_briefing={week}', *social.status_lines(now), USAGE])
 
     def _brief(self, chat_id, arg, now, today):
         b = Briefing.objects.filter(week_start=week_start(today)).first()

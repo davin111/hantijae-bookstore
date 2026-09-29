@@ -54,6 +54,16 @@ class RunDueTest(TestCase):
         patcher = mock.patch('marketing.tasks.selections.run_scan', return_value=[])
         self.selection_scan = patcher.start()
         self.addCleanup(patcher.stop)
+        patcher = mock.patch('marketing.tasks.social.run_due')
+        self.social_step = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_social_step_runs_every_loop_unless_off(self, *_):
+        tasks.run_due(Deps(), datetime(2026, 9, 29, 3, 0, tzinfo=KST))
+        tasks.run_due(Deps(), datetime(2026, 9, 29, 3, 1, tzinfo=KST))
+        self.assertEqual(self.social_step.call_count, 2)
+        tasks.run_due(Deps('off'), datetime(2026, 9, 29, 7, 0, tzinfo=KST))
+        self.assertEqual(self.social_step.call_count, 2)
 
     def test_off_mode_does_nothing(self, sales_, fund_, news_, brief_, kit_):
         tasks.run_due(Deps('off'), datetime(2026, 9, 28, 7, 0, tzinfo=KST))

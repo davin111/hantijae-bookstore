@@ -223,8 +223,8 @@ class RunTest(TestCase):
         client = FakeApify(starts=[done()], datasets={'d1': both_accounts('a', NOW)})
         with mock.patch('marketing.social.social_judge.judge_pending', return_value=[]) as judge:
             social.run_due(Deps(), NOW, client=client)
-        judge.assert_called_once()
-        self.assertEqual(judge.call_args[0][2], {'editor': '편집장', 'ceo': '대표'})
+        self.assertEqual(judge.call_count, 2)  # 새 글이 들어온 직후 + 하루 한 번 점검(못 한 판정 다시)
+        self.assertEqual(judge.call_args_list[0][0][2], {'editor': '편집장', 'ceo': '대표'})
 
 
 @override_settings(MARKETING=SETTINGS)
@@ -246,3 +246,50 @@ class InstagramRunTest(TestCase):
                                                               'apify~facebook-posts-scraper'])
         self.assertEqual(client.started[1][1], {'username': ['editor_ig', 'ceo_ig'], 'resultsLimit': 5,
                                                 'dataDetailLevel': 'basicData', 'skipPinnedPosts': True})
+
+
+@override_settings(MARKETING=SETTINGS)
+class UpkeepTest(TestCase):
+    def test_stale_success_alerts_once_a_day(self):
+        WorkerState.put(social.ON_SINCE_KEY, (NOW - timedelta(days=1)).isoformat())
+        WorkerState.put(social.OK_KEY, {'facebook:editor': (NOW - timedelta(days=4)).isoformat(),
+                                        'facebook:ceo': (NOW - timedelta(days=1)).isoformat()})
+        deps = Deps()
+        social.check_health(deps, SOCIAL_ACCOUNTS, NOW)
+        social.check_health(deps, SOCIAL_ACCOUNTS, NOW + timedelta(hours=1))
+        self.assertEqual(len(deps.notes), 1)
+        self.assertIn('편집장 페이스북: 마지막 성공 09-26', deps.notes[0])
+        self.assertNotIn('대표', deps.notes[0])
+        self.assertNotIn('인스타', deps.notes[0])
+
+    def test_prune_clears_text_by_relevance_and_deletes_old_rows(self):
+        from marketing.models import Signal
+        sig = Signal.objects.create(kind=Signal.SOCIAL, key='social:x', title='t', relevant=True)
+        kw = {'text': '본문', 'shared': {'text': '원문'}, 'link': {'title': '링크'}}
+        make_post('a', first_seen=NOW - timedelta(days=15), **kw)
+        make_post('b', first_seen=NOW - timedelta(days=15), signal=sig, **kw)
+        make_post('c', first_seen=NOW - timedelta(days=91), signal=sig, **kw)
+        make_post('d', first_seen=NOW - timedelta(days=181), **kw)
+        social.prune(NOW)
+        got = {p.post_id: (p.text, p.shared, p.text_cleared_at is not None) for p in SocialPost.objects.all()}
+        self.assertEqual(got, {'a': ('', {}, True), 'b': ('본문', {'text': '원문'}, False), 'c': ('', {}, True)})
+
+    def test_switch_on_off_and_status_lines(self):
+        self.assertEqual(social.switch('on', NOW), 'social=on')
+        self.assertEqual(WorkerState.get(social.ON_SINCE_KEY), NOW.isoformat())
+        make_run(state='succeeded', cost_usd=Decimal('0.052'), error='')
+        lines = social.status_lines(NOW)
+        self.assertEqual(lines[0], 'social=on')
+        self.assertIn('social_month_usd=0.052/3.00', lines)
+        self.assertEqual(social.switch('off', NOW), 'social=off')
+        with override_settings(MARKETING={}):
+            self.assertIn('social_missing=APIFY_TOKEN,SOCIAL_ACCOUNTS', social.status_lines(NOW))
+        self.assertEqual(social.switch('', NOW).split('\n')[0], 'social=off')
+
+    def test_daily_upkeep_runs_once_after_0620(self):
+        WorkerState.put(social.SWITCH_KEY, 'on')
+        with mock.patch('marketing.social.daily') as daily, mock.patch('marketing.social.next_run', return_value=None):
+            social.run_due(Deps(), NOW - timedelta(minutes=1), client=FakeApify())
+            social.run_due(Deps(), NOW, client=FakeApify())
+            social.run_due(Deps(), NOW + timedelta(hours=2), client=FakeApify())
+        daily.assert_called_once()

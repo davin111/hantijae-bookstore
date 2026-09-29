@@ -6,7 +6,7 @@ from datetime import datetime
 from django.utils import timezone
 
 from intake.models import WorkerState
-from marketing import briefing, funding, kit, news, sales, selections
+from marketing import briefing, funding, kit, news, sales, selections, social
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
@@ -106,6 +106,9 @@ def _run_due(deps, now):
     if _hm(local) >= SELECTION_AT and WorkerState.get('marketing_last_selection_scan') != day:
         WorkerState.put('marketing_last_selection_scan', day)
         _guard(deps, 'selection', now, lambda: selections.run_scan(deps, today, now))
+
+    # 운영진 개인 SNS: 06:20 뒤 시작, 진행 중인 실행 확인은 매 바퀴(시각·꺼짐은 social이 판단)
+    _guard(deps, 'social', now, lambda: social.run_due(deps, now))
 
     if monday and _hm(local) >= NEWS_AT and WorkerState.get('marketing_last_news_scan') != day:
         WorkerState.put('marketing_last_news_scan', day)

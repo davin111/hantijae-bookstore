@@ -372,6 +372,11 @@ class AdminCommandTest(TestCase):
         self.assertEqual(self.run_cmd('/mk', 'admin_only'), 'marketing_mode=admin_only')
         self.assertIn('mode=admin_only', self.run_cmd('/mk'))
 
+    def test_mk_social_switch(self):
+        self.assertEqual(self.run_cmd('/mk', 'social on'), 'social=on')
+        self.assertIn('\nsocial=on\n', self.run_cmd('/mk'))
+        self.assertEqual(self.run_cmd('/mk', 'social off'), 'social=off')
+
     def test_quiet_sets_until_and_rejects_bad_date(self):
         self.assertIn('2026-11-30까지', self.run_cmd('/quiet', '산속으로 2026-11-30 저자 사정'))
         self.assertEqual(BookProfile.objects.get(book=self.book).quiet_reason, '저자 사정')
