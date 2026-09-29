@@ -180,9 +180,19 @@ class AnnounceTest(TestCase):
 
         deps.bot.tg.send_message = failing_send
         with mock.patch('marketing.selections.collect', return_value=([fresh1, fresh2], [])):
-            with self.assertLogs('marketing', level='WARNING') as logs:
+            with self.assertLogs('intake', level='WARNING') as logs:
                 run_scan(deps, TODAY, NOW)
         self.assertEqual(Notice.objects.count(), 2)
         self.assertEqual(len(deps.bot.tg.sent('send')), 1)
         admin_notes = [n for n in deps.bot.notes if '알림을 보내지 못했어요' in n and '무궁화호를 위하여' in n]
         self.assertEqual(len(admin_notes), 1)
+
+    def test_run_scan_survives_fully_down_telegram(self):
+        deps = make_deps()
+        fresh1, fresh2 = self.found(key='kpipa:1'), self.found(key='kpipa:2')
+        deps.bot.tg.send_message = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('Telegram down'))
+        deps.bot.notify_admin = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('Telegram down'))
+        with mock.patch('marketing.selections.collect', return_value=([fresh1, fresh2], [])):
+            with self.assertLogs('intake', level='WARNING') as logs:
+                run_scan(deps, TODAY, NOW)
+        self.assertEqual(Notice.objects.count(), 2)

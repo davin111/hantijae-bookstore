@@ -14,7 +14,7 @@ from marketing.selection_sources import SCANNERS, Announcement
 from web.models import Notice
 from web.pages import absolute_url
 
-log = logging.getLogger('marketing')
+log = logging.getLogger('intake')
 
 NOTICE_DAYS = 30
 FAIL_ALERT_DAYS = 3
@@ -119,7 +119,6 @@ def _track_failures(deps, failed):
 
 def run_scan(deps, today, now, **collect_kwargs):
     found, failed = collect(today, **collect_kwargs)
-    _track_failures(deps, failed)
     for f in found:
         try:
             if f.announcement.withdrawal:
@@ -129,6 +128,10 @@ def run_scan(deps, today, now, **collect_kwargs):
                 announce(deps, f, now)
         except Exception:
             log.warning('selection announce failed: %s', f.signal.key, exc_info=True)
-            deps.bot.notify_admin(f'⚠️ 공공 선정: 『{f.signal.book.title}』 알림을 보내지 못했어요 — '
-                                  f'확인해 주세요: {f.announcement.url}')
+            try:
+                deps.bot.notify_admin(f'⚠️ 공공 선정: 『{f.signal.book.title}』 알림을 보내지 못했어요 — '
+                                      f'확인해 주세요: {f.announcement.url}')
+            except Exception:
+                log.warning('selection admin notify failed: %s', f.signal.key, exc_info=True)
+    _track_failures(deps, failed)
     return found
