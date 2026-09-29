@@ -8,7 +8,7 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from intake.models import WorkerState
-from marketing.models import SelectionAnnouncement, Signal
+from marketing.models import BookProfile, SelectionAnnouncement, Signal
 from marketing.selection_sources import Announcement
 from marketing.selections import Found, announce, collect, notice_message, run_scan, _track_failures
 from marketing.tests.fakes import FakeTG, make_book
@@ -126,6 +126,15 @@ class AnnounceTest(TestCase):
         notice.refresh_from_db()
         self.assertEqual((notice.chat_id, notice.message_id), (-100, 1001))
         self.assertTrue(Signal.objects.get().detail['posted'])
+
+    def test_quiet_book_is_not_auto_posted_even_on_isbn_hit(self):
+        BookProfile.objects.create(book=self.book, quiet_until=date(2026, 10, 15))
+        deps = make_deps()
+        notice = announce(deps, self.found(), NOW)
+        self.assertEqual(notice.state, Notice.DRAFT)
+        card = deps.bot.tg.sent('send')[0]
+        self.assertIn('홍보를 쉬는 중', card['text'])
+        self.assertIn('ntpub:', json.dumps(card['buttons']))
 
     def test_title_hit_makes_draft_card_not_posted(self):
         deps = make_deps()

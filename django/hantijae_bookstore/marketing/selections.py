@@ -7,10 +7,12 @@ from datetime import timedelta
 
 from intake import messages, notices
 from intake.models import WorkerState
+from marketing import kit
 from marketing.http import http_get, http_get_bytes
 from marketing.models import SelectionAnnouncement, Signal
 from marketing.selection_match import match_books, our_books
 from marketing.selection_sources import SCANNERS, Announcement
+from marketing.timeutil import kst_today
 from web.models import Notice
 from web.pages import absolute_url
 
@@ -81,7 +83,8 @@ def announce(deps, found, now):
     """ISBN으로 맞고 live 모드면 바로 게시, 아니면 미리보기(DRAFT). 카드는 모드에 맞는 방(target_chat)으로."""
     m = deps.bot.marketing
     book, ann = found.signal.book, found.announcement
-    post = found.how == 'isbn' and m.mode() == 'live'
+    quiet = kit.quiet_until(book, kst_today(now))
+    post = found.how == 'isbn' and m.mode() == 'live' and not quiet
     notice = Notice.objects.create(
         message=notice_message(book.title, ann.label), link_url=absolute_url(f'/book={book.id}'),
         link_label='책 보기', starts_at=now, ends_at=now + timedelta(days=NOTICE_DAYS),
@@ -97,6 +100,8 @@ def announce(deps, found, now):
         how = ' (ISBN이 아니라 제목으로 찾았어요)' if found.how == 'title' else ''
         head = (f'🏅 {ann.label} 선정 도서로 보여요 — 『{book.title}』{how}\n'
                 f'발표를 확인하고 첫 화면에 올릴까요? 발표: {ann.url}')
+        if quiet:
+            head += '\n홍보를 쉬는 중인 책이라 바로 올리지 않았어요.'
     sent = deps.bot.tg.send_message(chat, messages.notice_card(notice, head=head),
                                     buttons=messages.notice_buttons(notice))
     notices.attach_message(notice, chat, sent['message_id'])
