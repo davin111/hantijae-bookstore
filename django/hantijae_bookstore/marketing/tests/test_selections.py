@@ -179,7 +179,8 @@ class AnnounceTest(TestCase):
 
     def test_announce_failure_sends_one_card_and_alerts_on_other(self):
         deps = make_deps()
-        fresh1, fresh2 = self.found(key='kpipa:1'), self.found(key='kpipa:2')
+        fresh1 = self.found(key='kpipa:1')
+        fresh2 = self.found(key='kpipa:2', label='2026년 문학나눔')
         call_count = [0]
         original_send = deps.bot.tg.send_message
 
@@ -200,13 +201,23 @@ class AnnounceTest(TestCase):
 
     def test_run_scan_survives_fully_down_telegram(self):
         deps = make_deps()
-        fresh1, fresh2 = self.found(key='kpipa:1'), self.found(key='kpipa:2')
+        fresh1 = self.found(key='kpipa:1')
+        fresh2 = self.found(key='kpipa:2', label='2026년 문학나눔')
         deps.bot.tg.send_message = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('Telegram down'))
         deps.bot.notify_admin = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('Telegram down'))
         with mock.patch('marketing.selections.collect', return_value=([fresh1, fresh2], [])):
             with self.assertLogs('intake', level='WARNING') as logs:
                 run_scan(deps, TODAY, NOW)
         self.assertEqual(Notice.objects.count(), 2)
+
+    def test_one_notice_per_book_even_when_the_same_selection_is_listed_twice(self):
+        """같은 책이 같은 발표에 두 번 걸려도(목록 엔트리가 겹치는 등) 알림 띠는 한 번만 만든다."""
+        deps = make_deps()
+        fresh1, fresh2 = self.found(key='kpipa:1'), self.found(key='kpipa:2')
+        with mock.patch('marketing.selections.collect', return_value=([fresh1, fresh2], [])):
+            run_scan(deps, TODAY, NOW)
+        self.assertEqual(Notice.objects.count(), 1)
+        self.assertEqual(len(deps.bot.tg.sent('send')), 1)
 
 
 class CommandTest(TestCase):

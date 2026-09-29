@@ -130,7 +130,11 @@ def run_scan(deps, today, now, **collect_kwargs):
                 deps.bot.notify_admin(f'⚠️ {f.announcement.label} 철회·취소 공고 목록에 『{f.signal.book.title}』 포함 — '
                                       f'확인해 주세요: {f.announcement.url}')
             elif f.announcement.fresh:
-                announce(deps, f, now)
+                dup = any('notice_id' in s.detail for s in
+                         Signal.objects.filter(kind=Signal.SELECTION, book=f.signal.book, title=f.signal.title)
+                         .exclude(pk=f.signal.pk))
+                if not dup:
+                    announce(deps, f, now)
         except Exception:
             log.warning('selection announce failed: %s', f.signal.key, exc_info=True)
             try:
