@@ -156,5 +156,5 @@ def read_box(blocks, title_id=''):
 
 
 def normalize(text):
-    lines = (text or '').replace('\r\n', '\n').replace(' ', ' ').split('\n')
+    lines = (text or '').replace('\r\n', '\n').replace(chr(0xA0), ' ').split('\n')
     return '\n'.join(line.rstrip() for line in lines).strip()

@@ -43,7 +43,8 @@ class NotionBlocksTest(SimpleTestCase):
         self.assertEqual(nb.read_box([blk('paragraph', '한 블록\n\n안의 글')]), ('', '한 블록\n\n안의 글'))
 
     def test_normalize(self):
-        self.assertEqual(nb.normalize('가 \r\n나 다  \n\n'), '가\n나 다')
+        self.assertEqual(nb.normalize('가 \r\n나' + chr(0xA0) + '다  \n\n'), '가\n나 다')
+        self.assertEqual(nb.normalize('가' + chr(0xA0)), '가')
 
     def test_headings_and_progress(self):
         self.assertEqual(nb.heading_text('1. 항목', POSTED), '✅ 1. 항목')
