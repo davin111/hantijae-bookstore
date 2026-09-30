@@ -70,10 +70,9 @@ def compose(llm, cands, today, context=(), midweek=False):
             continue
         used_books |= ids
         channel = d.get('channel') if d.get('channel') in CHANNELS else Draft.INSTAGRAM
-        if places:  # 신간 묶음 편지와 같은 모양: 보낼 곳을 먼저, 그 아래 글
-            body = '알리면 좋을 곳\n' + '\n'.join(f'· {p}' for p in places) + '\n\n보낼 글\n' + body
         items.append((cand, headline, reason,
-                      {'channel': channel, 'title': fix_title_marks(str(d.get('title', '')).strip()), 'body': body}))
+                      {'channel': channel, 'title': fix_title_marks(str(d.get('title', '')).strip()), 'body': body,
+                       'places': places}))  # 보낼 곳은 올릴 글이 아니다 — Draft.extra에 따로(복사하기 좋게, 2026-09-30)
         if len(items) == MAX_ITEMS:
             break
     return items, dropped
@@ -95,7 +94,8 @@ def save_briefing(items, today):
             p = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=cand.books[0] if cand.books else None,
                                         signal=cand.signal, briefing=briefing, candidate_key=cand.id,
                                         headline=headline[:300], reason=reason, rank=rank, extra=extra)
-            Draft.objects.create(proposal=p, channel=d['channel'], title=d['title'][:300], body=d['body'])
+            Draft.objects.create(proposal=p, channel=d['channel'], title=d['title'][:300], body=d['body'],
+                                 extra={'places': d['places']} if d.get('places') else {})
             used = ([cand.signal.pk] if cand.signal else []) + more_ids
             if used:
                 Signal.objects.filter(pk__in=used).update(used_at=timezone.now())

@@ -66,6 +66,19 @@ class KitTest(TestCase):
         self.assertNotIn('자료에 없는 숫자', p.caution)
         self.assertEqual(p.extra, {'blog_exists': False, 'missing_stores': ['교보문고', '예스24']})
 
+    def test_letter_keeps_places_and_recipient_apart(self):
+        p = build_kit(self.book, FakeLLM(REPLY), posts=[], today=self.today)
+        letter = p.drafts.get(channel=Draft.LETTER)
+        self.assertEqual((letter.title, letter.body), ('신간 소식', '안녕하세요.\n\n도서출판 한티재 드림'))
+        self.assertEqual(letter.extra, {'places': ['청송 지역 신문 ― 지역 시인', '귀농·귀촌 단체 ― 귀농 이야기'],
+                                        'to': '청송 지역 신문'})
+
+    def test_outreach_without_a_letter_keeps_the_list_as_text(self):
+        reply = {**REPLY, 'letter': {}}
+        letter = build_kit(self.book, FakeLLM(reply), posts=[], today=self.today).drafts.get(channel=Draft.LETTER)
+        self.assertEqual(letter.body, '알리면 좋을 곳\n· 청송 지역 신문 ― 지역 시인\n· 귀농·귀촌 단체 ― 귀농 이야기')
+        self.assertEqual(letter.extra, {})
+
     def test_build_kit_flags_numbers_not_in_source(self):
         reply = dict(REPLY, instagram='벌써 1,000부가 나갔습니다.\n#한티재')
         p = build_kit(self.book, FakeLLM(reply), posts=[], today=self.today)

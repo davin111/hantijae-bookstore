@@ -102,7 +102,8 @@ def build(llm, today, now, marketing_mode):
     for rank, (cand, headline, reason, d) in enumerate(items, 1):
         p = Proposal.objects.create(kind=Proposal.NOW, book=cand.books[0], signal=cand.signal, candidate_key=cand.id,
                                     headline=headline[:300], reason=reason, rank=rank)
-        Draft.objects.create(proposal=p, channel=d['channel'], title=d['title'][:300], body=d['body'])
+        Draft.objects.create(proposal=p, channel=d['channel'], title=d['title'][:300], body=d['body'],
+                             extra={'places': d['places']} if d.get('places') else {})
         if cand.signal:
             Signal.objects.filter(pk=cand.signal.pk).update(used_at=now)
         made.append(p)

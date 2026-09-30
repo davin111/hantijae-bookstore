@@ -86,12 +86,13 @@ def build_kit(book, llm, posts, today):
             Draft.objects.create(proposal=p, channel=Draft.SHORT, body='\n'.join(body).strip())
         outreach = [o for o in (out.get('outreach') or []) if isinstance(o, dict) and o.get('who')][:5]
         letter = out.get('letter') if isinstance(out.get('letter'), dict) else {}
-        if outreach or letter.get('body'):
-            lines = ['알리면 좋을 곳'] + [f'· {_clean(o["who"])} ― {_clean(o.get("why"))}' for o in outreach]
-            if letter.get('body'):
-                lines += ['', f'보낼 글 ({_clean(letter.get("to"))})', f'제목: {_clean(letter.get("title"))}', '',
-                          _clean(letter['body'])]
-            Draft.objects.create(proposal=p, channel=Draft.LETTER, body='\n'.join(lines))
+        places = [f'{_clean(o["who"])} ― {_clean(o.get("why"))}' for o in outreach]
+        if letter.get('body'):  # 보낼 곳·받는 곳은 올릴 글이 아니라 extra로(텔레그램에서는 편지 앞에 짧게 따로 보낸다)
+            Draft.objects.create(proposal=p, channel=Draft.LETTER, title=_clean(letter.get('title'))[:300],
+                                 body=_clean(letter['body']), extra={'places': places, 'to': _clean(letter.get('to'))})
+        elif places:  # 보낼 글 없이 알릴 곳만 있으면 목록을 글로 둔다
+            Draft.objects.create(proposal=p, channel=Draft.LETTER,
+                                 body='\n'.join(['알리면 좋을 곳', *[f'· {x}' for x in places]]))
         source = '\n'.join([book.description or '', book.short_description or ''])
         notes = []
         bad = [q for d in p.drafts.all() for q in unverified_quotes(d.body, source)]
@@ -99,7 +100,8 @@ def build_kit(book, llm, posts, today):
             notes.append('원문과 다른 인용이 있어요. 책에서 확인해 주세요: ' + ' / '.join(f'"{q}"' for q in bad))
         allowed = [source, book.title, book.subtitle or '', str(book.page_count), str(book.full_price),
                    book.published_date.isoformat(), '200자 소개']
-        nums = foreign_numbers(' '.join(f'{d.title} {d.body}' for d in p.drafts.exclude(channel=Draft.LINKS)), allowed)
+        nums = foreign_numbers(' '.join(f'{d.title} {d.body} {" ".join(d.places)}'
+                                        for d in p.drafts.exclude(channel=Draft.LINKS)), allowed)
         if nums:
             notes.append('자료에 없는 숫자가 있어요. 확인해 주세요: ' + ', '.join(nums))
         if notes:

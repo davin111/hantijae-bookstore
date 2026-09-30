@@ -173,13 +173,15 @@ def build_briefing_user(candidates, today, context=(), midweek=False):
 
 
 def build_rewrite_user(draft, note, source_text):
-    return '\n'.join([
-        f'고칠 글의 종류: {draft.label}',
-        f'<지금 글 제목>{draft.title}</지금 글 제목>',
-        '<지금 글>', draft.body, '</지금 글>',
-        '<운영진의 지적>', note, '</운영진의 지적>',
-        '<참고 자료(책 소개)>', source_text or '(없음)', '</참고 자료(책 소개)>',
-    ])
+    lines = [f'고칠 글의 종류: {draft.label}',
+             f'<지금 글 제목>{draft.title}</지금 글 제목>',
+             '<지금 글>', draft.body, '</지금 글>',
+             '<운영진의 지적>', note, '</운영진의 지적>']
+    places = (getattr(draft, 'extra', None) or {}).get('places') or []
+    if places:  # 편지의 보낼 곳: 고치지 않고 참고만(보낼 곳 메시지에 단 답장도 편지 고치기로 온다)
+        lines += ['<보낼 곳(참고만, 바꾸지 않음)>', *places, '</보낼 곳(참고만, 바꾸지 않음)>']
+    lines += ['<참고 자료(책 소개)>', source_text or '(없음)', '</참고 자료(책 소개)>']
+    return '\n'.join(lines)
 
 
 def build_news_user(rows):
