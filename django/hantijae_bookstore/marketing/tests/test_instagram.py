@@ -152,10 +152,22 @@ class InstagramTest(TestCase):
 
     def test_tagger_check_error_leaves_the_name_out(self):
         g = Graph(tags=[media('A', '『무궁화호를 위하여』 읽었다', date(2026, 9, 26), 'flaky.shop')], broken={'flaky.shop'})
-        with self.assertLogs('intake', level='WARNING'):
+        with self.assertLogs('intake', level='WARNING') as cm:
             instagram.run(self.deps(), TODAY, self.notes.append, get=g)
         s = Signal.objects.get()
         self.assertEqual(s.detail['where'], '')
+        self.assertNotIn('flaky.shop', '\n'.join(cm.output))
+
+    def test_handles_in_captions_are_masked(self):
+        g = Graph(tags=[media('A', '@friend.personal 랑 『무궁화호를 위하여』 읽음', date(2026, 9, 26))])
+        llm = FakeLLM(REVIEW)
+        instagram.run(self.deps(llm), TODAY, self.notes.append, get=g)
+        s = Signal.objects.get()
+        self.assertIn('@…', s.title)
+        self.assertNotIn('friend.personal', s.title)
+        self.assertIn('@…', s.detail['snippet'])
+        self.assertNotIn('friend.personal', s.detail['snippet'])
+        self.assertNotIn('friend.personal', llm.calls[0][1])
 
     def test_tags_error_still_reads_partners_then_raises(self):
         g = Graph(tags=[], pros={p: [] for p in instagram.PARTNERS}, tags_broken=True)
