@@ -70,11 +70,14 @@ class ComposeTest(TestCase):
         self.assertTrue(items[0][2])
         self.assertFalse(any(w in items[0][2] for w in ('할인', '구매', '링크')))
 
-    def test_compose_drops_same_book_twice_and_caps_three(self):
+    def test_compose_drops_same_book_twice_and_caps_four(self):
+        """주간 브리핑은 4개까지(2026-09-30 사용자 결정: 3개면 저자 소식이 계기·기념일·펀딩에 밀려 빠졌다)."""
+        d = make_book(title='무지개를 변호하다', isbn='979-11-00000-14-1', author=None)
+        cands = self.cands + [Candidate(id='news:6', kind='news', books=[d], summary='강연', facts={}, urgency=2)]
         llm = FakeLLM({'items': [item('noreview:3'), item('hook:4'), item('hook:1', body='소개'), item('fund:2'),
-                                 item('blog:5')]})
-        items, _ = compose(llm, self.cands, TODAY)
-        self.assertEqual([i[0].id for i in items], ['noreview:3', 'hook:1', 'fund:2'])
+                                 item('blog:5'), item('news:6')]})
+        items, _ = compose(llm, cands, TODAY)
+        self.assertEqual([i[0].id for i in items], ['noreview:3', 'hook:1', 'fund:2', 'blog:5'])
 
     def test_compose_fixes_title_marks(self):
         llm = FakeLLM({'items': [item('blog:5', headline='『커밍아웃 스토리 ― 부모들의 이야기』')]})

@@ -1,4 +1,4 @@
-"""주간 브리핑: 후보를 LLM에 한 번 보내 최대 3개를 고르게 하고, 코드로 다시 검증한다."""
+"""주간 브리핑: 후보를 LLM에 한 번 보내 최대 4개를 고르게 하고, 코드로 다시 검증한다."""
 import re
 from datetime import datetime, timedelta
 
@@ -15,7 +15,7 @@ from marketing.text import fix_title_marks, foreign_numbers
 from marketing.timeutil import KST, week_start
 from web.models import StoreClick
 
-MAX_ITEMS = 3
+MAX_ITEMS = 4  # 3개면 저자 소식이 계기·기념일·펀딩에 밀려 빠졌다(2026-09-30). 주중 제안은 midweek.MAX_ITEMS(3)로 먼저 자른다
 SALES_WORDS = ('구매', '주문', '할인', '서점에서', '링크', 'http', '가격')
 MEMORIAL_REASON = '추모의 날이라 알리기만 하는 글이에요.'
 _SENTENCE_END = re.compile(r'(?<=[.!?])\s+')
@@ -121,7 +121,7 @@ def measure_line(today):
 
 def build_weekly(llm, today, now, posts, resolve=gnews.original_url):
     items, dropped = compose(llm, candidates.gather(today, now, posts), today, candidates.social_context(now))
-    for cand, *_ in items:  # 방에 보일 링크만(최대 3개): 구글 뉴스 주소는 언론사 원래 주소로, 실패하면 그대로
+    for cand, *_ in items:  # 방에 보일 링크만(최대 4개): 구글 뉴스 주소는 언론사 원래 주소로, 실패하면 그대로
         if cand.link:
             cand.link = resolve(cand.link)
     briefing = save_briefing(items, today)
