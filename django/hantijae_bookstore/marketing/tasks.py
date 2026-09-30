@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 from intake.models import WorkerState
-from marketing import briefing, funding, kit, midweek, moments, news, sales, selections, social
+from marketing import briefing, funding, grants, kit, midweek, moments, news, sales, selections, social
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
@@ -18,6 +18,7 @@ KIT_CHECK_SECONDS = 600
 SALES_AT, NEWS_AT, BRIEF_BUILD_AT, BRIEF_SEND_AT, BRIEF_GIVE_UP_AT = (6, 0), (6, 30), (7, 0), (9, 30), (21, 0)
 MOMENT_AT, MIDWEEK_BUILD_AT, MIDWEEK_SEND_AT = (5, 0), (5, 30), (9, 30)
 ADMIN_QUEUE = 'moment_admin_queue'
+GRANT_AT = (6, 40)   # 선정(06:10) 다음, 월요일 브리핑 만들기(07:00) 전. 한 번에 LLM 최대 3번(grants.JUDGE_PER_RUN)
 SELECTION_AT = (6, 10)   # 판매 지수(06:00) 다음. LLM을 쓰지 않아 07:00 브리핑 만들기 전에 끝난다
 MISSED_NOTE = '⏭️ 이번 주 브리핑을 보내지 못했어요(항목 없음·모드·시간). /mk 로 확인하세요'
 
@@ -126,6 +127,13 @@ def _moments(deps, now, started):
     return report
 
 
+def _grant_scan(deps, today, now, started):
+    """지원사업 공고 읽기. 알리지 않은 공고 요약은 관리자에게(새벽이면 08시 뒤)."""
+    text = grants.digest(grants.scan(deps.llm, today))
+    if text:
+        _notify_awake(deps, _later(now, started), text)
+
+
 def _build_midweek(deps, m, today, now, started):
     made, dropped = midweek.build(deps.llm, today, now, m.mode())
     if dropped:
@@ -175,6 +183,11 @@ def _run_due(deps, now):
         WorkerState.put('marketing_last_selection_scan', day)
         _guard(deps, 'selection', now, lambda: selections.run_scan(deps, today, now))
 
+    if (_hm(local) >= GRANT_AT and grants.mode() != 'off'
+            and WorkerState.get('grant_last_scan') != day):
+        WorkerState.put('grant_last_scan', day)
+        _guard(deps, 'grant', now, lambda: _grant_scan(deps, today, now, started))
+
     # 운영진 개인 SNS: 06:20 뒤 시작, 진행 중인 실행 확인은 매 바퀴(시각·꺼짐은 social이 판단)
     _guard(deps, 'social', now, lambda: social.run_due(deps, now))
 
@@ -194,6 +207,7 @@ def _run_due(deps, now):
         WorkerState.put('marketing_last_kit_check', now.isoformat())
         _guard(deps, 'kit', now, lambda: _build_kits(deps, m, today))
     _guard(deps, 'kit_send', now, lambda: m.send_pending_kits(now))
+    _guard(deps, 'grant_send', now, lambda: m.send_grants(_later(now, started)))
 
 
 def run_due(deps, now=None):

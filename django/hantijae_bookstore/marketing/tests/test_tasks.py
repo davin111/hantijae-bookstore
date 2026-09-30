@@ -33,6 +33,10 @@ class FakeMarketing:
         self.midweek_sends = getattr(self, 'midweek_sends', 0) + 1
         return False
 
+    def send_grants(self, now):
+        self.grant_sends = getattr(self, 'grant_sends', 0) + 1
+        return 0
+
 
 class FakeBot:
     def __init__(self, mode):
@@ -325,3 +329,53 @@ class MomentQuietTest(TestCase):
         with mock.patch('marketing.tasks.midweek.release_stale') as release:
             tasks.run_due(Deps(), datetime(2026, 9, 28, 12, 0, tzinfo=KST))
         release.assert_called_once()
+
+
+@mock.patch('marketing.tasks.kit.build_pending', return_value=[])
+@mock.patch('marketing.tasks.briefing.build_weekly',
+            return_value=(mock.Mock(**{'items.exists.return_value': True}), []))
+@mock.patch('marketing.tasks.news.collect_news', return_value=[])
+@mock.patch('marketing.tasks.funding.collect_funding', return_value=0)
+@mock.patch('marketing.tasks.sales.collect_sales', return_value=(0, []))
+class GrantScheduleTest(TestCase):
+    def setUp(self):
+        for target in ('marketing.tasks.selections.run_scan', 'marketing.tasks.social.run_due'):
+            patcher = mock.patch(target, return_value=[])
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        from marketing import grants
+        patcher = mock.patch('marketing.tasks.grants.scan', return_value=grants.ScanReport())
+        self.scan = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_scan_once_per_day_after_0640_when_on(self, *_):
+        WorkerState.put('grant_mode', 'admin_only')
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 30, 6, 39, tzinfo=KST))
+        self.scan.assert_not_called()
+        tasks.run_due(deps, datetime(2026, 9, 30, 6, 40, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 30, 12, 0, tzinfo=KST))
+        self.assertEqual(self.scan.call_count, 1)
+        self.assertEqual(WorkerState.get('grant_last_scan'), '2026-09-30')
+
+    def test_grant_mode_off_skips_scan(self, *_):
+        tasks.run_due(Deps(), datetime(2026, 9, 30, 7, 0, tzinfo=KST))
+        self.scan.assert_not_called()
+
+    def test_digest_waits_for_morning(self, *_):
+        from marketing import grants
+        WorkerState.put('grant_mode', 'live')
+        self.scan.return_value = grants.ScanReport(unannounced=['· 웹소설 공고 — 제목으로 뺌'])
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 30, 6, 40, tzinfo=KST))
+        self.assertEqual(deps.bot.notes, [])
+        self.assertIn('📋 알리지 않은 지원사업 공고\n· 웹소설 공고 — 제목으로 뺌', WorkerState.get(tasks.ADMIN_QUEUE))
+
+    def test_send_grants_every_loop_unless_marketing_off(self, *_):
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 30, 10, 0, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 30, 10, 1, tzinfo=KST))
+        self.assertEqual(deps.bot.marketing.grant_sends, 2)
+        off = Deps('off')
+        tasks.run_due(off, datetime(2026, 9, 30, 10, 2, tzinfo=KST))
+        self.assertFalse(hasattr(off.bot.marketing, 'grant_sends'))
