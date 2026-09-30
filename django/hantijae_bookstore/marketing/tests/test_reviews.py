@@ -159,7 +159,7 @@ class ScanTest(TestCase):
         report, fresh = self.scan(first, llm)
         self.assertEqual((report.baseline, fresh, llm.calls), (1, [], []))
         self.assertEqual(Signal.objects.get().detail['verdict'], 'old')
-        self.assertIn(self.book.id, WorkerState.get(reviews.SCANNED))
+        self.assertIn(f'{self.book.id}:naver_cafe', WorkerState.get(reviews.SCANNED))
         later = FakeAPI(naver_cafe=[nc('모임 후기', 'https://cafe.naver.com/c/1', '&lt;커밍아웃 스토리&gt; 읽기'),
                                     nc('새 모임 후기', 'https://cafe.naver.com/c/2', '&lt;커밍아웃 스토리&gt; 읽기')])
         self.scan(later, llm)
@@ -216,7 +216,7 @@ class ScanTest(TestCase):
         with self.assertLogs('intake', level='WARNING'):
             report, _ = self.scan(api)
         self.assertEqual(report.failed, ['naver_blog', 'naver_cafe', 'daum_blog', 'daum_cafe'])
-        self.assertNotIn(self.book.id, WorkerState.get(reviews.SCANNED) or [])
+        self.assertFalse([k for k in WorkerState.get(reviews.SCANNED) or [] if k.startswith(f'{self.book.id}:')])
 
     def test_todays_books_takes_one_seventh_by_id(self):
         books = [make_book(title=f'책 {i}', published=date(2020, 1, 1), isbn=f'979-11-00001-{i:02d}-0', author=None)
@@ -227,3 +227,13 @@ class ScanTest(TestCase):
         expected = {b.id for b in books + [self.book] if b.id % 7 == TODAY.toordinal() % 7}
         self.assertEqual(picked, expected)
         self.assertNotIn(hidden.id, picked)
+
+    def test_cafe_baseline_waits_for_the_cafe_search_to_succeed(self):
+        """카페 검색만 실패한 날엔 카페 기준선이 없다 → 카페가 처음 성공한 날의 날짜 없는 글은 새 글이 아니다."""
+        with self.assertLogs('intake', level='WARNING'):
+            self.scan(FakeAPI(naver_blog=[nb('커밍아웃 스토리 독후감', 'https://blog.naver.com/a/0', '한티재', '20260101')],
+                              raise_for={'naver_cafe'}))
+        llm = FakeLLM(REVIEW)
+        report, fresh = self.scan(FakeAPI(naver_cafe=[nc('옛 모임 후기', 'https://cafe.naver.com/c/9', '&lt;커밍아웃 스토리&gt; 읽기')]), llm)
+        self.assertEqual((fresh, llm.calls), ([], []))
+        self.assertEqual(Signal.objects.get(url='https://cafe.naver.com/c/9').detail['verdict'], 'old')

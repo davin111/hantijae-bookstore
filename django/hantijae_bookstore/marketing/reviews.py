@@ -25,7 +25,7 @@ PER_LLM_CALL = 40
 FRESH_DAYS = 14
 ROTATION = 7      # 책마다 주 1회: 날마다 id % 7이 맞는 책만
 SPACING = 0.5
-SCANNED = 'review_scanned_books'   # 한 번이라도 찾아본 책 id. 날짜 없는 네이버 카페 글은 첫 검색 결과를 기준선으로만 둔다
+SCANNED = 'review_scanned_books'   # 한 번이라도 검색이 성공한 (책, 출처). 날짜 없는 글은 그 출처의 첫 검색 결과를 기준선으로만 둔다
 
 
 def _book_line(t):
@@ -101,7 +101,7 @@ def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
         return report, []
     books = todays_books(today) if books is None else books
     scanned = set(WorkerState.get(SCANNED) or [])
-    calls, errors, ok_books = Counter(), Counter(), set()
+    calls, errors, ok = Counter(), Counter(), set()
     fresh, seen, waited = [], set(), False
     for book in books:
         t = terms(book)
@@ -119,7 +119,7 @@ def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
                     if errors[source] == 1:   # 한도 초과면 수십 번 실패한다 → 출처마다 한 번만 남긴다
                         log.warning('review search failed: %s', source, exc_info=True)
                     continue
-                ok_books.add(book.id)
+                ok.add(f'{book.id}:{source}')
                 for p in posts:
                     key = signal_key(book, p)
                     if key in seen or excluded(p) or not mentions_book(p, t):
@@ -130,7 +130,7 @@ def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
                     if p.posted_on:
                         is_fresh = p.posted_on >= today - timedelta(days=FRESH_DAYS)
                     else:
-                        is_fresh = book.id in scanned
+                        is_fresh = f'{book.id}:{p.source}' in scanned
                     if is_fresh:
                         fresh.append((t, p, key))
                     else:
@@ -138,7 +138,7 @@ def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
                         report.baseline += 1
     report.failed = [s for s in calls if errors[s] == calls[s]]
     report.found = len(fresh)
-    WorkerState.put(SCANNED, sorted(scanned | ok_books))
+    WorkerState.put(SCANNED, sorted(scanned | ok))
     return report, fresh
 
 
