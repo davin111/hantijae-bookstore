@@ -1,5 +1,6 @@
 """주간 브리핑 후보. 규칙만으로 만들고(LLM 없음), 고르기는 briefing.py가 LLM에 맡긴다."""
 import json
+import logging
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -23,6 +24,7 @@ from marketing.text import loose_key, similarity, title_key, won_display
 from marketing.timeutil import kst_today, week_start
 from web.models import Notice
 
+log = logging.getLogger('intake')
 KIND_LABEL = {'hook': '기념일', 'fund': '진행 중 펀딩', 'news': '저자 소식', 'surge': '판매 지수 급등',
               'blog': '네이버 블로그 글 없음', 'noreview': '리뷰 없음', 'selection': '공공 선정',
               'sns_event': '다가오는 행사', 'sns_after': '행사 후기', 'sns_repost': '공식 채널로 옮겨 싣기',
@@ -318,32 +320,41 @@ def noreview_candidates(today):
     return out
 
 
-LOAN_MIN, LOAN_TOP, LOAN_AGE_DAYS = 10, 3, 365
+LOAN_MIN, LOAN_TOP, LOAN_AGE_DAYS, LOAN_WINDOW = 10, 3, 365, 11
+
+
+def _months_back(d, n):
+    """d가 속한 달에서 n달 앞선 달의 첫날."""
+    y, m = divmod(d.year * 12 + d.month - 1 - n, 12)
+    return date(y, m + 1, 1)
 
 
 def loan_candidates(today):
-    """도서관에서 꾸준히 읽히는 구간 책(스펙 §7): 가장 최근 달 대출이 LOAN_MIN 이상이고 앞선 달 평균보다 줄지 않은,
-    나온 지 1년 넘은 책을 대출 많은 순으로 LOAN_TOP권. 같은 책은 NEEDS_REST로 3주 쉰다."""
-    latest = LoanSnapshot.objects.aggregate(m=Max('month'))['m']
-    if not latest:
+    """도서관에서 꾸준히 읽히는 구간 책(스펙 §7): 가장 최근 달 대출이 LOAN_MIN 이상이고 앞선 11달 평균보다 줄지 않은,
+    나온 지 1년 넘은 책을 대출 많은 순으로 LOAN_TOP권. 정보나루는 대출이 없던 달을 아예 빼고 돌려주므로
+    빠진 달은 0회로 센다(항상 LOAN_WINDOW로 나눈다). 같은 책은 NEEDS_REST로 3주 쉰다."""
+    last_month = LoanSnapshot.objects.aggregate(m=Max('month'))['m']
+    if not last_month:
         return []
     picked = []
-    for snap in (LoanSnapshot.objects.filter(month=latest, loans__gte=LOAN_MIN, book__is_published=True,
+    for snap in (LoanSnapshot.objects.filter(month=last_month, loans__gte=LOAN_MIN, book__is_published=True,
                                              book__visible=True,
                                              book__published_date__lte=today - timedelta(days=LOAN_AGE_DAYS))
                  .select_related('book')):
-        prev = list(LoanSnapshot.objects.filter(book=snap.book, month__lt=latest,
-                                                month__gte=latest - timedelta(days=335)).values_list('loans', flat=True))
-        avg = round(sum(prev) / len(prev)) if prev else 0
-        if prev and snap.loans < avg:
+        prev = list(LoanSnapshot.objects.filter(book=snap.book, month__lt=last_month,
+                                                month__gte=_months_back(last_month, LOAN_WINDOW))
+                    .values_list('loans', flat=True))
+        avg = round(sum(prev) / LOAN_WINDOW)
+        if snap.loans < avg:
             continue
-        picked.append((snap, avg, len(prev)))
+        picked.append((snap, avg))
     picked.sort(key=lambda x: (-x[0].loans, x[0].book_id))
     out = []
-    for snap, avg, n in picked[:LOAN_TOP]:
-        summary = f'{latest.month}월 도서관 대출 {snap.loans}회' + (f'(앞선 {n}달 평균 {avg}회)' if n else '')
-        out.append(Candidate(id=f'loan:{snap.book_id}:{latest.isoformat()}', kind='loan', books=[snap.book],
-                             summary=summary, facts={'month': latest.strftime('%Y-%m'), 'loans': snap.loans, 'avg': avg},
+    for snap, avg in picked[:LOAN_TOP]:
+        summary = f'{last_month.month}월 도서관 대출 {snap.loans}회(앞선 {LOAN_WINDOW}달 평균 {avg}회)'
+        out.append(Candidate(id=f'loan:{snap.book_id}:{last_month.isoformat()}', kind='loan', books=[snap.book],
+                             summary=summary,
+                             facts={'month': last_month.strftime('%Y-%m'), 'loans': snap.loans, 'avg': avg},
                              urgency=1))
     return out
 
@@ -368,6 +379,8 @@ def select(cands, today, now, limit=20):  # 12개면 운영진 SNS 후보가 LLM
             continue
         out.append(c)
     out.sort(key=lambda c: -c.urgency)
+    if len(out) > limit:
+        log.info('candidates over limit %d, dropped: %s', limit, ', '.join(c.id for c in out[limit:]))
     return out[:limit]
 
 
@@ -532,10 +545,10 @@ def gather(today, now, posts):
     sns = merge_fund_posts(funds, social_candidates(today, now, posts))
     reviews = review_candidates(today, now)
     reviewed = {b.id for c in reviews for b in c.books}   # 새 서평이 있는 책의 '리뷰 없음'은 서평 후보 하나로 합친다
+    # 급한 정도 1: 바깥에서 온 신호(도서관 대출)를 늘 있는 알림(블로그 빈칸·리뷰 없음)보다 앞에 둬 cap이 이쪽부터 자르게 한다
     cands = (hook_candidates(today) + funds + news_candidates(now) + selection_candidates(now) + sns + reviews
-             + surge_candidates(today) + blog_gap_candidates(today, posts)
-             + [c for c in noreview_candidates(today) if not {b.id for b in c.books} & reviewed]
-             + loan_candidates(today))
+             + surge_candidates(today) + loan_candidates(today) + blog_gap_candidates(today, posts)
+             + [c for c in noreview_candidates(today) if not {b.id for b in c.books} & reviewed])
     if WorkerState.get('moment_mode', 'off') == 'live':
         cands = with_moments(cands, moment_candidates(today, now), now)
     return select(cands, today, now)
