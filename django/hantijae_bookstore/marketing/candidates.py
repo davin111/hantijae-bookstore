@@ -210,7 +210,7 @@ def with_moments(cands, moments, now):
             surge.facts['room'] = talk.signal.title
             surge.signal = talk.signal
             keep.remove(talk)
-    # 계기를 앞에 둔다: select 가 급한 순서로만 정렬한 뒤 12개로 자르므로(같은 급한 정도면 들어온 순서),
+    # 계기를 앞에 둔다: select 가 급한 순서로만 정렬한 뒤 20개로 자르므로(같은 급한 정도면 들어온 순서),
     # 뒤에 붙이면 같은 급한 정도 안에서 가장 먼저 잘린다. 대화 속 계기는 판매를 움직인 1순위 재료다
     return keep + cands
 
@@ -262,7 +262,7 @@ def _recently_proposed(today, now):
                .exclude(briefing__week_start=week_start(today)).values_list('book_id', flat=True))
 
 
-def select(cands, today, now, limit=12):
+def select(cands, today, now, limit=20):  # 12개면 운영진 SNS 후보가 LLM에 가지도 못했다(2026-09-30)
     quiet = set(BookProfile.objects.filter(quiet_until__gte=today).values_list('book_id', flat=True))
     recent = _recently_proposed(today, now)
     out = []

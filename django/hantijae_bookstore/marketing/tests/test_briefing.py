@@ -79,6 +79,18 @@ class ComposeTest(TestCase):
         items, _ = compose(llm, cands, TODAY)
         self.assertEqual([i[0].id for i in items], ['noreview:3', 'hook:1', 'fund:2', 'blog:5'])
 
+    def test_compose_puts_the_places_to_send_on_top_of_a_letter(self):
+        """2026-09-30 사용자: 브리핑 편지에 '알리면 좋을 곳'이 어딘지 없었다."""
+        raw = item('fund:2', body='안녕하세요. 도서출판 한티재입니다.')
+        raw['draft'].update(channel='letter', to=['농업·생협 단체', '귀농·귀촌 모임', ''])
+        items, _ = compose(FakeLLM({'items': [raw]}), self.cands, TODAY)
+        self.assertEqual(items[0][3]['body'],
+                         '알리면 좋을 곳\n· 농업·생협 단체\n· 귀농·귀촌 모임\n\n보낼 글\n안녕하세요. 도서출판 한티재입니다.')
+        plain = item('fund:2', body='안녕하세요.')
+        plain['draft']['channel'] = 'letter'
+        items, _ = compose(FakeLLM({'items': [plain]}), self.cands, TODAY)
+        self.assertEqual(items[0][3]['body'], '안녕하세요.')
+
     def test_compose_fixes_title_marks(self):
         llm = FakeLLM({'items': [item('blog:5', headline='『커밍아웃 스토리 ― 부모들의 이야기』')]})
         items, _ = compose(llm, self.cands, TODAY)

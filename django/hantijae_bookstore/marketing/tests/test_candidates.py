@@ -61,6 +61,12 @@ class CandidateTest(TestCase):
                               happens_on=TODAY)
         self.assertEqual([(c.signal.title, c.link) for c in C.news_candidates(NOW)], [('좋은 소식', 'https://news.example/a')])
 
+    def test_select_passes_twenty_candidates_to_the_llm(self):
+        """12개면 기념일·계기·저자 칼럼이 자리를 다 채워 운영진 SNS 후보가 LLM에 가지도 못했다(2026-09-30)."""
+        cands = [C.Candidate(id=f'hook:{i}', kind='hook', books=[self.naeran], summary='', facts={}, urgency=2)
+                 for i in range(25)]
+        self.assertEqual(len(C.select(cands, TODAY, NOW)), 20)
+
     def test_select_drops_quiet_books_and_recently_proposed(self):
         BookProfile.objects.create(book=self.sibwol, quiet_until=date(2026, 10, 31))
         last_week = Briefing.objects.create(week_start=date(2026, 9, 21), sent_at=NOW - timedelta(days=7))
@@ -228,6 +234,6 @@ class MomentOrderTest(TestCase):
                                       relevant=True, detail={'type': 'selection', 'status': 'done'})
             moments.append(C.Candidate(id=f'moment:{s.id}', kind='moment', books=[books[i]], summary='계기', facts={},
                                        urgency=2, signal=s))
-        kept = C.select(C.with_moments(base, moments, NOW), TODAY, NOW)
+        kept = C.select(C.with_moments(base, moments, NOW), TODAY, NOW, limit=12)
         self.assertEqual(len(kept), 12)
         self.assertEqual([c.kind for c in kept[:2]], ['moment', 'moment'])

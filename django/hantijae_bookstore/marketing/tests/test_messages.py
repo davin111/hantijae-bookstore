@@ -50,6 +50,26 @@ class MessagesTest(SimpleTestCase):
         self.assertEqual(insta, ['올렸어요', '고치기', '다음에'])
         self.assertEqual(links, ['고치기', '다음에'])
 
+    def test_draft_text_explains_each_button_right_above_the_buttons(self):
+        """2026-09-30 사용자: '올렸어요/고치기/다음에'를 누르면 어떻게 되는지 알기 어렵다."""
+        insta = messages.draft_text(draft(9, Draft.INSTAGRAM, body='글'))
+        self.assertTrue(insta.startswith('인스타 글이에요.\n\n글\n\n'))
+        guide = insta.split('\n\n')[-1]
+        self.assertIn('[올렸어요]', guide)
+        self.assertIn('2주', guide)
+        self.assertIn('[고치기]', guide)
+        self.assertIn('답장', guide)
+        self.assertIn('[다음에]', guide)
+        links = messages.draft_text(draft(9, Draft.LINKS, body='글'))
+        self.assertNotIn('[올렸어요]', links)  # 이 초안에는 그 버튼이 없다
+        self.assertIn('[고치기]', links)
+
+    def test_letter_intro_mentions_places_only_when_the_draft_lists_them(self):
+        with_places = messages.draft_text(draft(9, Draft.LETTER, body='알리면 좋을 곳\n· 농업 단체\n\n보낼 글\n안녕하세요'))
+        self.assertTrue(with_places.startswith('알리면 좋을 곳과 보낼 글이에요.'))
+        only_letter = messages.draft_text(draft(9, Draft.LETTER, body='안녕하세요'))
+        self.assertTrue(only_letter.startswith('보낼 글이에요.'))
+
     def test_briefing_text_has_at_most_three_items_and_measure(self):
         ps = [SimpleNamespace(id=i, headline=f'항목 {i}', reason='이유') for i in range(1, 4)]
         text = messages.briefing_text(date(2026, 9, 28), ps, measure='지난번 올린 글 ― 판매 지수 455 → 520 (2주 뒤)')

@@ -22,6 +22,12 @@ _SENTENCE_END = re.compile(r'(?<=[.!?])\s+')
 CHANNELS = (Draft.INSTAGRAM, Draft.BLOG, Draft.LETTER)
 
 
+def _places(draft):
+    """편지의 보낼 곳(draft.to). 빈 값은 빼고 5곳까지."""
+    to = draft.get('to')
+    return [p for p in (str(x).strip() for x in to) if p][:5] if isinstance(to, list) else []
+
+
 def _without_sales_sentences(text):
     return ' '.join(x for x in _SENTENCE_END.split(text) if x and not any(w in x for w in SALES_WORDS))
 
@@ -46,7 +52,8 @@ def compose(llm, cands, today, context=(), midweek=False):
         if not headline or not body:
             dropped.append(f'{cand.id}: 빈 항목')
             continue
-        bad = foreign_numbers(' '.join([headline, reason, body]), cand.allowed_texts() + [today.isoformat()])
+        places = _places(d) if d.get('channel') == Draft.LETTER else []
+        bad = foreign_numbers(' '.join([headline, reason, body, *places]), cand.allowed_texts() + [today.isoformat()])
         if bad:
             dropped.append(f'{cand.id}: 자료에 없는 숫자 {", ".join(bad)}')
             continue
@@ -63,6 +70,8 @@ def compose(llm, cands, today, context=(), midweek=False):
             continue
         used_books |= ids
         channel = d.get('channel') if d.get('channel') in CHANNELS else Draft.INSTAGRAM
+        if places:  # 신간 묶음 편지와 같은 모양: 보낼 곳을 먼저, 그 아래 글
+            body = '알리면 좋을 곳\n' + '\n'.join(f'· {p}' for p in places) + '\n\n보낼 글\n' + body
         items.append((cand, headline, reason,
                       {'channel': channel, 'title': fix_title_marks(str(d.get('title', '')).strip()), 'body': body}))
         if len(items) == MAX_ITEMS:

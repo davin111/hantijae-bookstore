@@ -6,7 +6,7 @@ from django.utils import timezone
 from intake.messages import CAPTION_LIMIT
 from intake.telegram_api import keyboard
 from marketing.models import Draft
-from marketing.text import clip
+from marketing.text import clip, tg_len
 from marketing.timeutil import kst_today
 
 TEXT_LIMIT = 4096
@@ -47,12 +47,28 @@ def kit_buttons(proposal, drafts):
     return keyboard(rows)
 
 
+# 버튼 바로 위에 두는 안내: 누르면 무엇이 되는지 운영진이 누르기 전에 알게(2026-09-30 사용자)
+GUIDE_POSTED = '[올렸어요] 올린 뒤 누르면 기록해 두고, 2주쯤 뒤 반응을 브리핑에 알려 드려요'
+GUIDE_EDIT = '[고치기] 이 메시지에 답장으로 고칠 점을 적으면 다시 써 드려요'
+GUIDE_LATER = '[다음에] 이번엔 쓰지 않을 때 눌러 주세요'
+PLACES_HEAD = '알리면 좋을 곳'
+
+
+def _button_guide(channel):
+    posted = [] if channel in (Draft.LINKS, Draft.SHORT) else [GUIDE_POSTED]  # draft_buttons와 같은 기준
+    return '\n'.join(posted + [GUIDE_EDIT, GUIDE_LATER])
+
+
 def draft_text(draft, note=''):
-    head = INTRO[draft.channel] + (f' (고친 글 {draft.version})' if draft.version > 1 else '')
+    intro = INTRO[draft.channel]
+    if draft.channel == Draft.LETTER and not draft.body.startswith(PLACES_HEAD):
+        intro = '보낼 글이에요.'  # 보낼 곳 목록이 없는 편지에 '알리면 좋을 곳과'라고 하지 않는다
+    head = intro + (f' (고친 글 {draft.version})' if draft.version > 1 else '')
     if note:
         head += '\n' + note
     body = (draft.title + '\n\n' if draft.title else '') + draft.body
-    return clip(head + '\n\n' + body, TEXT_LIMIT)
+    guide = _button_guide(draft.channel)
+    return clip(head + '\n\n' + body, TEXT_LIMIT - tg_len(guide) - 2) + '\n\n' + guide
 
 
 def draft_buttons(draft):

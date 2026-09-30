@@ -77,6 +77,17 @@ class PromptTest(SimpleTestCase):
             self.assertTrue(p.startswith(prompts.VOICE))
             self.assertIn('웹 검색', p)
 
+    def test_briefing_prompt_asks_for_four_items_and_named_personal_accounts(self):
+        """2026-09-30 사용자: '최대 4개'면 3개에서 멈췄고, '개인 계정'은 누구의 어떤 계정인지 헷갈린다."""
+        self.assertIn('4개를 고르고', prompts.BRIEFING_SYSTEM)
+        self.assertNotIn('최대 3개', prompts.BRIEFING_SYSTEM)
+        self.assertIn("'대표님 페이스북'", prompts.BRIEFING_SYSTEM)
+        self.assertIn('"to"', prompts.BRIEFING_SYSTEM)  # 편지면 보낼 곳
+
+    def test_voice_does_not_announce_that_a_memorial_post_sells_nothing(self):
+        """2026-09-30 사용자: 10월항쟁 글의 '무엇을 권하려는 글이 아닙니다'가 오히려 꾸민 말처럼 읽힌다."""
+        self.assertIn('권하려는 글이 아닙니다', prompts.VOICE)
+
     def test_build_kit_user_mentions_blog_status_and_hooks(self):
         book = SimpleNamespace(title='책', subtitle='', published_date=date(2026, 8, 21), page_count=132,
                                full_price=12000, description='소개', short_description='')
