@@ -4,11 +4,10 @@ from unittest import mock
 from django.test import TestCase, override_settings
 
 from intake.models import TelegramChat, WorkerState
-from intake.telegram_api import plain_text
 from marketing import messages
 from marketing.bot import KIT_DAILY_CAP, Marketing
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, Proposal, WatchQuery
-from marketing.tests.fakes import FakeLLM, FakeTG, make_book
+from marketing.tests.fakes import FakeLLM, FakeTG, make_book, tg_message
 from marketing.timeutil import KST
 
 ADMIN, GROUP = 100, -200
@@ -604,13 +603,23 @@ class MomentCommandTest(TestCase):
         self.assertEqual(self.last(), '새로 찾은 계기가 없어요')
 
 
-def hub_cb(message_id=555, text='', caption=''):
+def hub_cb(message_id=555, text='', caption='', entities=None, caption_entities=None):
     m = {'message_id': message_id, 'chat': {'id': GROUP}}
     if text:
         m['text'] = text
     if caption:
         m['caption'] = caption
+    if entities:
+        m['entities'] = entities
+    if caption_entities:
+        m['caption_entities'] = caption_entities
     return {'id': 'q', 'from': {'first_name': '검수자A'}, 'message': m}
+
+
+def html_hub_cb(message_id, html_text):
+    """HTML 허브(브리핑·주중 제안)를 누른 콜백: 텔레그램처럼 서식 없는 글 + 굵게 entities."""
+    text, entities = tg_message(html_text)
+    return hub_cb(message_id, text=text, entities=entities)
 
 
 def briefing_with(book, n=2):
@@ -640,16 +649,29 @@ class HubFlowTest(TestCase):
 
     def test_briefing_item_is_sent_body_only_under_a_quote_of_its_line(self):
         b, ps = briefing_with(self.book)
-        hub = plain_text(messages.briefing_text(b.week_start, ps))  # 텔레그램은 서식을 뺀 글(과 entities)을 돌려준다
-        answer = self.m().handle_callback(f'mk:b:{ps[1].id}', GROUP, hub_cb(900, text=hub), '검수자A')
+        cq = html_hub_cb(900, messages.briefing_text(b.week_start, ps))
+        answer = self.m().handle_callback(f'mk:b:{ps[1].id}', GROUP, cq, '검수자A')
         sent = self.tg.sent('send')[0]
         self.assertEqual((sent['text'], sent['reply_to'], sent['quote']), ('글 2', 900, '2. 항목 2'))
+        # 굵게 줄은 서식까지 같이 인용해야 텔레그램이 받아 준다(2026-09-30 확인: 글만 보내면 QUOTE_TEXT_INVALID)
+        self.assertEqual(sent['quote_entities'], [{'type': 'bold', 'offset': 0, 'length': 7}])
         self.assertEqual(answer, '2번 인스타 글을 보냈어요')
+
+    def test_midweek_item_quote_carries_its_bold(self):
+        ps = [Proposal.objects.create(kind=Proposal.NOW, book=self.book, headline=f'『책』 🌱 소식 {i}', reason='이유',
+                                      rank=i, chat_id=GROUP, message_id=700, status=Proposal.SHOWN) for i in (1, 2)]
+        for p in ps:
+            Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body=f'주중 {p.rank}')
+        self.m().handle_callback(f'mk:b:{ps[1].id}', GROUP, html_hub_cb(700, messages.midweek_text(ps)), 'x')
+        sent = self.tg.sent('send')[0]
+        self.assertEqual((sent['quote'], sent['quote_entities']),
+                         ('2. 『책』 🌱 소식 2', [{'type': 'bold', 'offset': 0, 'length': 14}]))
 
     def test_quote_is_left_out_when_the_hub_line_is_missing(self):
         b, ps = briefing_with(self.book)
         self.m().handle_callback(f'mk:b:{ps[0].id}', GROUP, hub_cb(900, text='이번 주 홍보 제안\n\n1. 다른 제목…'), 'x')
-        self.assertIsNone(self.tg.sent('send')[0]['quote'])
+        sent = self.tg.sent('send')[0]
+        self.assertEqual((sent['quote'], sent['quote_entities']), (None, None))
 
     def test_kit_view_quotes_the_caption_bullet(self):
         p = kit(self.book)
@@ -657,8 +679,18 @@ class HubFlowTest(TestCase):
         caption = '『책』 홍보 자료를 만들어 두었어요.\n\n준비된 것\n· 인스타 글\n· 서점 링크 공지'
         answer = self.m().handle_callback(f'mk:v:{d.id}', GROUP, hub_cb(555, caption=caption), 'x')
         sent = self.tg.sent('send')[0]
-        self.assertEqual((sent['text'], sent['quote']), ('인스타 본문', '· 인스타 글'))
+        self.assertEqual((sent['text'], sent['quote'], sent['quote_entities']), ('인스타 본문', '· 인스타 글', None))
         self.assertEqual(answer, '인스타 글을 보냈어요')
+
+    def test_rest_of_kit_quotes_each_caption_bullet_with_its_formatting(self):
+        p = kit(self.book)
+        caption = '『책』 홍보 자료를 만들어 두었어요.\n\n준비된 것\n· 인스타 글\n· 서점 링크 공지'
+        start = len(caption) - len('· 서점 링크 공지')  # 한글·기호만이라 UTF-16 길이와 같다
+        cq = hub_cb(555, caption=caption, caption_entities=[{'type': 'italic', 'offset': start, 'length': 10}])
+        self.m().handle_callback(f'mk:m:{p.id}', GROUP, cq, 'x')
+        sent = self.tg.sent('send')[0]
+        self.assertEqual((sent['text'], sent['quote'], sent['quote_entities']),
+                         ('링크', '· 서점 링크 공지', [{'type': 'italic', 'offset': 0, 'length': 10}]))
 
     def test_posted_marks_the_newest_version_and_redraws_the_hub_without_a_new_message(self):
         b, ps = briefing_with(self.book)
@@ -700,13 +732,14 @@ class HubFlowTest(TestCase):
         b, ps = briefing_with(self.book, n=1)
         Draft.objects.filter(proposal=ps[0]).update(channel=Draft.LETTER, title='부탁드립니다', body='안녕하세요.',
                                                     extra={'places': ['농민회', '생협']})
-        hub = plain_text(messages.briefing_text(b.week_start, ps))
         m = self.m({'title': '부탁드립니다', 'body': '안녕하십니까.', 'note': '인사를 바꿨어요'})
-        m.handle_callback(f'mk:b:{ps[0].id}', GROUP, hub_cb(900, text=hub), 'x')
+        m.handle_callback(f'mk:b:{ps[0].id}', GROUP, html_hub_cb(900, messages.briefing_text(b.week_start, ps)), 'x')
         places, letter = self.tg.sent('send')
         self.assertEqual(places['text'], '알리면 좋을 곳\n· 농민회\n· 생협')
         self.assertEqual(letter['text'], '부탁드립니다\n\n안녕하세요.')
         self.assertEqual((places['quote'], letter['quote']), ('1. 항목 1', '1. 항목 1'))
+        bold = [{'type': 'bold', 'offset': 0, 'length': 7}]
+        self.assertEqual((places['quote_entities'], letter['quote_entities']), (bold, bold))
         places_id = self.tg.next_id - 1
         self.assertTrue(m.owns_message(GROUP, places_id))
         m.handle_reply(GROUP, places_id, {'message_id': 77}, '더 정중하게요', '검수자A')

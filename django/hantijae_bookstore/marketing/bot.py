@@ -333,13 +333,13 @@ class Marketing:
             WorkerState.put('moment_week_notice', wk.isoformat())
             self.host.notify_admin('ℹ️ 이번 주 주중 제안이 두 번째예요. 너무 잦으면 /moment midweek 로 조정하세요')
 
-    def _send_draft(self, draft, chat_id, reply_to=None, quote=None):
+    def _send_draft(self, draft, chat_id, reply_to=None, quote=None, quote_entities=None):
         places = messages.places_text(draft)
         if places:  # 편지: 보낼 곳을 먼저 짧게(올릴 글이 아니라 본문에서 뺐다). 여기에 단 답장도 편지 고치기로 간다
-            sent = self.tg.send_message(chat_id, places, reply_to=reply_to, quote=quote)
+            sent = self.tg.send_message(chat_id, places, reply_to=reply_to, quote=quote, quote_entities=quote_entities)
             DraftMessage.objects.create(draft=draft, chat_id=chat_id, message_id=sent['message_id'])
         sent = self.tg.send_message(chat_id, messages.draft_text(draft), reply_to=reply_to, quote=quote,
-                                    buttons=messages.draft_buttons(draft))
+                                    quote_entities=quote_entities, buttons=messages.draft_buttons(draft))
         Draft.objects.filter(pk=draft.pk).update(chat_id=chat_id, message_id=sent['message_id'])  # 마지막 사본
         DraftMessage.objects.create(draft=draft, chat_id=chat_id, message_id=sent['message_id'])
 
@@ -388,7 +388,8 @@ class Marketing:
             if not d:
                 return ''
             cur, note = self._current(d.proposal, d.channel)
-            self._send_draft(cur, chat_id, reply_to=here, quote=messages.kit_line(hub_text, d.channel))
+            quote, ents = messages.quote_for(here_msg, messages.kit_line(hub_text, d.channel))
+            self._send_draft(cur, chat_id, reply_to=here, quote=quote, quote_entities=ents)
             return messages.sent_toast(None, cur, note)
         if action == 'b':
             p = Proposal.objects.filter(pk=pk).first()
@@ -396,8 +397,9 @@ class Marketing:
             if not newest:
                 return ''
             cur, note = self._current(p, newest.channel)
-            line = messages.item_line(hub_text, p.headline)
-            self._send_draft(cur, chat_id, reply_to=here, quote=line)
+            line = messages.item_line(hub_text, p.headline)  # 텔레그램이 돌려준 글은 서식이 빠져 있어 그대로 찾는다
+            quote, ents = messages.quote_for(here_msg, line)
+            self._send_draft(cur, chat_id, reply_to=here, quote=quote, quote_entities=ents)
             return messages.sent_toast(messages.line_number(line), cur, note)
         if action == 'm':
             p = Proposal.objects.filter(pk=pk).first()
@@ -409,7 +411,8 @@ class Marketing:
             for d in p.drafts.filter(channel__in=(Draft.LINKS, Draft.SHORT, Draft.LETTER), parent__isnull=True).order_by('id'):
                 cur, note = self._current(p, d.channel)
                 notes.append(note)
-                self._send_draft(cur, chat_id, reply_to=here, quote=messages.kit_line(hub_text, d.channel))
+                quote, ents = messages.quote_for(here_msg, messages.kit_line(hub_text, d.channel))
+                self._send_draft(cur, chat_id, reply_to=here, quote=quote, quote_entities=ents)
             return '나머지 글을 보냈어요' + (' · 노션에서 고친 글이 있어요' if 'notion' in notes else '')
         if action == 'p':
             d = Draft.objects.filter(pk=pk).select_related('proposal').first()

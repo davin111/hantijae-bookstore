@@ -108,6 +108,51 @@ class MessagesTest(SimpleTestCase):
         self.assertEqual(messages.kit_line(cap, Draft.BLOG), '· 네이버 블로그 글')
         self.assertIsNone(messages.kit_line(cap, Draft.LINKS))
 
+    def test_quote_for_plain_hub_has_no_entities(self):
+        msg = {'text': '이번 주 홍보 제안\n\n1. 항목 1\n이유'}
+        self.assertEqual(messages.quote_for(msg, '1. 항목 1'), ('1. 항목 1', None))
+
+    def test_quote_for_takes_only_the_bold_over_that_line(self):
+        """굵게 줄을 인용할 때는 그 줄에 걸친 서식을 줄 기준 위치로 옮겨 같이 보내야 한다(2026-09-30 확인)."""
+        text = '이번 주 홍보 제안 (9월 28일 ~ 10월 4일)\n\n1. 항목 1\n이유\n\n2. 항목 2\n이유'
+        msg = {'text': text, 'entities': [
+            {'type': 'bold', 'offset': 0, 'length': 10},                      # 제목
+            {'type': 'bold', 'offset': 30, 'length': 7},                      # 1. 항목 1
+            {'type': 'bold', 'offset': 42, 'length': 7},                      # 2. 항목 2
+            {'type': 'url', 'offset': 42, 'length': 3},                       # 인용 서식이 아닌 것은 뺀다
+        ]}
+        self.assertEqual(text[42:49], '2. 항목 2')
+        self.assertEqual(messages.quote_for(msg, '2. 항목 2'),
+                         ('2. 항목 2', [{'type': 'bold', 'offset': 0, 'length': 7}]))
+
+    def test_quote_for_clips_entities_to_the_line(self):
+        msg = {'text': '머리\n1. 항목 1\n다음 줄', 'entities': [{'type': 'italic', 'offset': 6, 'length': 8},
+                                                           {'type': 'bold', 'offset': 0, 'length': 5}]}
+        self.assertEqual(messages.quote_for(msg, '1. 항목 1'),
+                         ('1. 항목 1', [{'type': 'italic', 'offset': 3, 'length': 4},
+                                      {'type': 'bold', 'offset': 0, 'length': 2}]))
+
+    def test_quote_for_counts_utf16_units(self):
+        """🎉·🌱는 UTF-16으로 2칸. 텔레그램의 offset·length는 UTF-16 단위다."""
+        msg = {'text': '🎉\n2. 『책』 🌱 새싹', 'entities': [{'type': 'bold', 'offset': 13, 'length': 2},
+                                                     {'type': 'custom_emoji', 'offset': 10, 'length': 2,
+                                                      'custom_emoji_id': '42'}]}
+        self.assertEqual(messages.quote_for(msg, '2. 『책』 🌱 새싹'),
+                         ('2. 『책』 🌱 새싹', [{'type': 'bold', 'offset': 10, 'length': 2},
+                                          {'type': 'custom_emoji', 'offset': 7, 'length': 2, 'custom_emoji_id': '42'}]))
+
+    def test_quote_for_reads_captions(self):
+        msg = {'caption': '준비된 것\n· 인스타 글', 'caption_entities': [{'type': 'bold', 'offset': 6, 'length': 6}],
+               'entities': [{'type': 'bold', 'offset': 0, 'length': 3}]}
+        self.assertEqual(messages.quote_for(msg, '· 인스타 글'), ('· 인스타 글', [{'type': 'bold', 'offset': 0, 'length': 6}]))
+
+    def test_quote_for_missing_line(self):
+        msg = {'text': '1. 항목 1', 'entities': [{'type': 'bold', 'offset': 0, 'length': 7}]}
+        self.assertEqual(messages.quote_for(msg, '2. 항목 2'), (None, None))
+        self.assertEqual(messages.quote_for(msg, None), (None, None))
+        self.assertEqual(messages.quote_for({}, '1. 항목 1'), (None, None))
+        self.assertEqual(messages.quote_for(msg, '1. 항목'), (None, None))  # 줄 일부는 줄이 아니다
+
     def test_toasts_pick_the_right_particle(self):
         self.assertEqual(messages.sent_toast(2, draft(1, Draft.INSTAGRAM)), '2번 인스타 글을 보냈어요')
         self.assertEqual(messages.sent_toast(None, draft(1, Draft.LINKS)), '서점 링크 공지를 보냈어요')

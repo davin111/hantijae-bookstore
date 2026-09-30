@@ -173,6 +173,33 @@ def kit_line(hub_text, channel):
     return line if line in (hub_text or '').split('\n') else None
 
 
+# 인용이 서식까지 맞아야 하는 종류(텔레그램 reply_parameters.quote_entities). 링크·멘션 같은 것은 보내지 않는다
+QUOTE_ENTITY_TYPES = ('bold', 'italic', 'underline', 'strikethrough', 'spoiler', 'custom_emoji')
+
+
+def quote_for(message, line):
+    """(인용할 줄, 그 줄의 서식) — message는 콜백의 cq['message'](텔레그램이 서식을 뺀 text/caption과 entities를 준다).
+    HTML 허브의 굵게 줄은 글만 인용하면 거절되므로(QUOTE_TEXT_INVALID, 2026-09-30 확인) 그 줄에 걸친 서식을 줄 기준
+    위치(UTF-16)로 옮겨 같이 보낸다. 서식이 없으면 (줄, None), 줄이 없으면 (None, None)."""
+    text = message.get('text') or message.get('caption') or ''
+    entities = message.get('entities') if message.get('text') else message.get('caption_entities')
+    if not line:
+        return None, None
+    pos = 0
+    for piece in text.split('\n'):
+        if piece == line:
+            start = tg_len(text[:pos])
+            end = start + tg_len(line)
+            out = []
+            for e in entities or ():
+                a, b = max(e['offset'], start), min(e['offset'] + e['length'], end)
+                if e.get('type') in QUOTE_ENTITY_TYPES and a < b:
+                    out.append({**e, 'offset': a - start, 'length': b - a})
+            return line, out or None
+        pos += len(piece) + 1
+    return None, None
+
+
 def _obj(word):
     """목적격 조사: 받침이 있으면 '을', 없으면 '를'."""
     code = ord(word[-1]) - 0xAC00 if word else -1

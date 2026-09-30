@@ -1,4 +1,6 @@
+import html
 import json
+import re
 from datetime import date
 
 import requests
@@ -37,6 +39,23 @@ class FakeTG:
 
     def sent(self, kind=None):
         return [c for c in self.calls if kind is None or c['kind'] == kind]
+
+
+def tg_message(html_text):
+    """텔레그램이 parse_mode=HTML 메시지를 돌려주는 모양: (서식 없는 text, 굵게 entities). 길이·위치는 UTF-16 단위.
+    이 모듈이 쓰는 <b>만 안다(다른 태그면 시험이 먼저 알게 멈춘다)."""
+    from marketing.text import tg_len
+    text, entities, start = '', [], None
+    for part in re.split(r'(<[^>]+>)', html_text):
+        if part == '<b>':
+            start = tg_len(text)
+        elif part == '</b>':
+            entities.append({'type': 'bold', 'offset': start, 'length': tg_len(text) - start})
+        elif part.startswith('<'):
+            raise ValueError(f'tg_message: unknown tag {part}')
+        else:
+            text += html.unescape(part)
+    return text, entities
 
 
 class FakeLLM:

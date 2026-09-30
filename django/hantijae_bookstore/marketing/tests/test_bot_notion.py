@@ -3,12 +3,11 @@ from datetime import date, datetime
 from django.test import TestCase, override_settings
 
 from intake.models import TelegramChat, WorkerState
-from intake.telegram_api import plain_text
 from marketing import messages
 from marketing import notion_sync as ns
 from marketing.bot import Marketing
 from marketing.models import Briefing, Draft, Proposal
-from marketing.tests.fakes import FakeLLM, FakeNotion, FakeTG, make_book
+from marketing.tests.fakes import FakeLLM, FakeNotion, FakeTG, make_book, tg_message
 from marketing.timeutil import KST
 
 ADMIN, GROUP = 100, -200
@@ -84,10 +83,11 @@ class BotNotionTest(TestCase):
         self.m().send_briefing(b, DAY)
         box = Draft.objects.get(proposal=p).notion['box']
         self.fake.edit(self.fake.kids[box][0], '노션에서 고친 글 1')
-        hub = plain_text(messages.briefing_text(b.week_start, [p]))  # 텔레그램이 돌려주는 글은 서식이 빠져 있다
-        cq = {'id': 'q', 'message': {'message_id': 1001, 'chat': {'id': GROUP}, 'text': hub}}
+        hub, entities = tg_message(messages.briefing_text(b.week_start, [p]))  # 텔레그램이 돌려주는 모양
+        cq = {'id': 'q', 'message': {'message_id': 1001, 'chat': {'id': GROUP}, 'text': hub, 'entities': entities}}
         answer = self.m().handle_callback(f'mk:b:{p.id}', GROUP, cq, 'x')
         self.assertEqual(self.tg.sent('send')[-1]['text'], '노션에서 고친 글 1')
+        self.assertEqual(self.tg.sent('send')[-1]['quote_entities'], [{'type': 'bold', 'offset': 0, 'length': 7}])
         self.assertEqual(answer, '1번 인스타 글을 보냈어요 · 노션에서 고친 글이에요')
 
     def test_posted_records_the_notion_text_and_marks_the_page(self):
