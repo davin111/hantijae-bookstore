@@ -176,14 +176,14 @@ class MeasureTest(TestCase):
                          '지난번 보낸 『나는 산속으로 더 깊이 들어간다』 글(한티재 페북 페이지) ― 판매 지수 455 → 520 (2주 뒤)')
 
     def test_build_weekly_clips_long_measure_line(self):
-        book = make_book(title='가' * 400)
+        book = make_book(title='가' * 800)
         p = Proposal.objects.create(kind=Proposal.KIT, book=book, headline='x')
         Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='b', status=Draft.POSTED,
                              posted_at=datetime(2026, 9, 10, 10, 0, tzinfo=KST))
         SalesSnapshot.objects.create(book=book, date=date(2026, 9, 10), sales_point=455)
         SalesSnapshot.objects.create(book=book, date=date(2026, 9, 25), sales_point=520)
         b, _ = build_weekly(FakeLLM({'items': []}), TODAY, datetime(2026, 9, 28, 7, 0, tzinfo=KST), posts=[])
-        self.assertLessEqual(len(b.measure), 600)
+        self.assertEqual(len(b.measure), 600)
 
     def test_measure_line_empty_before_two_weeks(self):
         book = make_book()
