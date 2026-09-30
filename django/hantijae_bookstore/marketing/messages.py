@@ -77,9 +77,11 @@ def draft_buttons(draft):
     return keyboard([[('올렸어요', cb('p', draft.id)), ('고치기', cb('e', draft.id)), ('다음에', cb('l', draft.id))]])
 
 
-def briefing_text(week_start, proposals, measure='', grants=()):
+def briefing_text(week_start, proposals, measure='', grants=(), sales=''):
     end = week_start + timedelta(days=6)
     lines = [f'이번 주 홍보 제안 ({week_start.month}월 {week_start.day}일 ~ {end.month}월 {end.day}일)']
+    if sales:  # 전산망 최근 7일 판매 한 줄(bnk_sales.sales_line) — 보내는 때 계산해 넘긴다
+        lines += ['', sales]
     for i, p in enumerate(proposals, 1):
         lines += ['', f'{i}. {p.headline}', p.reason]
         extra = getattr(p, 'extra', None) or {}
