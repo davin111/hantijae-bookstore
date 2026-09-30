@@ -10,7 +10,7 @@ from marketing.models import Draft
 
 def draft(pk, channel, body='본문', title='', version=1, extra=None):
     return SimpleNamespace(id=pk, channel=channel, body=body, title=title, version=version, extra=extra or {},
-                           label=dict(Draft.CHANNEL_CHOICES)[channel])
+                           label=Draft(channel=channel).label)
 
 
 class MessagesTest(SimpleTestCase):
@@ -68,11 +68,15 @@ class MessagesTest(SimpleTestCase):
         cap = messages.kit_caption(book, [draft(1, Draft.INSTAGRAM)], [], True, today=date(2026, 9, 28))
         self.assertTrue(cap.endswith(messages.KIT_GUIDE))
 
-    def test_guide_survives_a_long_briefing(self):
+    def test_long_briefing_keeps_its_tags_and_one_guide_at_the_end(self):
+        """HTML 허브 글은 자르지 않는다(태그가 잘리지 않게) — 너무 길면 텔레그램 쪽이 일반 글로 보낸다(main의 방식)."""
         ps = [SimpleNamespace(id=i, headline=f'항목 {i}', reason='가' * 1500) for i in range(1, 5)]
         text = messages.briefing_text(date(2026, 9, 28), ps)
-        self.assertLessEqual(tg_len(text), messages.TEXT_LIMIT)
-        self.assertTrue(text.endswith(messages.BRIEF_GUIDE))
+        self.assertGreater(tg_len(text), messages.TEXT_LIMIT)
+        self.assertIn('<b>4. 항목 4</b>\n' + '가' * 1500, text)
+        self.assertEqual((text.count('<b>'), text.count('</b>')), (5, 5))
+        self.assertTrue(text.endswith('\n\n' + messages.BRIEF_GUIDE))
+        self.assertEqual(text.count(messages.BRIEF_GUIDE), 1)
 
     def test_buttons_follow_states_and_carry_the_notion_link(self):
         ps = [SimpleNamespace(id=i) for i in (1, 2, 3)]
@@ -87,7 +91,11 @@ class MessagesTest(SimpleTestCase):
         self.assertEqual([b['text'] for row in no_link['inline_keyboard'] for b in row], ['1번 글 보기', '넘기기'])
         kit_kb = messages.kit_buttons(SimpleNamespace(id=7), [draft(1, Draft.BLOG), draft(2, Draft.INSTAGRAM)],
                                       {Draft.BLOG: messages.POSTED})
-        self.assertEqual([b['text'] for b in kit_kb['inline_keyboard'][0]], ['블로그 ✅ 올림', '인스타 글 보기'])
+        self.assertEqual([b['text'] for b in kit_kb['inline_keyboard'][0]], ['네이버 블로그 ✅ 올림', '인스타 글 보기'])
+        kit_open = messages.kit_buttons(SimpleNamespace(id=7), [draft(1, Draft.BLOG)], {})
+        self.assertEqual(kit_open['inline_keyboard'][0][0]['text'], '네이버 블로그 글 보기')
+        kit_skip = messages.kit_buttons(SimpleNamespace(id=7), [draft(1, Draft.BLOG)], {Draft.BLOG: messages.SKIPPED})
+        self.assertEqual(kit_skip['inline_keyboard'][0][0]['text'], '네이버 블로그 넘김')
 
     def test_quote_lines(self):
         hub = '이번 주 홍보 제안\n\n1. 『시월』 ― 항쟁\n이유\n\n2. 다른 것\n이유'
@@ -95,15 +103,18 @@ class MessagesTest(SimpleTestCase):
         self.assertIsNone(messages.item_line(hub, '없는 제목'))
         self.assertEqual(messages.line_number('2. 다른 것'), 2)
         self.assertIsNone(messages.line_number(None))
-        cap = '준비된 것\n· 블로그 글\n· 인스타 글'
+        cap = '준비된 것\n· 네이버 블로그 글\n· 인스타 글'
         self.assertEqual(messages.kit_line(cap, Draft.INSTAGRAM), '· 인스타 글')
+        self.assertEqual(messages.kit_line(cap, Draft.BLOG), '· 네이버 블로그 글')
         self.assertIsNone(messages.kit_line(cap, Draft.LINKS))
 
     def test_toasts_pick_the_right_particle(self):
         self.assertEqual(messages.sent_toast(2, draft(1, Draft.INSTAGRAM)), '2번 인스타 글을 보냈어요')
         self.assertEqual(messages.sent_toast(None, draft(1, Draft.LINKS)), '서점 링크 공지를 보냈어요')
         self.assertEqual(messages.sent_toast(None, draft(1, Draft.SHORT)), '짧은 소개를 보냈어요')
-        self.assertEqual(messages.sent_toast(1, draft(1, Draft.BLOG), 'notion'), '1번 블로그 글을 보냈어요 · 노션에서 고친 글이에요')
+        self.assertEqual(messages.sent_toast(1, draft(1, Draft.BLOG), 'notion'),
+                         '1번 네이버 블로그 글을 보냈어요 · 노션에서 고친 글이에요')
+        self.assertEqual(messages.sent_toast(None, draft(1, Draft.BLOG)), '네이버 블로그 글을 보냈어요')
         self.assertIn('비어 있어', messages.sent_toast(1, draft(1, Draft.BLOG), 'empty'))
         self.assertEqual(messages.rewrite_done('첫 줄을 줄였어요'), '고쳤어요: 첫 줄을 줄였어요')
         self.assertEqual(messages.rewrite_done(''), '고쳤어요.')
@@ -126,5 +137,8 @@ class MessagesTest(SimpleTestCase):
 
 class NaverBlogWordingTest(SimpleTestCase):
     def test_blog_draft_is_called_naver_blog(self):
-        self.assertTrue(messages.draft_text(draft(1, Draft.BLOG, body='본문')).startswith('네이버 블로그 글이에요.'))
+        # 초안 메시지는 올릴 글만(머리말 없음) — '네이버 블로그'는 허브 줄·버튼·알림에서 보인다
+        self.assertEqual(messages.draft_text(draft(1, Draft.BLOG, body='본문')), '본문')
         self.assertEqual(Draft(channel=Draft.BLOG).label, '네이버 블로그 글')
+        self.assertEqual(messages.KIT_BULLET[Draft.BLOG], '네이버 블로그 글')
+        self.assertEqual(messages.sent_toast(None, draft(1, Draft.BLOG)), '네이버 블로그 글을 보냈어요')

@@ -4,6 +4,7 @@ from unittest import mock
 from django.test import TestCase, override_settings
 
 from intake.models import TelegramChat, WorkerState
+from intake.telegram_api import plain_text
 from marketing import messages
 from marketing.bot import KIT_DAILY_CAP, Marketing
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, Proposal, WatchQuery
@@ -639,7 +640,7 @@ class HubFlowTest(TestCase):
 
     def test_briefing_item_is_sent_body_only_under_a_quote_of_its_line(self):
         b, ps = briefing_with(self.book)
-        hub = messages.briefing_text(b.week_start, ps)
+        hub = plain_text(messages.briefing_text(b.week_start, ps))  # 텔레그램은 서식을 뺀 글(과 entities)을 돌려준다
         answer = self.m().handle_callback(f'mk:b:{ps[1].id}', GROUP, hub_cb(900, text=hub), '검수자A')
         sent = self.tg.sent('send')[0]
         self.assertEqual((sent['text'], sent['reply_to'], sent['quote']), ('글 2', 900, '2. 항목 2'))
@@ -699,7 +700,7 @@ class HubFlowTest(TestCase):
         b, ps = briefing_with(self.book, n=1)
         Draft.objects.filter(proposal=ps[0]).update(channel=Draft.LETTER, title='부탁드립니다', body='안녕하세요.',
                                                     extra={'places': ['농민회', '생협']})
-        hub = messages.briefing_text(b.week_start, ps)
+        hub = plain_text(messages.briefing_text(b.week_start, ps))
         m = self.m({'title': '부탁드립니다', 'body': '안녕하십니까.', 'note': '인사를 바꿨어요'})
         m.handle_callback(f'mk:b:{ps[0].id}', GROUP, hub_cb(900, text=hub), 'x')
         places, letter = self.tg.sent('send')
@@ -751,4 +752,5 @@ class HubFlowTest(TestCase):
         self.assertEqual(b.shown, [p1.id])
         sent = self.tg.sent('send')[0]
         self.assertTrue(sent['text'].endswith(messages.BRIEF_GUIDE))
+        self.assertTrue(sent['html'])  # main의 HTML 서식과 상황판 버튼이 함께 간다
         self.assertEqual(self.labels(sent)[0], '1번 ✅ 올림')

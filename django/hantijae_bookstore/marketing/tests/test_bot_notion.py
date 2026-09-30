@@ -3,6 +3,7 @@ from datetime import date, datetime
 from django.test import TestCase, override_settings
 
 from intake.models import TelegramChat, WorkerState
+from intake.telegram_api import plain_text
 from marketing import messages
 from marketing import notion_sync as ns
 from marketing.bot import Marketing
@@ -53,6 +54,7 @@ class BotNotionTest(TestCase):
         b.refresh_from_db()
         sent = self.tg.sent('send')[0]
         self.assertEqual(sent['buttons']['inline_keyboard'][-1][0]['url'], b.notion['url'])
+        self.assertTrue(sent['html'])
         blue = next(iter(self.fake.blocks.values()))
         self.assertNotIn(messages.BRIEF_GUIDE, blue['callout']['rich_text'][0]['text']['content'])  # 노션엔 안내 줄 없이
 
@@ -82,7 +84,7 @@ class BotNotionTest(TestCase):
         self.m().send_briefing(b, DAY)
         box = Draft.objects.get(proposal=p).notion['box']
         self.fake.edit(self.fake.kids[box][0], '노션에서 고친 글 1')
-        hub = messages.briefing_text(b.week_start, [p])
+        hub = plain_text(messages.briefing_text(b.week_start, [p]))  # 텔레그램이 돌려주는 글은 서식이 빠져 있다
         cq = {'id': 'q', 'message': {'message_id': 1001, 'chat': {'id': GROUP}, 'text': hub}}
         answer = self.m().handle_callback(f'mk:b:{p.id}', GROUP, cq, 'x')
         self.assertEqual(self.tg.sent('send')[-1]['text'], '노션에서 고친 글 1')
