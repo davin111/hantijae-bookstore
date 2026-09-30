@@ -77,6 +77,12 @@ class InputTest(TestCase):
                                            heading='『책』 · 12/17 통화', text='저자가 10월 강연')
         self.assertEqual(M.line(note), f'[#{note.id} 노션 · 『책』 · 12/17 통화 · 9/28 수정]\n저자가 10월 강연')
 
+    def test_line_shows_what_the_bot_read_from_a_link(self):
+        e = entry(1, '박강수 방송. https://youtu.be/SmBkSfcS8nM', role='운영진C',
+                  link_text='[유튜브] 「두 번째 무대」 · EBS 다큐 · 2026-09-29 공개\n설명: 9월 11일 방송')
+        self.assertEqual(M.line(e), f'[#{e.id} 9/29(화) 10:01 운영진C] 박강수 방송. https://youtu.be/SmBkSfcS8nM '
+                                    '[링크 내용] [유튜브] 「두 번째 무대」 · EBS 다큐 · 2026-09-29 공개 / 설명: 9월 11일 방송')
+
     def test_chunks_split_by_size(self):
         es = [entry(i, '가' * 40) for i in range(1, 6)]
         parts = M.chunks(es, limit=150)
@@ -152,6 +158,14 @@ class RunTest(TestCase):
                                    new_item([e.id], title='강연', summary='2026-10-02 금요일에 강연한다.')]})
         self.assertEqual([s.title for s in r.new], ['강연'])
         self.assertIn('자료에 없는 숫자 300', r.dropped[0])
+
+    def test_numbers_and_dates_read_from_a_link_count_as_evidence(self):
+        e = entry(1, '이런 것도 홍보 소재가 될까? https://youtu.be/SmBkSfcS8nM',
+                  link_text='[유튜브] 「두 번째 무대」 · EBS 다큐 · 2026-09-29 공개 · 조회 수 658,084회')
+        r = self.run_with({'new': [new_item([e.id], type='media', title='저자 방송 영상 조회 수 658,084회',
+                                            summary='9월 29일 공개된 방송 영상이 퍼지는 중.', date_='', date_text='')]})
+        self.assertEqual([s.title for s in r.new], ['저자 방송 영상 조회 수 658,084회'])
+        self.assertEqual(r.dropped, [])
 
     def test_unverified_date_is_cleared_and_flagged(self):
         e = entry(1, '강연이 잡혔대요')
@@ -337,16 +351,42 @@ class DailyTest(TestCase):
         self.assertEqual((len(r.new), r.photos), (1, 3))
         self.assertIn('노션 읽기 실패: RuntimeError: notion 500', r.errors)
 
+    def test_daily_reads_youtube_links_before_extraction(self):
+        from types import SimpleNamespace
+        make_book()
+        e = entry(1, '박강수 방송 https://youtu.be/SmBkSfcS8nM')
+        llm = FakeLLM({'new': []})
+        page = ('var ytInitialPlayerResponse = {"videoDetails": {"title": "두 번째 무대", "author": "EBS 다큐", '
+                '"viewCount": "100", "shortDescription": ""}};')
+        with mock.patch.object(M.context_photos, 'read_pending', return_value=0):
+            r = M.daily(SimpleNamespace(llm=llm, tg=None, notion=None), NOW, link_get=lambda url: page)
+        e.refresh_from_db()
+        self.assertEqual(r.links, 1)
+        self.assertIn('[링크 내용] [유튜브] 「두 번째 무대」 · EBS 다큐', llm.calls[0][1])
+        self.assertIn('링크 1개', M.digest(M.Report(links=1, dropped=['x']), NOW))
+
+    def test_daily_link_failure_is_reported_and_extraction_goes_on(self):
+        from types import SimpleNamespace
+        make_book()
+        entry(1, '금요일에 강연')
+        with mock.patch.object(M.context_photos, 'read_pending', return_value=0), \
+                mock.patch.object(M.context_links, 'read_links', side_effect=RuntimeError('boom')):
+            r = M.daily(SimpleNamespace(llm=FakeLLM({'new': []}), tg=None, notion=None), NOW)
+        self.assertIn('링크 읽기 실패: RuntimeError: boom', r.errors)
+        self.assertEqual(M.pending_entries(), [])  # 추출은 그대로 했다
+
     def test_daily_dry_run_skips_writes_and_filters_by_time(self):
         from types import SimpleNamespace
         make_book()
         entry(1, '금요일에 강연', at=datetime(2026, 9, 1, 10, 0, tzinfo=KST))
         late = entry(2, '금요일에 강연', at=datetime(2026, 9, 29, 10, 0, tzinfo=KST))
         llm = FakeLLM({'new': [new_item([late.id])]})
-        with mock.patch.object(M.context_photos, 'read_pending') as read, mock.patch.object(M, 'sweep') as sweep:
+        with mock.patch.object(M.context_photos, 'read_pending') as read, mock.patch.object(M, 'sweep') as sweep, \
+                mock.patch.object(M.context_links, 'read_links') as read_links:
             r = M.daily(SimpleNamespace(llm=llm, tg=None, notion=None), NOW, since=datetime(2026, 9, 20, tzinfo=KST),
                         dry_run=True)
         read.assert_not_called()
+        read_links.assert_not_called()
         sweep.assert_not_called()
         self.assertEqual((len(r.preview), Signal.objects.count(), MomentScan.objects.count()), (1, 0, 0))
         new_part = llm.calls[0][1].split('\n<새 기록>\n')[1]

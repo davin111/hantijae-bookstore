@@ -63,11 +63,13 @@ def apply_edit(msg):
     entry = ContextEntry.objects.filter(key=_key(msg['chat']['id'], msg['message_id'])).first()
     if entry is None or entry.forgotten:
         return None
-    old_file = entry.file_id
+    old_file, old_text = entry.file_id, entry.text
     for field, value in _content(msg).items():
         setattr(entry, field, value)
     if entry.file_id != old_file:  # 사진 자체가 바뀌면 읽은 글을 버리고 다시 읽게 한다
         entry.media_text, entry.media_read_at = '', None
+    if entry.text != old_text:  # 글이 바뀌면 링크도 바뀌었을 수 있다 → 다음 계기 잡기 때 다시 읽는다
+        entry.link_text, entry.link_read_at = '', None
     entry.edited_at = _ts(msg.get('edit_date') or msg['date'])
     entry.save()
     return entry

@@ -9,7 +9,7 @@ class ContextEntryAdmin(admin.ModelAdmin):
     list_display = ['at', 'source', 'role', 'author_name', 'short_text', 'media', 'origin', 'forgotten']
     list_filter = ['source', 'role', 'origin', 'media', 'forgotten']
     actions = ['forget_selected']
-    search_fields = ['text', 'media_text', 'heading']
+    search_fields = ['text', 'media_text', 'heading', 'link_text']
     date_hierarchy = 'at'
 
     def has_add_permission(self, request):

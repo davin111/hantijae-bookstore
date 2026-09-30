@@ -9,7 +9,7 @@ DEFAULT_ROLE = '참여자'
 IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.webp')
 # /잊어·관리자 '잊기'가 비우는 칸. 키와 시각은 남겨 같은 메시지가 되살아나지 않게 한다
 FORGET_FIELDS = {'forgotten': True, 'text': '', 'media_name': '', 'file_id': '', 'redactions': {}, 'media_text': '',
-                 'heading': ''}
+                 'heading': '', 'link_text': ''}
 
 
 class ContextEntry(BaseModel):
@@ -46,6 +46,8 @@ class ContextEntry(BaseModel):
     media_text = models.TextField(blank=True, help_text='사진에서 읽은 글(가림 적용). 첫 줄에 [포스터] 같은 종류')
     media_read_at = models.DateTimeField(null=True, blank=True, help_text='사진을 읽은 시각(글자 없는 사진도)')
     media_read_tries = models.PositiveSmallIntegerField(default=0, help_text='사진 읽기에 실패한 횟수(3번이면 읽지 못함으로)')
+    link_text = models.TextField(blank=True, help_text='글 속 유튜브 링크에서 읽은 제목·채널·공개일·설명(가림 적용)')
+    link_read_at = models.DateTimeField(null=True, blank=True, help_text='링크를 읽어 본 시각(못 읽었어도)')
 
     class Meta:
         ordering = ['at']

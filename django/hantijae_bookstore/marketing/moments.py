@@ -16,11 +16,12 @@ from django.db import transaction
 from django.db.models import Count, Q
 
 from books.models import Book
-from context import notion as context_notion, photos as context_photos
+from context import links as context_links, notion as context_notion, photos as context_photos
 from context.models import ContextEntry
 from context.redact import redact
 from intake.llm import Attachment, complete_json
 from intake.models import WorkerState
+from marketing.http import http_get
 from marketing.moment_dates import date_supported, unsupported_mentions
 from marketing.models import MomentScan, Proposal, Signal, SignalEvidence
 from marketing.prompts import MOMENT_SYSTEM, build_moment_user
@@ -50,6 +51,7 @@ class Report:
     errors: List[str] = field(default_factory=list)
     photos: int = 0
     notion: int = 0
+    links: int = 0
     swept: int = 0
     left: int = 0  # 이번에 못 넣어 다음으로 넘긴 기록 수
 
@@ -92,12 +94,16 @@ def _media_part(e):
     return f'[{MEDIA_LABEL.get(e.media, e.media)}]' if e.media else ''
 
 
+def _link_part(e):
+    return '[링크 내용] ' + ' / '.join(e.link_text.splitlines()) if e.link_text else ''
+
+
 def line(e, reply_ids=None):
     """기록 한 줄. #번호는 ContextEntry 번호(= LLM이 근거로 적을 번호)."""
     if e.source == ContextEntry.NOTION:
         t = e.at.astimezone(KST)
         return f'[#{e.id} 노션 · {e.heading} · {t.month}/{t.day} 수정]\n{e.text}'
-    body = ' '.join(p for p in (_media_part(e), e.text.strip()) if p)
+    body = ' '.join(p for p in (_media_part(e), e.text.strip(), _link_part(e)) if p)
     tail = ''
     if e.reply_to_id:
         target = (reply_ids or {}).get((e.chat_id, e.origin, e.reply_to_id))
@@ -237,14 +243,14 @@ def _local_day(e):
 
 
 def _date_evidence(entries):
-    return [(' '.join([e.heading, e.text, e.media_text]), _local_day(e)) for e in entries]
+    return [(' '.join([e.heading, e.text, e.media_text, e.link_text]), _local_day(e)) for e in entries]
 
 
 def _allowed(entries, today, day):
     """지어낸 숫자 검사의 허용 자료: 근거 글 + 근거 날짜·오늘·확인된 날짜(요약의 ISO 날짜 '2026-…'이 걸리지 않게)."""
     texts = [today.isoformat()] + ([day.isoformat()] if day else [])
     for e in entries:
-        texts += [e.text, e.media_text, e.heading, _local_day(e).isoformat()]
+        texts += [e.text, e.media_text, e.link_text, e.heading, _local_day(e).isoformat()]
     return texts
 
 
@@ -596,6 +602,7 @@ def digest(report, now):
         for s in hot:
             lines.append(f'· {book_label(s)} {s.title}' + (f'\n  /quiet {s.book.title[:12]} YYYY-MM-DD 이유' if s.book else ''))
     lines.append(f'사진 {report.photos}장 · 노션 구역 {report.notion}개'
+                 + (f' · 링크 {report.links}개' if report.links else '')
                  + (f' · 남은 기록 {report.left}줄은 다음에' if report.left else ''))
     lines += [f'⚠️ {e}' for e in report.errors]
     return clip('\n'.join(lines), DIGEST_LIMIT)
@@ -611,10 +618,12 @@ def photo_ask(llm):
 
 
 # ---- 새벽 한 번 ----
-def daily(deps, now, since=None, until=None, notion=True, photos=True, max_chunks=MAX_CHUNKS, dry_run=False):
-    """정리 → 노션 구역 → 사진 읽기 → 추출. 앞 단계가 실패해도 뒤 단계는 한다(오류는 보고서에).
-    dry-run 은 아무것도 쓰지 않으므로 정리·노션·사진을 건너뛴다. since/until 은 기록 시각(at) 범위."""
+def daily(deps, now, since=None, until=None, notion=True, photos=True, max_chunks=MAX_CHUNKS, dry_run=False,
+          link_get=http_get):
+    """정리 → 노션 구역 → 사진 읽기 → 링크 읽기 → 추출. 앞 단계가 실패해도 뒤 단계는 한다(오류는 보고서에).
+    dry-run 은 아무것도 쓰지 않으므로 정리·노션·사진·링크를 건너뛴다. since/until 은 기록 시각(at) 범위."""
     report = Report()
+    links = not dry_run
     if dry_run:
         notion = photos = False
     else:
@@ -632,6 +641,12 @@ def daily(deps, now, since=None, until=None, notion=True, photos=True, max_chunk
         except Exception as e:
             log.exception('moment photo reading failed')
             report.errors.append(f'사진 읽기 실패: {type(e).__name__}: {e}')
+    if links:  # 아직 추출하지 않은 기록만 — 이미 본 기록의 링크를 읽어도 쓸 곳이 없다
+        try:
+            report.links = context_links.read_links(pending_entries(), now, link_get)
+        except Exception as e:
+            log.exception('moment link reading failed')
+            report.errors.append(f'링크 읽기 실패: {type(e).__name__}: {e}')
     entries = [e for e in pending_entries()
                if (since is None or e.at >= since) and (until is None or e.at < until)]
     return run(deps.llm, now, report=report, entries=entries, max_chunks=max_chunks, dry_run=dry_run)
