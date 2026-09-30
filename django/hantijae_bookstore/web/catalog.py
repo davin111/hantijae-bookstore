@@ -2,10 +2,10 @@
 from typing import List, Optional
 
 from django.core.paginator import EmptyPage, Paginator
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
 
 from books.constants import PUBLIC_SERIES_ORDER
-from books.models import Book, BookAuthor, Series
+from books.models import Book, BookAuthor, BookSeries, Series
 
 PAGE_SIZE = 24
 AUTHORS = Prefetch('authors', queryset=BookAuthor.objects.select_related('author').order_by('id'))
@@ -42,7 +42,9 @@ def recent_books(limit: int, offset: int = 0) -> List[Book]:
 
 
 def series_books(series):
-    return newest_first(published_books().filter(series__series=series))
+    """시리즈의 공개 책, 최신순. 카드에 번호를 달 수 있게 그 시리즈에서의 번호(series_index)를 붙인다."""
+    number = BookSeries.objects.filter(book=OuterRef('pk'), series=series).values('index')[:1]
+    return newest_first(published_books().filter(series__series=series).annotate(series_index=Subquery(number)))
 
 
 def paginate(qs, page):
@@ -69,11 +71,17 @@ def book_with_details(pk: int) -> Optional[Book]:
     return Book.objects.prefetch_related(AUTHORS, 'series__series').filter(pk=pk).first()
 
 
-def book_series(book) -> Optional[Series]:
+def book_series_entry(book) -> Optional[BookSeries]:
+    """책이 속한 첫 공개 시리즈 연결(시리즈 + 번호)."""
     for bs in book.series.all():
         if bs.series.name in PUBLIC_SERIES_ORDER:
-            return bs.series
+            return bs
     return None
+
+
+def book_series(book) -> Optional[Series]:
+    entry = book_series_entry(book)
+    return entry.series if entry else None
 
 
 def same_series_books(book, series, limit: int = 6) -> List[Book]:

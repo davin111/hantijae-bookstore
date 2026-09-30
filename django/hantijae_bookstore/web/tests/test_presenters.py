@@ -94,6 +94,38 @@ class CoverUrlTest(SimpleTestCase):
         self.assertEqual(p.cover_3d_url(b), '/c.png')
 
 
+def series(name):
+    return SimpleNamespace(name=name)
+
+
+class SeriesNameTest(SimpleTestCase):
+    def test_official_name_has_hantijae_prefix_except_danhaengbon(self):
+        self.assertEqual(p.series_name(series('시의숲')), '한티재 시의숲')
+        self.assertEqual(p.series_name(series('교양문고')), '한티재 교양문고')
+        self.assertEqual(p.series_name(series('단행본')), '단행본')
+
+    def test_menu_name_is_short_except_siseon(self):
+        self.assertEqual(p.series_menu_name(series('팸플릿')), '팸플릿')
+        self.assertEqual(p.series_menu_name(series('시선')), '한티재 시선')
+
+    def test_series_number_padded_by_series_rule(self):
+        self.assertEqual(p.series_number(series('교양문고'), '001'), '01')
+        self.assertEqual(p.series_number(series('산문선'), '4'), '04')
+        self.assertEqual(p.series_number(series('팸플릿'), '27'), '027')
+        self.assertEqual(p.series_number(series('시선'), ' 023 '), '023')
+        self.assertEqual(p.series_number(series('팸플릿'), '특별판'), '특별판')   # 숫자가 아니면 그대로
+
+    def test_series_without_numbers_shows_none(self):
+        self.assertEqual(p.series_number(series('시의숲'), '01'), '')
+        self.assertEqual(p.series_number(series('단행본'), None), '')
+        self.assertEqual(p.series_number(series('시선'), None), '')
+
+    def test_series_label_joins_official_name_and_number(self):
+        self.assertEqual(p.series_label(series('시선'), '23'), '한티재 시선 023')
+        self.assertEqual(p.series_label(series('시의숲'), '01'), '한티재 시의숲')
+        self.assertEqual(p.series_label(series('단행본'), None), '단행본')
+
+
 class DescriptionTest(SimpleTestCase):
     def test_parse_description_sections_lead_and_collapsible(self):
         text = ('갈릴레이 온도계부터,\n일기예보의 시대\n\n본문 첫 문단입니다.\n​\n'

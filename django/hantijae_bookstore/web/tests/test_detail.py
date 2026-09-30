@@ -24,12 +24,12 @@ class DetailTest(TestCase):
         patcher = mock.patch('web.views.blog.latest_posts', return_value=[])
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.book = f.book('내일 날씨, 어떻습니까?', date(2021, 7, 12), in_series='교양문고',
+        self.book = f.book('내일 날씨, 어떻습니까?', date(2021, 7, 12), in_series='교양문고', series_index='007',
                            subtitle='기상학자가 들려주는 과학과 세상 이야기', full_price=14000, page_count=256,
                            size='125*188', isbn='979-11-90178-60-0  04450', description=DESC,
                            short_description='기후위기 시대, 모든 시민의 교양', cover_image_3d=png(),
                            authors=(('김해동', 1),))
-        self.sibling = f.book('시대의 끝에서', date(2020, 1, 1), in_series='교양문고')
+        self.sibling = f.book('시대의 끝에서', date(2020, 1, 1), in_series='교양문고', series_index='002')
 
     def get(self, book, query=''):
         return self.client.get(f'/book={book.id}{query}')
@@ -85,6 +85,14 @@ class DetailTest(TestCase):
         body = self.get(b).content.decode()
         self.assertIn('&lt;script&gt;alert(1)&lt;/script&gt;', body)
         self.assertNotIn('<script>alert(1)</script>', body)
+
+    def test_crumb_and_same_series_use_official_name_and_number(self):
+        body = self.get(self.book).content.decode()
+        series_id = self.book.series.first().series_id
+        self.assertIn(f'<p class="crumb"><a href="/series={series_id}">한티재 교양문고 07</a></p>', body)
+        self.assertIn('한티재 교양문고의 다른 책', body)
+        self.assertIn('한티재 교양문고 모두 보기 →', body)
+        self.assertIn('<p class="card-no">02</p>', body)
 
     def test_same_series_excludes_self(self):
         r = self.get(self.book)

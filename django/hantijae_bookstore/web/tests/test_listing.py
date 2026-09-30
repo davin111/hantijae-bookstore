@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from unittest import mock
 from urllib.parse import quote
@@ -53,6 +54,20 @@ class ListingTest(TestCase):
             self.assertEqual(self.client.get(f'/series={self.series.id}?page={q}').status_code, 404, q)
         self.assertEqual(self.client.get('/series=999999').status_code, 404)
         self.assertEqual(self.client.get(f'/series={f.series("기타").id}').status_code, 404)
+
+    def test_series_page_uses_official_name_and_numbers_cards(self):
+        pamphlets = [f.book(f'팸플릿 {n}', date(2024, 1, int(n)), in_series='팸플릿', series_index=n)
+                     for n in ('27', '28')]
+        r = self.client.get(f'/series={f.series("팸플릿").id}')
+        body = r.content.decode()
+        self.assertIn('<h1 class="page-title serif">한티재 팸플릿</h1>', body)
+        self.assertIn('<title>한티재 팸플릿 — 도서출판 한티재</title>', body)
+        self.assertIn('>팸플릿</a>', body)   # 메뉴는 짧은 이름
+        self.assertIn(f'<a href="/book={pamphlets[1].id}">', body)
+        self.assertEqual(re.findall(r'<p class="card-no">(\d+)</p>', body), ['028', '027'])
+
+    def test_series_without_numbers_has_no_card_numbers(self):
+        self.assertNotIn('card-no', self.client.get(f'/series={self.series.id}').content.decode())
 
     def test_all_books_lists_every_series_newest_first(self):
         poem = f.book('출렁이는 본심', date(2023, 3, 13), in_series='시의숲')

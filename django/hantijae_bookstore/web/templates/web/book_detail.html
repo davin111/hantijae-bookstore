@@ -5,7 +5,7 @@
   <div class="wrap detail-top">
     <div class="cover-3d">{% with src=book|cover_3d_url %}{% if src %}<img src="{{ src }}" alt="{{ book.title }} 표지" fetchpriority="high">{% endif %}{% endwith %}</div>
     <div class="detail-info">
-      {% if series %}<p class="crumb"><a href="/series={{ series.id }}">{{ series.name }}</a></p>{% endif %}
+      {% if series %}<p class="crumb"><a href="/series={{ series.id }}">{{ series_label }}</a></p>{% endif %}
       <h1 class="detail-title serif">{{ book.title }}</h1>
       {% if book.subtitle %}<p class="detail-sub">{{ book.subtitle }}</p>{% endif %}
       {% if credit %}<p class="detail-credit">{{ credit }}</p>{% endif %}
@@ -34,9 +34,9 @@
   </div>
   {% if same_series %}
   <section class="wrap block" aria-labelledby="same-title">
-    <h2 class="block-title serif" id="same-title">{{ series.name }}의 다른 책</h2>
+    <h2 class="block-title serif" id="same-title">{{ series|series_name }}의 다른 책</h2>
     {% include 'web/_book_grid.html' with books=same_series %}
-    <p class="more"><a href="/series={{ series.id }}">{{ series.name }} 모두 보기 →</a></p>
+    <p class="more"><a href="/series={{ series.id }}">{{ series|series_name }} 모두 보기 →</a></p>
   </section>
   {% endif %}
 </article>

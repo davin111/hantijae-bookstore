@@ -8,6 +8,8 @@ from typing import List, Optional, Sequence, Tuple
 from django.utils.html import escape, strip_tags
 from django.utils.safestring import SafeString, mark_safe
 
+from books.constants import SERIES_MENU_NAME, SERIES_NUMBER_DIGITS, SERIES_OFFICIAL_NAME
+
 # BookAuthor.author_type → 역할 표기. 표기 순서는 지음 · 엮음 · 옮김 · 기획
 ROLE_VERB = {1: '지음', 2: '옮김', 3: '기획', 4: '엮음'}
 ROLE_ORDER = (1, 4, 2, 3)
@@ -44,6 +46,27 @@ def card_credit(authors: Credit) -> str:
         if names:
             return names[0] + (' 외' if len(names) > 1 else '')
     return ''
+
+
+def series_name(series) -> str:
+    return SERIES_OFFICIAL_NAME.get(series.name, series.name)
+
+
+def series_menu_name(series) -> str:
+    return SERIES_MENU_NAME.get(series.name, series.name)
+
+
+def series_number(series, index: Optional[str]) -> str:
+    """시리즈 규칙대로 자리수를 맞춘 번호. 번호 없는 시리즈나 빈 값이면 ''. 숫자가 아니면 그대로."""
+    digits = SERIES_NUMBER_DIGITS.get(series.name)
+    raw = (index or '').strip()
+    if not digits or not raw:
+        return ''
+    return str(int(raw)).zfill(digits) if raw.isdigit() else raw
+
+
+def series_label(series, index: Optional[str]) -> str:
+    return f'{series_name(series)} {series_number(series, index)}'.strip()
 
 
 def format_price(won: Optional[int]) -> str:

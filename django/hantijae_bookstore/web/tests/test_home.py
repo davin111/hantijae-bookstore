@@ -22,7 +22,8 @@ class HomeTest(TestCase):
         for name in ('단행본', '교양문고', '시선'):
             f.series(name)
         self.old = [f.book(f'오래된 책 {i}', date(2020, 1, i + 1)) for i in range(14)]
-        self.hero = f.book('나는 산속으로 더 깊이 들어간다', date(2026, 8, 21), in_series='시선', subtitle='최정 시집',
+        self.hero = f.book('나는 산속으로 더 깊이 들어간다', date(2026, 8, 21), in_series='시선', series_index='23',
+                           subtitle='최정 시집',
                            short_description='**도시** 생활 이십 년 만에', authors=(('최정', 1),))
         f.book('비공개 초안', date(2026, 9, 1), is_published=False)
 
@@ -32,7 +33,7 @@ class HomeTest(TestCase):
         body = r.content.decode()
         self.assertEqual(r.context['hero'], self.hero)
         self.assertIn('새로 나온 책 · 2026년 8월', body)
-        self.assertIn('최정 지음 · 시선', body)
+        self.assertIn('최정 지음 · 한티재 시선 023', body)
         self.assertIn('도시 생활 이십 년 만에', body)
         self.assertNotIn('**', body)
         self.assertNotIn('비공개 초안', body)
@@ -51,7 +52,12 @@ class HomeTest(TestCase):
         nav = body[body.index('<nav class="section-nav"'):]
         nav = nav[:nav.index('</nav>')]
         self.assertEqual(re.findall(r'>([^<>]+)</a>', nav),
-                         ['신간', '전체 보기', '단행본', '교양문고', '팸플릿', '산문선', '시선', '시의숲', '한티재 소개'])
+                         ['신간', '전체 보기', '단행본', '교양문고', '팸플릿', '산문선', '한티재 시선', '시의숲', '한티재 소개'])
+
+    def test_series_tabs_use_menu_names(self):
+        body = self.client.get('/').content.decode()
+        tabs = body[body.index('<nav class="tabs"'):]
+        self.assertEqual(re.findall(r'>([^<>]+) <span>', tabs[:tabs.index('</nav>')]), ['단행본', '교양문고', '한티재 시선'])
 
     def test_recent_block_links_to_all_books(self):
         self.assertIn('<a href="/books">펴낸 책 모두 보기 →</a>', self.client.get('/').content.decode())

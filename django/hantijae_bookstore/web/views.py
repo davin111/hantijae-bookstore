@@ -42,10 +42,11 @@ def home(request):
     series = catalog.public_series()
     books = catalog.recent_books(7)
     hero, recent = (books[0], books[1:]) if books else (None, [])
+    hero_entry = catalog.book_series_entry(hero) if hero else None
     shelf_series = series[0] if series else None
     return render_page(request, 'web/home.html', {
         'hero': hero,
-        'hero_series': catalog.book_series(hero) if hero else None,
+        'hero_series_label': presenters.series_label(hero_entry.series, hero_entry.index) if hero_entry else '',
         'hero_links': presenters.store_links(hero) if hero else [],
         'hero_summary': presenters.strip_marks(hero.short_description).strip() if hero else '',
         'recent': recent,
@@ -56,9 +57,17 @@ def home(request):
     }, meta=page_meta('/'), nav_active='home', nav_series=series)
 
 
-def render_listing(request, page, *, heading, count, base_path, description, nav_active, nav_series=None):
+def numbered(books, series):
+    """시리즈 목록의 카드에 번호를 단다(series_books가 붙여 준 series_index를 시리즈 규칙대로)."""
+    for b in books:
+        b.series_no = presenters.series_number(series, b.series_index)
+    return books
+
+
+def render_listing(request, page, *, heading, count, base_path, description, nav_active, nav_series=None,
+                   series=None):
     """표지 격자 + 쪽 이동 목록(시리즈·전체 보기). 2쪽부터는 canonical에 쪽 번호를 붙인다."""
-    books = list(page.object_list)
+    books = numbered(list(page.object_list), series) if series else list(page.object_list)
     path = base_path + (f'?page={page.number}' if page.number > 1 else '')
     meta = page_meta(path, title=heading, description=description,
                      image=presenters.cover_3d_url(books[0]) if books else None)
@@ -75,10 +84,10 @@ def series_page(request, series_id):
     page = catalog.paginate(catalog.series_books(series), request.GET.get('page'))
     if page is None:
         raise Http404
-    return render_listing(request, page, heading=series.name, count=series.book_count,
-                          base_path=f'/series={series.id}',
-                          description=f'{series.name} {series.book_count}권 — 도서출판 한티재',
-                          nav_active=series.id, nav_series=nav)
+    name = presenters.series_name(series)
+    return render_listing(request, page, heading=name, count=series.book_count, base_path=f'/series={series.id}',
+                          description=f'{name} {series.book_count}권 — 도서출판 한티재',
+                          nav_active=series.id, nav_series=nav, series=series)
 
 
 def all_books(request):
@@ -97,7 +106,8 @@ def book_detail(request, book_id):
     preview = not book.is_published
     if preview and not is_valid_preview_token(book.id, request.GET.get('preview', '')):
         raise Http404
-    series = catalog.book_series(book)
+    entry = catalog.book_series_entry(book)
+    series = entry.series if entry else None
     sections = presenters.parse_description(book.description)
     authors = presenters.authors_of(book)
     spec = [(label, value) for label, value in (
@@ -114,11 +124,12 @@ def book_detail(request, book_id):
                      description=presenters.short_text(book.short_description or book.description, 150),
                      image=presenters.cover_3d_url(book), og_type='book', noindex=preview, extra=extra)
     return render_page(request, 'web/book_detail.html', {
-        'book': book, 'series': series, 'credit': presenters.credit_line(authors), 'spec': spec,
+        'book': book, 'series': series, 'series_label': presenters.series_label(series, entry.index) if entry else '',
+        'credit': presenters.credit_line(authors), 'spec': spec,
         'links': presenters.store_links(book), 'preview': preview, 'sections': sections,
         'section_nav': sections if len(sections) > 1 else [],
         'video_url': site_info.AUTHOR_VIDEOS.get(book.id),
-        'same_series': catalog.same_series_books(book, series),
+        'same_series': numbered(catalog.same_series_books(book, series), series) if series else [],
     }, meta=meta, nav_active=series.id if series else None)
 
 

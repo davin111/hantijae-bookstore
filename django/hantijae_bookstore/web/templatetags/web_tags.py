@@ -31,6 +31,16 @@ def cover_3d_url(book):
 
 
 @register.filter
+def series_name(series):
+    return presenters.series_name(series)
+
+
+@register.filter
+def series_menu_name(series):
+    return presenters.series_menu_name(series)
+
+
+@register.filter
 def date_ko(d):
     return presenters.format_date_ko(d)
 

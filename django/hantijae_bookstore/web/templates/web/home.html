@@ -8,7 +8,7 @@
     <p class="eyebrow">새로 나온 책 · {{ hero.published_date|month_ko }}</p>
     <h1 class="hero-title serif" id="hero-title"><a href="/book={{ hero.id }}">{{ hero.title }}</a></h1>
     {% if hero.subtitle %}<p class="hero-sub">{{ hero.subtitle }}</p>{% endif %}
-    <p class="hero-credit">{{ hero|credit }}{% if hero_series %} · {{ hero_series.name }}{% endif %}</p>
+    <p class="hero-credit">{{ hero|credit }}{% if hero_series_label %} · {{ hero_series_label }}{% endif %}</p>
     {% if hero_summary %}<p class="hero-summary">{{ hero_summary }}</p>{% endif %}
     <div class="actions">
       <a class="btn btn-fill" href="/book={{ hero.id }}">책 소개 보기</a>
@@ -27,9 +27,9 @@
 {% if shelf_series %}
 <section class="wrap block" aria-labelledby="shelf-title">
   <h2 class="visually-hidden" id="shelf-title">시리즈별로 보기</h2>
-  <nav class="tabs" aria-label="시리즈">{% for s in nav_series %}<a href="/series={{ s.id }}"{% if s.id == shelf_series.id %} aria-current="true"{% endif %}>{{ s.name }} <span>{{ s.book_count }}</span></a>{% endfor %}</nav>
+  <nav class="tabs" aria-label="시리즈">{% for s in nav_series %}<a href="/series={{ s.id }}"{% if s.id == shelf_series.id %} aria-current="true"{% endif %}>{{ s|series_menu_name }} <span>{{ s.book_count }}</span></a>{% endfor %}</nav>
   {% include 'web/_book_grid.html' with books=shelf_books %}
-  <p class="more"><a href="/series={{ shelf_series.id }}">{{ shelf_series.name }} {{ shelf_series.book_count }}권 모두 보기 →</a></p>
+  <p class="more"><a href="/series={{ shelf_series.id }}">{{ shelf_series|series_name }} {{ shelf_series.book_count }}권 모두 보기 →</a></p>
 </section>
 {% endif %}
 {% include 'web/_blog_posts.html' %}
