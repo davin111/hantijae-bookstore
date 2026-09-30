@@ -216,6 +216,7 @@ MARKETING = {
     'META_APP_SECRET': secret_info.get('META_APP_SECRET', ''),
     'META_PAGE_ID': secret_info.get('META_PAGE_ID', ''),
     'META_IG_USER_ID': secret_info.get('META_IG_USER_ID', ''),
+    'META_ACCESS_EXPIRES': secret_info.get('META_ACCESS_EXPIRES', ''),   # 인스타 데이터 접근 만료일(YYYY-MM-DD), 다시 발급하면 바꾼다
     'KPIPA_BNK_ID': secret_info.get('KPIPA_BNK_ID', ''),   # 출판유통통합전산망(대표 계정, 대표 동의)
     'KPIPA_BNK_PASSWORD': secret_info.get('KPIPA_BNK_PASSWORD', ''),
     'KAKAO_REST_API_KEY': secret_info.get('KAKAO_REST_API_KEY', ''),
