@@ -25,6 +25,7 @@ PER_LLM_CALL = 40
 FRESH_DAYS = 14
 ROTATION = 7      # 책마다 주 1회: 날마다 id % 7이 맞는 책만
 SPACING = 0.5
+SOURCE_GIVE_UP = 3   # 한 출처가 이만큼 연달아 실패하면 그날 나머지는 부르지 않는다(20초 타임아웃이 걸리면 워커를 오래 붙잡는다)
 SCANNED = 'review_scanned_books'   # 한 번이라도 검색이 성공한 (책, 출처). 날짜 없는 글은 그 출처의 첫 검색 결과를 기준선으로만 둔다
 
 
@@ -101,13 +102,16 @@ def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
         return report, []
     books = todays_books(today) if books is None else books
     scanned = set(WorkerState.get(SCANNED) or [])
-    calls, errors, ok, bad = Counter(), Counter(), set(), set()
+    calls, errors, ok, bad, streak = Counter(), Counter(), set(), set(), Counter()
     fresh, seen, waited = [], set(), False
     for book in books:
         t = terms(book)
         report.books += 1
         for source, search, creds in srcs:
             for q in queries(t):
+                if streak[source] >= SOURCE_GIVE_UP:   # 사흘째 실패가 아니라 한 바퀴 안에서 연달아 실패 — 매달린 API를 기다리지 않는다
+                    bad.add(f'{book.id}:{source}')
+                    continue
                 if waited:
                     sleep(SPACING)
                 waited = True
@@ -116,10 +120,12 @@ def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
                     posts = search(source, q, creds, get_json)
                 except Exception:
                     errors[source] += 1
+                    streak[source] += 1
                     bad.add(f'{book.id}:{source}')   # 질의 하나라도 실패하면 그 (책, 출처)는 검색된 것으로 치지 않는다
                     if errors[source] == 1:   # 한도 초과면 수십 번 실패한다 → 출처마다 한 번만 남긴다
                         log.warning('review search failed: %s', source, exc_info=True)
                     continue
+                streak[source] = 0
                 ok.add(f'{book.id}:{source}')
                 for p in posts:
                     key = signal_key(book, p)

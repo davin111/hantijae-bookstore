@@ -231,6 +231,17 @@ class ScanTest(TestCase):
         self.scan(FakeAPI(), sleep=sleeps.append)
         self.assertEqual(sleeps, [reviews.SPACING] * (4 * 2 - 1))   # 출처 4곳 × 질의 2개, 첫 호출 앞에는 쉬지 않는다
 
+    def test_failing_source_stops_after_three_in_a_row(self):
+        books = [self.book,
+                 make_book(title='책 2', published=date(2020, 1, 1), isbn='979-11-00003-02-0'),
+                 make_book(title='책 3', published=date(2020, 1, 1), isbn='979-11-00003-03-0')]
+        api = FakeAPI(raise_for={'daum_blog'})
+        with self.assertLogs('intake', level='WARNING'):
+            report, _ = self.scan(api, books=books)
+        self.assertEqual(api.calls.count('daum_blog'), 3)
+        self.assertEqual(report.failed, ['daum_blog'])
+        self.assertEqual(api.calls.count('naver_blog'), 6)
+
     def test_book_not_marked_scanned_when_every_search_failed(self):
         api = FakeAPI(raise_for={'naver_blog', 'naver_cafe', 'daum_blog', 'daum_cafe'})
         with self.assertLogs('intake', level='WARNING'):
