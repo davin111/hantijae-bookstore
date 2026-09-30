@@ -101,7 +101,7 @@ def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
         return report, []
     books = todays_books(today) if books is None else books
     scanned = set(WorkerState.get(SCANNED) or [])
-    calls, errors, ok = Counter(), Counter(), set()
+    calls, errors, ok, bad = Counter(), Counter(), set(), set()
     fresh, seen, waited = [], set(), False
     for book in books:
         t = terms(book)
@@ -116,6 +116,7 @@ def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
                     posts = search(source, q, creds, get_json)
                 except Exception:
                     errors[source] += 1
+                    bad.add(f'{book.id}:{source}')   # 질의 하나라도 실패하면 그 (책, 출처)는 검색된 것으로 치지 않는다
                     if errors[source] == 1:   # 한도 초과면 수십 번 실패한다 → 출처마다 한 번만 남긴다
                         log.warning('review search failed: %s', source, exc_info=True)
                     continue
@@ -136,9 +137,10 @@ def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
                     else:
                         _save(book, p, key, 'old', '')
                         report.baseline += 1
+        # 책마다 적어 둔다 — 워커가 죽어도(배포·OOM) 다시 켰을 때 이미 끝낸 책은 되풀이하지 않는다
+        WorkerState.put(SCANNED, sorted(scanned | (ok - bad)))
     report.failed = [s for s in calls if errors[s] == calls[s]]
     report.found = len(fresh)
-    WorkerState.put(SCANNED, sorted(scanned | ok))
     return report, fresh
 
 

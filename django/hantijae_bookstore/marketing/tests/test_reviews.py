@@ -1,4 +1,5 @@
 import json
+import urllib.parse
 from datetime import date
 from io import StringIO
 from types import SimpleNamespace
@@ -93,17 +94,21 @@ def kd(title, url, contents, dt, cafename=None):
 
 
 class FakeAPI:
-    """출처별로 돌려줄 결과(질의는 보지 않는다). raise_for에 든 출처 호출은 실패한다."""
+    """출처별로 돌려줄 결과(질의는 보지 않는다). raise_for에 든 출처 호출은 실패한다.
+    raise_query: {(출처, 글자)} — 그 출처 호출의 질의(query 파라미터)에 그 글자가 들어 있으면 실패한다."""
 
-    def __init__(self, naver_blog=(), naver_cafe=(), daum_blog=(), daum_cafe=(), raise_for=()):
+    def __init__(self, naver_blog=(), naver_cafe=(), daum_blog=(), daum_cafe=(), raise_for=(), raise_query=()):
         self.data = {'naver_blog': list(naver_blog), 'naver_cafe': list(naver_cafe), 'daum_blog': list(daum_blog),
                      'daum_cafe': list(daum_cafe)}
-        self.raise_for, self.calls = set(raise_for), []
+        self.raise_for, self.raise_query, self.calls = set(raise_for), set(raise_query), []
 
     def __call__(self, url, headers):
         source = ('naver_' if 'naverapihub' in url else 'daum_') + ('cafe' if '/cafe' in url else 'blog')
         self.calls.append(source)
         if source in self.raise_for:
+            raise RuntimeError('429 Too Many Requests')
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)['query'][0]
+        if any(s == source and text in query for s, text in self.raise_query):
             raise RuntimeError('429 Too Many Requests')
         items = self.data[source]
         return {'items': items} if source.startswith('naver') else {'documents': items}
@@ -177,6 +182,17 @@ class ScanTest(TestCase):
             report, fresh = self.scan(api)
         self.assertEqual((report.failed, len(fresh)), (['daum_blog'], 1))
         self.assertEqual(len([r for r in logs.records if 'daum_blog' in r.getMessage()]), 1)   # 출처마다 한 번만 남긴다
+
+    def test_one_failed_query_keeps_the_source_unsearched(self):
+        with self.assertLogs('intake', level='WARNING'):
+            self.scan(FakeAPI(naver_cafe=[], raise_query={('naver_cafe', '성소수자부모모임')}))
+        scanned = WorkerState.get(reviews.SCANNED) or []
+        self.assertNotIn(f'{self.book.id}:naver_cafe', scanned)
+        self.assertIn(f'{self.book.id}:naver_blog', scanned)
+        llm = FakeLLM(REVIEW)
+        _, fresh = self.scan(FakeAPI(naver_cafe=[nc('옛 모임 후기', 'https://cafe.naver.com/c/9', '&lt;커밍아웃 스토리&gt; 읽기')]), llm)
+        self.assertEqual((fresh, llm.calls), ([], []))
+        self.assertEqual(Signal.objects.get(url='https://cafe.naver.com/c/9').detail['verdict'], 'old')
 
     def test_missing_kakao_key_skips_daum_sources(self):
         api = FakeAPI()
