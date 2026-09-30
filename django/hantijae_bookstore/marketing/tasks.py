@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 from intake.models import WorkerState
-from marketing import briefing, funding, grants, kit, midweek, moments, news, reviews, sales, selections, social
+from marketing import (briefing, funding, grants, kit, midweek, moments, news, placements, reviews, sales, selections,
+                       social)
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
@@ -21,6 +22,7 @@ ADMIN_QUEUE = 'moment_admin_queue'
 GRANT_AT = (6, 40)   # 선정(06:10) 다음, 월요일 브리핑 만들기(07:00) 전. 한 번에 LLM 최대 3번(grants.JUDGE_PER_RUN)
 SELECTION_AT = (6, 10)   # 판매 지수(06:00) 다음. LLM을 쓰지 않아 07:00 브리핑 만들기 전에 끝난다
 REVIEW_AT = (4, 30)   # 새벽: 검색 200번 남짓과 판별 LLM으로 몇 분 워커를 붙잡는다(그동안 텔레그램 응답이 늦다)
+PLACEMENT_AT = (12, 0)   # [올렸어요] 초안이 올라간 곳 찾기. 운영진 개인 계정 수집(06:20~) 뒤. LLM 없음
 MISSED_NOTE = '⏭️ 이번 주 브리핑을 보내지 못했어요(항목 없음·모드·시간). /mk 로 확인하세요'
 
 
@@ -195,6 +197,11 @@ def _run_due(deps, now):
 
     # 운영진 개인 SNS: 06:20 뒤 시작, 진행 중인 실행 확인은 매 바퀴(시각·꺼짐은 social이 판단)
     _guard(deps, 'social', now, lambda: social.run_due(deps, now))
+
+    if _hm(local) >= PLACEMENT_AT and WorkerState.get('marketing_last_placement_scan') != day:
+        WorkerState.put('marketing_last_placement_scan', day)
+        _guard(deps, 'placement', now, lambda: placements.update_recent(
+            now, blog_posts=m.blog_posts, labels=social.labels(social.config()[1])))
 
     if monday and _hm(local) >= NEWS_AT and WorkerState.get('marketing_last_news_scan') != day:
         WorkerState.put('marketing_last_news_scan', day)

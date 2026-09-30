@@ -335,7 +335,8 @@ class Marketing:
                 return ''
             Draft.objects.filter(pk=pk).update(status=Draft.POSTED, posted_at=timezone.now(), posted_by=actor[:100])
             Proposal.objects.filter(pk=d.proposal_id).update(status=Proposal.ACTED)
-            self.tg.send_message(chat_id, '기록해 둘게요. 2주쯤 뒤 판매 지수가 어떻게 달라졌는지 브리핑에 적어 드릴게요.', reply_to=here)
+            self.tg.send_message(chat_id, '기록해 둘게요. 어디에 올리셨는지는 봇이 찾아볼게요. '
+                                          '2주쯤 뒤 판매 지수와 반응이 어떻게 달라졌는지 브리핑에 적어 드릴게요.', reply_to=here)
             return '기록했어요'
         if action == 'e':
             return '이 초안에 답장으로 고칠 점을 적어 주세요'

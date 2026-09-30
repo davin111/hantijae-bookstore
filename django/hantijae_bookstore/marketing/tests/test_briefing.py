@@ -144,8 +144,35 @@ class MeasureTest(TestCase):
         Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='b', status=Draft.POSTED, posted_at=posted)
         SalesSnapshot.objects.create(book=book, date=date(2026, 9, 10), sales_point=455)
         SalesSnapshot.objects.create(book=book, date=date(2026, 9, 25), sales_point=520)
+        # 어디에 올렸는지 못 찾았으면 초안 종류(인스타 글)를 쓰지 않는다 — 인스타 초안을 페북에 올리기도 한다
         self.assertEqual(measure_line(TODAY),
-                         '지난번 올린 『나는 산속으로 더 깊이 들어간다』 인스타 글 ― 판매 지수 455 → 520 (2주 뒤)')
+                         '지난번 올린 『나는 산속으로 더 깊이 들어간다』 글 ― 판매 지수 455 → 520 (2주 뒤)')
+
+    def test_measure_line_names_places_and_official_reactions(self):
+        book = make_book()
+        p = Proposal.objects.create(kind=Proposal.NOW, book=book, headline='x')
+        Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='b', status=Draft.POSTED,
+                             posted_at=datetime(2026, 9, 10, 10, 0, tzinfo=KST), placements=[
+                                 {'kind': 'facebook', 'label': '한티재 페북 페이지', 'url': 'u1', 'id': '111_9', 'at': ''},
+                                 {'kind': 'instagram', 'label': '한티재 인스타', 'url': 'u2', 'id': '179', 'at': ''},
+                                 {'kind': 'personal', 'label': '편집장님 페이스북', 'url': 'u3', 'at': ''}])
+        SalesSnapshot.objects.create(book=book, date=date(2026, 9, 10), sales_point=455)
+        SalesSnapshot.objects.create(book=book, date=date(2026, 9, 25), sales_point=520)
+        replies = {'111_9': {'reactions': 12, 'comments': 3, 'shares': 2}, '179': {'likes': 16, 'comments': 1}}
+        line = measure_line(TODAY, counts=lambda kind, post_id: replies[post_id])
+        self.assertEqual(line, '지난번 올린 『나는 산속으로 더 깊이 들어간다』 글(한티재 페북 페이지·한티재 인스타·편집장님 페이스북) '
+                               '― 판매 지수 455 → 520 (2주 뒤), 페북 페이지 반응 12·댓글 3·공유 2, 인스타 좋아요 16·댓글 1')
+
+    def test_measure_line_skips_counts_it_could_not_read_and_says_sent_for_letters(self):
+        book = make_book()
+        p = Proposal.objects.create(kind=Proposal.NOW, book=book, headline='x')
+        Draft.objects.create(proposal=p, channel=Draft.LETTER, body='b', status=Draft.POSTED,
+                             posted_at=datetime(2026, 9, 10, 10, 0, tzinfo=KST),
+                             placements=[{'kind': 'facebook', 'label': '한티재 페북 페이지', 'url': 'u', 'id': '1', 'at': ''}])
+        SalesSnapshot.objects.create(book=book, date=date(2026, 9, 10), sales_point=455)
+        SalesSnapshot.objects.create(book=book, date=date(2026, 9, 25), sales_point=520)
+        self.assertEqual(measure_line(TODAY, counts=lambda kind, post_id: None),
+                         '지난번 보낸 『나는 산속으로 더 깊이 들어간다』 글(한티재 페북 페이지) ― 판매 지수 455 → 520 (2주 뒤)')
 
     def test_build_weekly_clips_long_measure_line(self):
         book = make_book(title='가' * 400)

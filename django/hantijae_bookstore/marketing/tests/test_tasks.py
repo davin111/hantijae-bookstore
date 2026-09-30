@@ -223,6 +223,18 @@ class RunDueTest(TestCase):
         tasks.run_due(deps, datetime(2026, 9, 29, 12, 0, tzinfo=KST))
         self.assertEqual(self.selection_scan.call_count, 1)
 
+    def test_placement_scan_once_per_day_after_noon(self, *_):
+        deps = Deps()
+        with mock.patch('marketing.tasks.placements.update_recent', return_value=0) as scan:
+            tasks.run_due(deps, datetime(2026, 9, 30, 11, 59, tzinfo=KST))
+            scan.assert_not_called()
+            tasks.run_due(deps, datetime(2026, 9, 30, 12, 0, tzinfo=KST))
+            tasks.run_due(deps, datetime(2026, 9, 30, 15, 0, tzinfo=KST))
+        self.assertEqual(scan.call_count, 1)
+        self.assertEqual(deps.bot.marketing.blog_reads, 0)  # 블로그는 찾을 글이 있을 때만(placements가 부름) 읽는다
+        scan.call_args.kwargs['blog_posts']()
+        self.assertEqual(deps.bot.marketing.blog_reads, 1)
+
     def test_off_mode_skips_selection_scan(self, *_):
         tasks.run_due(Deps('off'), datetime(2026, 9, 29, 7, 0, tzinfo=KST))
         self.selection_scan.assert_not_called()

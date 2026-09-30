@@ -57,3 +57,50 @@ class MetaTest(SimpleTestCase):
         self.assertEqual(logs.output, ['WARNING:intake:meta facebook posts: HTTP 400',
                                        'WARNING:intake:meta instagram media: ConnectionError'])
         self.assertNotIn('ptok', ' '.join(logs.output))
+
+    def test_official_posts_keep_post_ids(self):
+        get = FakeGet({'111': {'data': [{'id': '111_9', 'message': '글', 'created_time': '2026-09-20T01:00:00+0000',
+                                         'permalink_url': 'https://f/p1'}]},
+                       '222': {'data': [{'id': '179', 'caption': '글', 'timestamp': '2026-09-18T09:15:24+0000',
+                                         'permalink': 'https://i/1'}]}})
+        out = meta.official_posts(SINCE, get=get)
+        self.assertEqual((out['facebook'][0].id, out['instagram'][0].id), ('111_9', '179'))
+        self.assertTrue(get.calls[0][1]['fields'].startswith('id,'))
+
+
+class Reply:
+    def __init__(self, status, body):
+        self.status_code, self.body = status, body
+
+    def json(self):
+        return self.body
+
+
+@override_settings(MARKETING=CFG)
+class PostCountsTest(SimpleTestCase):
+    def test_facebook_reactions_comments_shares(self):
+        calls = []
+
+        def get(url, params=None, timeout=None):
+            calls.append((url, params))
+            return Reply(200, {'reactions': {'summary': {'total_count': 12}}, 'comments': {'summary': {'total_count': 3}},
+                               'shares': {'count': 2}})
+        self.assertEqual(meta.post_counts('facebook', '111_9', get=get), {'reactions': 12, 'comments': 3, 'shares': 2})
+        self.assertEqual(calls[0][0], 'https://graph.facebook.com/v26.0/111_9')
+        self.assertIn('appsecret_proof', calls[0][1])
+
+    def test_facebook_without_shares_and_instagram(self):
+        fb = lambda url, params=None, timeout=None: Reply(200, {'reactions': {'summary': {'total_count': 3}},  # noqa: E731
+                                                                'comments': {'summary': {'total_count': 0}}})
+        self.assertEqual(meta.post_counts('facebook', '111_9', get=fb), {'reactions': 3, 'comments': 0, 'shares': 0})
+        ig = lambda url, params=None, timeout=None: Reply(200, {'like_count': 16, 'comments_count': 1})  # noqa: E731
+        self.assertEqual(meta.post_counts('instagram', '179', get=ig), {'likes': 16, 'comments': 1})
+
+    def test_failure_is_none_and_never_logs_the_token(self):
+        def get(url, params=None, timeout=None):
+            raise requests.ConnectionError(f'{url}?access_token=ptok')
+        with self.assertLogs('intake', level='WARNING') as logs:
+            self.assertIsNone(meta.post_counts('facebook', '111_9', get=get))
+        self.assertNotIn('ptok', ' '.join(logs.output))
+        self.assertIsNone(meta.post_counts('facebook', '', get=get))  # 번호 없으면 부르지 않는다
+

@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from intake.llm import complete_json
-from marketing import candidates, gnews
+from marketing import candidates, gnews, meta
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM, build_briefing_user
 from marketing.sales import latest
@@ -108,8 +108,31 @@ def _store_click_count(book, day):
     return StoreClick.objects.filter(book=book, created_at__gte=start, created_at__lt=end).count()
 
 
-def measure_line(today):
-    """게시하고 14~28일 지난 글 가운데 가장 최근 것의 판매 지수 전후. 인과가 아니라 전후 비교다."""
+def _where(draft):
+    """봇이 찾은 게시 위치(placements.py). 못 찾았으면 빈 문자열 — 초안 종류(인스타 글)로 짐작하지 않는다."""
+    labels = list(dict.fromkeys(p['label'] for p in draft.placements or [] if p.get('label')))
+    return f'({"·".join(labels)})' if labels else ''
+
+
+def _reactions(draft, counts):
+    """공식 페북·인스타 글의 지금 반응 수. 못 읽은 채널은 뺀다."""
+    out = []
+    for p in draft.placements or []:
+        if p.get('kind') not in ('facebook', 'instagram') or not p.get('id'):
+            continue
+        c = counts(p['kind'], p['id'])
+        if not c:
+            continue
+        if p['kind'] == 'facebook':
+            out.append(f"페북 페이지 반응 {c['reactions']}·댓글 {c['comments']}·공유 {c['shares']}")
+        else:
+            out.append(f"인스타 좋아요 {c['likes']}·댓글 {c['comments']}")
+    return out
+
+
+def measure_line(today, counts=meta.post_counts):
+    """게시하고 14~28일 지난 글 가운데 가장 최근 것의 판매 지수 전후. 인과가 아니라 전후 비교다.
+    올라간 곳(봇이 찾은 것)과 공식 글의 반응 수를 함께 적는다."""
     posted = (Draft.objects.filter(status=Draft.POSTED, posted_at__isnull=False, proposal__book__isnull=False)
               .select_related('proposal__book').order_by('-posted_at'))
     for d in posted:
@@ -120,7 +143,11 @@ def measure_line(today):
         before = latest(book, day)
         after = SalesSnapshot.objects.filter(book=book, date__gte=day + timedelta(days=14)).order_by('date').first()
         if before and after:
-            line = f'지난번 올린 『{book.title}』 {d.label} ― 판매 지수 {before.sales_point} → {after.sales_point} (2주 뒤)'
+            verb = '보낸' if d.channel == Draft.LETTER else '올린'
+            line = (f'지난번 {verb} 『{book.title}』 글{_where(d)} ― 판매 지수 {before.sales_point} → {after.sales_point}'
+                    ' (2주 뒤)')
+            for part in _reactions(d, counts):
+                line += f', {part}'
             clicks = _store_click_count(book, day)
             if clicks > 0:
                 line += f', 사이트 서점 버튼 {clicks}번'

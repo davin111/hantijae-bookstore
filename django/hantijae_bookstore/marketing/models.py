@@ -128,6 +128,8 @@ class Draft(BaseModel):
     posted_by = models.CharField(max_length=100, blank=True)
     chat_id = models.BigIntegerField(null=True, blank=True)
     message_id = models.BigIntegerField(null=True, blank=True)
+    placements = models.JSONField(default=list, blank=True,
+                                  help_text='[올렸어요] 뒤 봇이 찾은 실제 게시 위치: kind·label·url·id·at (placements.py)')
 
     @property
     def label(self):

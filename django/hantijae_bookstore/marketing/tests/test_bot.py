@@ -284,6 +284,8 @@ class MarketingBotTest(TestCase):
         p.refresh_from_db()
         self.assertEqual((d.status, d.posted_by, p.status, answer), (Draft.POSTED, '검수자A', Proposal.ACTED, '기록했어요'))
         self.assertIsNotNone(d.posted_at)
+        # 어디에 올렸는지 묻지 않는다(봇이 찾는다) — 운영진이 더 누를 것이 없다고 알려 준다
+        self.assertIn('어디에 올리셨는지는 봇이 찾아볼게요', self.tg.sent('send')[-1]['text'])
 
     def test_edit_callback_answers_with_hint_only(self):
         d = kit(self.book).drafts.first()
