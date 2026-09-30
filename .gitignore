@@ -180,9 +180,11 @@ dump.rdb
 django/**/static/
 !django/hantijae_bookstore/web/static/
 
-# Claude Code
+# Claude Code / Codex (per-developer, not shared — public repo)
 CLAUDE.md
 .claude/
+AGENTS.md
+.codex/
 .playwright-mcp/
 .superpowers/
 
