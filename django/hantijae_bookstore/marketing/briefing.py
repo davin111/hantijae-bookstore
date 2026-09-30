@@ -130,7 +130,7 @@ def _reactions(draft, counts):
     return out
 
 
-MEASURE_MAX = 300   # Briefing.measure 칸 길이
+MEASURE_MAX = 600   # Briefing.measure 칸 길이
 
 
 def _fit_measure(first, line):

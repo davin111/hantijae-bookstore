@@ -222,6 +222,7 @@ MARKETING = {
     'KAKAO_REST_API_KEY': secret_info.get('KAKAO_REST_API_KEY', ''),
     'NAVER_HUB_CLIENT_ID': secret_info.get('NAVER_HUB_CLIENT_ID', ''),
     'NAVER_HUB_CLIENT_SECRET': secret_info.get('NAVER_HUB_CLIENT_SECRET', ''),
+    'DATA4LIBRARY_AUTH_KEY': secret_info.get('DATA4LIBRARY_AUTH_KEY', ''),   # 도서관 정보나루(서버 IP 등록)
 }
 
 # 맥락 기록(검수 방 대화 등). 원문은 가린 채 이 기간만 보관한다.

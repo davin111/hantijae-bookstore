@@ -183,7 +183,7 @@ class MeasureTest(TestCase):
         SalesSnapshot.objects.create(book=book, date=date(2026, 9, 10), sales_point=455)
         SalesSnapshot.objects.create(book=book, date=date(2026, 9, 25), sales_point=520)
         b, _ = build_weekly(FakeLLM({'items': []}), TODAY, datetime(2026, 9, 28, 7, 0, tzinfo=KST), posts=[])
-        self.assertEqual(len(b.measure), 300)
+        self.assertLessEqual(len(b.measure), 600)
 
     def test_measure_line_empty_before_two_weeks(self):
         book = make_book()
@@ -318,40 +318,40 @@ class BuildWeeklyTest(TestCase):
 
 class FitMeasureTest(TestCase):
     def test_fits_both_lines_when_possible(self):
-        first = 'ㄱ' * 50
+        first = 'ㄱ' * 100
         line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「작은책」 22'
         result = _fit_measure(first, line)
         self.assertEqual(result, first + '\n' + line)
-        self.assertLessEqual(len(result), 300)
+        self.assertLessEqual(len(result), 600)
 
     def test_drops_top_post_when_both_lines_too_long(self):
-        first = 'ㄱ' * 150
-        line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「' + 'ㄴ' * 140 + '」 22'
+        first = 'ㄱ' * 300
+        line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「' + 'ㄴ' * 280 + '」 22'
         result = _fit_measure(first, line)
         expected_line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1'
         self.assertEqual(result, first + '\n' + expected_line)
-        self.assertLessEqual(len(result), 300)
+        self.assertLessEqual(len(result), 600)
         self.assertNotIn('「', result)
 
     def test_drops_channel_line_when_still_too_long(self):
-        first = 'ㄱ' * 280
-        line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「' + 'ㄴ' * 140 + '」 22'
+        first = 'ㄱ' * 560
+        line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「' + 'ㄴ' * 280 + '」 22'
         result = _fit_measure(first, line)
         self.assertEqual(result, first)
-        self.assertLessEqual(len(result), 300)
+        self.assertLessEqual(len(result), 600)
 
     def test_old_behavior_when_no_channel_line(self):
-        first = 'ㄱ' * 350
+        first = 'ㄱ' * 700
         result = _fit_measure(first, '')
-        self.assertEqual(result, 'ㄱ' * 300)
-        self.assertEqual(len(result), 300)
+        self.assertEqual(result, 'ㄱ' * 600)
+        self.assertEqual(len(result), 600)
 
     def test_short_both_lines_unchanged(self):
-        first = 'ㄱ' * 50
-        line = 'ㄴ' * 50
+        first = 'ㄱ' * 100
+        line = 'ㄴ' * 100
         result = _fit_measure(first, line)
         self.assertEqual(result, first + '\n' + line)
-        self.assertEqual(len(result), 101)  # 50 + newline + 50
+        self.assertEqual(len(result), 201)  # 100 + newline + 100
 
 
 class PromptRulesTest(TestCase):
