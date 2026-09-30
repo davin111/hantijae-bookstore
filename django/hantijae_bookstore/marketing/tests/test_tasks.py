@@ -68,6 +68,9 @@ class RunDueTest(TestCase):
         patcher = mock.patch('marketing.tasks.reviews.run')
         self.review_scan = patcher.start()
         self.addCleanup(patcher.stop)
+        patcher = mock.patch('marketing.tasks.instagram.run')
+        self.instagram_scan = patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_social_step_runs_every_loop_unless_off(self, *_):
         tasks.run_due(Deps(), datetime(2026, 9, 29, 3, 0, tzinfo=KST))
@@ -261,6 +264,22 @@ class RunDueTest(TestCase):
         self.assertEqual(WorkerState.get('moment_admin_queue'), ['x'])
         self.assertEqual(deps.bot.notes, [])
 
+    def test_instagram_scan_once_per_day_after_0450(self, *_):
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 29, 4, 49, tzinfo=KST))
+        self.instagram_scan.assert_not_called()
+        tasks.run_due(deps, datetime(2026, 9, 29, 4, 50, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 29, 12, 0, tzinfo=KST))
+        self.assertEqual(self.instagram_scan.call_count, 1)
+        self.assertEqual(self.instagram_scan.call_args.args[:2], (deps, date(2026, 9, 29)))
+        notify = self.instagram_scan.call_args.kwargs['notify']
+        notify('x')   # 04:50에 부른 알림은 아침까지 모아 둔다
+        self.assertEqual(deps.bot.notes, [])
+
+    def test_off_mode_skips_instagram_scan(self, *_):
+        tasks.run_due(Deps('off'), datetime(2026, 9, 29, 5, 0, tzinfo=KST))
+        self.instagram_scan.assert_not_called()
+
     def test_review_failure_is_reported_once_and_loop_goes_on(self, sales_, *_):
         self.review_scan.side_effect = RuntimeError('판별 실패')
         deps = Deps()
@@ -283,7 +302,7 @@ class MomentScheduleTest(TestCase):
     def setUp(self):
         # 바깥 수집은 이 클래스가 보는 것이 아니다 — 시험 중에 실제 사이트에 요청하지 않게 막는다
         for target in ('marketing.tasks.selections.run_scan', 'marketing.tasks.social.run_due',
-                       'marketing.tasks.reviews.run'):
+                       'marketing.tasks.reviews.run', 'marketing.tasks.instagram.run'):
             patcher = mock.patch(target)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -360,7 +379,7 @@ class MomentQuietTest(TestCase):
     def setUp(self):
         # 바깥 수집은 이 클래스가 보는 것이 아니다 — 시험 중에 실제 사이트에 요청하지 않게 막는다
         for target in ('marketing.tasks.selections.run_scan', 'marketing.tasks.social.run_due',
-                       'marketing.tasks.reviews.run'):
+                       'marketing.tasks.reviews.run', 'marketing.tasks.instagram.run'):
             patcher = mock.patch(target)
             patcher.start()
             self.addCleanup(patcher.stop)
