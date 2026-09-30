@@ -65,6 +65,9 @@ class RunDueTest(TestCase):
         patcher = mock.patch('marketing.tasks.social.run_due')
         self.social_step = patcher.start()
         self.addCleanup(patcher.stop)
+        patcher = mock.patch('marketing.tasks.reviews.run')
+        self.review_scan = patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_social_step_runs_every_loop_unless_off(self, *_):
         tasks.run_due(Deps(), datetime(2026, 9, 29, 3, 0, tzinfo=KST))
@@ -224,6 +227,27 @@ class RunDueTest(TestCase):
         tasks.run_due(Deps('off'), datetime(2026, 9, 29, 7, 0, tzinfo=KST))
         self.selection_scan.assert_not_called()
 
+    def test_review_scan_once_per_day_after_0430(self, *_):
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 29, 4, 29, tzinfo=KST))
+        self.review_scan.assert_not_called()
+        tasks.run_due(deps, datetime(2026, 9, 29, 4, 30, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 29, 12, 0, tzinfo=KST))
+        self.assertEqual(self.review_scan.call_count, 1)
+        self.assertEqual(self.review_scan.call_args.args, (deps, date(2026, 9, 29)))
+
+    def test_off_mode_skips_review_scan(self, *_):
+        tasks.run_due(Deps('off'), datetime(2026, 9, 29, 5, 0, tzinfo=KST))
+        self.review_scan.assert_not_called()
+
+    def test_review_failure_is_reported_once_and_loop_goes_on(self, sales_, *_):
+        self.review_scan.side_effect = RuntimeError('판별 실패')
+        deps = Deps()
+        with self.assertLogs('intake', level='ERROR'):
+            tasks.run_due(deps, datetime(2026, 9, 29, 6, 0, tzinfo=KST))
+            tasks.run_due(deps, datetime(2026, 9, 30, 6, 0, tzinfo=KST))
+        self.assertEqual(len([n for n in deps.bot.notes if '마케팅 review 실패' in n]), 2)   # 날마다 한 번
+        self.assertEqual(sales_.call_count, 2)
 
 
 @mock.patch('marketing.tasks.kit.build_pending', return_value=[])
@@ -234,6 +258,14 @@ class RunDueTest(TestCase):
 @mock.patch('marketing.tasks.sales.collect_sales', return_value=(0, []))
 class MomentScheduleTest(TestCase):
     TUE = datetime(2026, 9, 29, 5, 0, tzinfo=KST)
+
+    def setUp(self):
+        # 바깥 수집은 이 클래스가 보는 것이 아니다 — 시험 중에 실제 사이트에 요청하지 않게 막는다
+        for target in ('marketing.tasks.selections.run_scan', 'marketing.tasks.social.run_due',
+                       'marketing.tasks.reviews.run'):
+            patcher = mock.patch(target)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_moment_runs_once_after_five_only_when_on(self, *_):
         from marketing.moments import Report
@@ -304,6 +336,14 @@ class MomentScheduleTest(TestCase):
 @mock.patch('marketing.tasks.funding.collect_funding', return_value=0)
 @mock.patch('marketing.tasks.sales.collect_sales', return_value=(0, []))
 class MomentQuietTest(TestCase):
+    def setUp(self):
+        # 바깥 수집은 이 클래스가 보는 것이 아니다 — 시험 중에 실제 사이트에 요청하지 않게 막는다
+        for target in ('marketing.tasks.selections.run_scan', 'marketing.tasks.social.run_due',
+                       'marketing.tasks.reviews.run'):
+            patcher = mock.patch(target)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def test_dawn_digest_waits_until_eight(self, *_):
         from marketing.moments import Report
         WorkerState.put('moment_mode', 'admin_only')

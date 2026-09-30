@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 from intake.models import WorkerState
-from marketing import briefing, funding, grants, kit, midweek, moments, news, sales, selections, social
+from marketing import briefing, funding, grants, kit, midweek, moments, news, reviews, sales, selections, social
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
@@ -20,6 +20,7 @@ MOMENT_AT, MIDWEEK_BUILD_AT, MIDWEEK_SEND_AT = (5, 0), (5, 30), (9, 30)
 ADMIN_QUEUE = 'moment_admin_queue'
 GRANT_AT = (6, 40)   # 선정(06:10) 다음, 월요일 브리핑 만들기(07:00) 전. 한 번에 LLM 최대 3번(grants.JUDGE_PER_RUN)
 SELECTION_AT = (6, 10)   # 판매 지수(06:00) 다음. LLM을 쓰지 않아 07:00 브리핑 만들기 전에 끝난다
+REVIEW_AT = (4, 30)   # 새벽: 검색 200번 남짓과 판별 LLM으로 몇 분 워커를 붙잡는다(그동안 텔레그램 응답이 늦다)
 MISSED_NOTE = '⏭️ 이번 주 브리핑을 보내지 못했어요(항목 없음·모드·시간). /mk 로 확인하세요'
 
 
@@ -173,6 +174,10 @@ def _run_due(deps, now):
     now = _later(now, started)  # 뒤 블록(판매 지수·브리핑·묶음)은 지금 시각으로 판단한다
     local = kst_now(now)
     today, day, monday = local.date(), local.date().isoformat(), local.weekday() == 0
+
+    if _hm(local) >= REVIEW_AT and WorkerState.get('marketing_last_review_scan') != day:
+        WorkerState.put('marketing_last_review_scan', day)
+        _guard(deps, 'review', now, lambda: reviews.run(deps, today))
 
     if _hm(local) >= SALES_AT and WorkerState.get('marketing_last_sales_scan') != day:
         WorkerState.put('marketing_last_sales_scan', day)

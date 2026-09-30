@@ -157,3 +157,28 @@ def save_judged(llm, fresh, report):
         if verdict == 'review':
             report.reviews.append(s)
     return report
+
+
+FAIL_ALERT_DAYS = 3
+
+
+def _track_failures(deps, failed, active):
+    """같은 출처가 사흘 연속 모두 실패하면(키 만료·사용 한도) 관리자에게 한 번 알린다."""
+    for source in active:
+        key = f'review_fail_{source}'
+        if source not in failed:
+            WorkerState.put(key, 0)
+            continue
+        streak = (WorkerState.get(key) or 0) + 1
+        WorkerState.put(key, streak)
+        if streak == FAIL_ALERT_DAYS:
+            deps.bot.notify_admin(f'⚠️ 서평 수집: {SOURCE_LABEL[source]} 검색이 {streak}일째 실패했어요. '
+                                  f'API 키·사용 한도를 확인해 주세요')
+
+
+def run(deps, today, **scan_kwargs):
+    """워커가 하루 한 번(04:30 KST) 부른다. 판별 LLM이 모두 실패하면 예외를 올린다(tasks._guard가 하루 한 번 알림)."""
+    cfg = getattr(settings, 'MARKETING', {})
+    report, fresh = scan(today, cfg=cfg, **scan_kwargs)
+    _track_failures(deps, report.failed, [s for s, _, _ in sources(cfg)])
+    return save_judged(deps.llm, fresh, report)

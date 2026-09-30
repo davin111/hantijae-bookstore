@@ -1,7 +1,8 @@
 import json
 from datetime import date
+from types import SimpleNamespace
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from intake.models import WorkerState
 from marketing import reviews
@@ -237,3 +238,35 @@ class ScanTest(TestCase):
         report, fresh = self.scan(FakeAPI(naver_cafe=[nc('옛 모임 후기', 'https://cafe.naver.com/c/9', '&lt;커밍아웃 스토리&gt; 읽기')]), llm)
         self.assertEqual((fresh, llm.calls), ([], []))
         self.assertEqual(Signal.objects.get(url='https://cafe.naver.com/c/9').detail['verdict'], 'old')
+
+
+@override_settings(MARKETING=CFG)
+class RunTest(TestCase):
+    def setUp(self):
+        self.book = make_book(title='커밍아웃 스토리', subtitle='성소수자와 그 부모들의 이야기', published=date(2018, 6, 11),
+                              isbn='979-11-00000-01-1', author='성소수자부모모임')
+        self.notes = []
+
+    def deps(self, llm=None):
+        return SimpleNamespace(llm=llm or FakeLLM({'items': []}), bot=SimpleNamespace(notify_admin=self.notes.append))
+
+    def test_failure_streak_alerts_once_on_third_day(self):
+        api = FakeAPI(raise_for={'naver_cafe'})
+        with self.assertLogs('intake', level='WARNING'):
+            for _ in range(4):
+                reviews.run(self.deps(), TODAY, books=[self.book], get_json=api, sleep=no_sleep)
+        self.assertEqual(len([n for n in self.notes if '네이버 카페' in n and '3일째' in n]), 1)
+        reviews.run(self.deps(), TODAY, books=[self.book], get_json=FakeAPI(), sleep=no_sleep)
+        self.assertEqual(WorkerState.get('review_fail_naver_cafe'), 0)
+
+    def test_judge_failure_raises_after_tracking_failures(self):
+        api = FakeAPI(naver_blog=[nb('커밍아웃 스토리 독후감', 'https://blog.naver.com/a/1', '한티재', '20260925')],
+                      raise_for={'daum_cafe'})
+        with self.assertLogs('intake', level='WARNING'), self.assertRaises(RuntimeError):
+            reviews.run(self.deps(FlakyLLM(fail_first=9)), TODAY, books=[self.book], get_json=api, sleep=no_sleep)
+        self.assertEqual(WorkerState.get('review_fail_daum_cafe'), 1)
+
+    def test_returns_report_with_new_reviews(self):
+        api = FakeAPI(naver_blog=[nb('커밍아웃 스토리 독후감', 'https://blog.naver.com/a/1', '한티재', '20260925')])
+        report = reviews.run(self.deps(FakeLLM(REVIEW)), TODAY, books=[self.book], get_json=api, sleep=no_sleep)
+        self.assertEqual([s.url for s in report.reviews], ['https://blog.naver.com/a/1'])
