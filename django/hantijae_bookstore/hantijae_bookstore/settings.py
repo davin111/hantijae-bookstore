@@ -216,6 +216,8 @@ MARKETING = {
     'META_APP_SECRET': secret_info.get('META_APP_SECRET', ''),
     'META_PAGE_ID': secret_info.get('META_PAGE_ID', ''),
     'META_IG_USER_ID': secret_info.get('META_IG_USER_ID', ''),
+    'KPIPA_BNK_ID': secret_info.get('KPIPA_BNK_ID', ''),   # 출판유통통합전산망(대표 계정, 대표 동의)
+    'KPIPA_BNK_PASSWORD': secret_info.get('KPIPA_BNK_PASSWORD', ''),
     'KAKAO_REST_API_KEY': secret_info.get('KAKAO_REST_API_KEY', ''),
     'NAVER_HUB_CLIENT_ID': secret_info.get('NAVER_HUB_CLIENT_ID', ''),
     'NAVER_HUB_CLIENT_SECRET': secret_info.get('NAVER_HUB_CLIENT_SECRET', ''),
