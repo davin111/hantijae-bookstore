@@ -39,6 +39,8 @@ def normalize_url(url):
     query = urllib.parse.parse_qs(parts.query)
     if host == 'blog.naver.com' and query.get('blogId') and query.get('logNo'):
         path = f"/{query['blogId'][0]}/{query['logNo'][0]}"
+    if host == 'cafe.naver.com' and query.get('articleid'):   # 옛 ArticleRead.nhn?clubid=&articleid= 주소
+        path = f"/{query.get('clubid', [''])[0]}/{query['articleid'][0]}"
     return host + path
 
 

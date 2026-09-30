@@ -56,6 +56,11 @@ class ParseTest(SimpleTestCase):
         self.assertEqual(normalize_url('https://cafe.naver.com/rainbow/123?art=abc'), 'cafe.naver.com/rainbow/123')
         self.assertEqual(normalize_url('https://www.Example.com/a/'), 'example.com/a')
 
+    def test_normalize_url_keeps_legacy_naver_cafe_articles_distinct(self):
+        a = normalize_url('https://cafe.naver.com/ArticleRead.nhn?clubid=1&articleid=2')
+        b = normalize_url('https://cafe.naver.com/ArticleRead.nhn?clubid=1&articleid=3')
+        self.assertNotEqual(a, b)
+
 
 class SearchTest(SimpleTestCase):
     def test_naver_search_builds_request(self):
