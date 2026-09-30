@@ -12,8 +12,9 @@ class FakeTG:
         self.next_id += 1
         return {'message_id': self.next_id}
 
-    def send_message(self, chat_id, text, reply_to=None, buttons=None):
-        self.calls.append({'kind': 'send', 'chat': chat_id, 'text': text, 'reply_to': reply_to, 'buttons': buttons})
+    def send_message(self, chat_id, text, reply_to=None, buttons=None, quote=None):
+        self.calls.append({'kind': 'send', 'chat': chat_id, 'text': text, 'reply_to': reply_to, 'buttons': buttons,
+                           'quote': quote})
         return self._msg()
 
     def send_photo(self, chat_id, photo, caption, buttons=None, reply_to=None):
@@ -21,7 +22,10 @@ class FakeTG:
         return self._msg()
 
     def edit_text(self, chat_id, message_id, text, buttons=None):
-        self.calls.append({'kind': 'edit', 'chat': chat_id, 'text': text, 'buttons': buttons})
+        self.calls.append({'kind': 'edit', 'chat': chat_id, 'message_id': message_id, 'text': text, 'buttons': buttons})
+
+    def edit_markup(self, chat_id, message_id, buttons):
+        self.calls.append({'kind': 'markup', 'chat': chat_id, 'message_id': message_id, 'buttons': buttons})
 
     def answer_callback(self, callback_id, text=''):
         self.calls.append({'kind': 'answer', 'text': text})

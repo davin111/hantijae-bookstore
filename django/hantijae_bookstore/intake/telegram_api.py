@@ -9,7 +9,9 @@ class TelegramError(Exception):
 
 
 def keyboard(rows):
-    return {'inline_keyboard': [[{'text': t, 'callback_data': d} for t, d in row] for row in rows]}
+    """버튼 줄. (글, 콜백) 짝은 콜백 버튼, dict는 그대로 둔다(예: {'text': …, 'url': …} 링크 버튼)."""
+    return {'inline_keyboard': [[b if isinstance(b, dict) else {'text': b[0], 'callback_data': b[1]} for b in row]
+                                for row in rows]}
 
 
 class TelegramAPI:
@@ -39,16 +41,35 @@ class TelegramAPI:
         return str(e).replace(self.token, '***') if self.token else str(e)
 
     @staticmethod
-    def _reply(reply_to):
-        return {'message_id': reply_to, 'allow_sending_without_reply': True} if reply_to else None
+    def _reply(reply_to, quote=None):
+        if not reply_to:
+            return None
+        params = {'message_id': reply_to, 'allow_sending_without_reply': True}
+        if quote:  # 답장 위에 원래 메시지의 이 줄만 보인다(복사할 때는 따라오지 않는다)
+            params['quote'] = quote
+        return params
 
     def get_updates(self, offset, timeout=50):
         return self.call('getUpdates', _http_timeout=timeout + 15, offset=offset, timeout=timeout,
                          allowed_updates=['message', 'edited_message', 'callback_query'])
 
-    def send_message(self, chat_id, text, reply_to=None, buttons=None):
+    def send_message(self, chat_id, text, reply_to=None, buttons=None, quote=None):
+        try:
+            return self.call('sendMessage', chat_id=chat_id, text=text[:4096],
+                             reply_parameters=self._reply(reply_to, quote), reply_markup=buttons)
+        except TelegramError as e:
+            if not (quote and 'QUOTE' in str(e)):
+                raise
+        # 인용할 줄이 원래 메시지에 그대로 없으면 텔레그램이 거절한다(QUOTE_TEXT_INVALID) → 인용 없이 다시
         return self.call('sendMessage', chat_id=chat_id, text=text[:4096],
                          reply_parameters=self._reply(reply_to), reply_markup=buttons)
+
+    def edit_markup(self, chat_id, message_id, buttons):
+        try:
+            self.call('editMessageReplyMarkup', chat_id=chat_id, message_id=message_id, reply_markup=buttons)
+        except TelegramError as e:
+            if 'message is not modified' not in str(e):
+                raise
 
     def send_photo(self, chat_id, photo, caption, buttons=None, reply_to=None):
         return self.call('sendPhoto', _files={'photo': ('cover.jpg', photo, 'image/jpeg')}, chat_id=chat_id,

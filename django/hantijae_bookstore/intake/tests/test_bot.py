@@ -27,13 +27,19 @@ class FakeTG:
         self.next_id += 1
         return {'message_id': self.next_id}
 
-    def send_message(self, chat_id, text, reply_to=None, buttons=None):
+    def send_message(self, chat_id, text, reply_to=None, buttons=None, quote=None):
         self.calls.append(('send', chat_id, text, buttons))
         return self._msg()
 
     def send_photo(self, chat_id, photo, caption, buttons=None, reply_to=None):
         self.calls.append(('photo', chat_id, caption, buttons))
         return self._msg()
+
+    def edit_text(self, chat_id, message_id, text, buttons=None):
+        self.calls.append(('edit_text', chat_id, text, buttons))
+
+    def edit_markup(self, chat_id, message_id, buttons):
+        self.calls.append(('markup', chat_id, message_id, buttons))
 
     def edit_caption(self, chat_id, message_id, caption, buttons=None):
         self.calls.append(('edit', chat_id, caption, buttons))
@@ -189,7 +195,7 @@ class StrictFakeTG(FakeTG):
         self.kinds[m['message_id']] = kind
         return m
 
-    def send_message(self, chat_id, text, reply_to=None, buttons=None):
+    def send_message(self, chat_id, text, reply_to=None, buttons=None, quote=None):
         self.calls.append(('send', chat_id, text, buttons))
         return self._msg('text')
 
