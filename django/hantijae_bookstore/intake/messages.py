@@ -94,6 +94,8 @@ def parse_callback(data):
 
 
 def _val(v):
+    if isinstance(v, bool):   # 참·거짓 값은 '판매 상태' 하나뿐
+        return '판매 중' if v else '절판'
     return '(빈 칸)' if v is None else str(v)
 
 

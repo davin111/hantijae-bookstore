@@ -12,7 +12,7 @@ from books.models import Book
 from intake.drafts import invalidate_book_caches
 from intake.models import ReviewItem
 
-# 항목 → (사이트 Book 필드 또는 None=노션 전용, 노션 속성 타입). 노션 속성 이름은 항목 이름과 같다.
+# 항목 → (사이트 Book 필드 또는 None=노션 전용, 노션 속성 타입 또는 None=사이트 전용). 노션 속성 이름은 항목 이름과 같다.
 FIELDS = {
     '쪽수': ('page_count', 'number'),
     '가격': ('full_price', 'number'),
@@ -20,6 +20,7 @@ FIELDS = {
     '판형': ('size', 'select'),
     '부제': ('subtitle', 'rich_text'),
     'ISBN': (None, 'rich_text'),
+    '판매 상태': ('visible', None),   # False = 절판(책 페이지가 서점 버튼 대신 '절판된 책입니다')
 }
 NOTION, SITE = '노션', '사이트'
 
@@ -85,7 +86,7 @@ def fields_of(spec):
 def snapshot(book_id, page_id, fields, notion):
     page = notion.get_page(page_id) if page_id else None
     book = Book.objects.get(pk=book_id) if book_id else None
-    return {f: {'notion': _notion_read(page['properties'].get(f)) if page else None,
+    return {f: {'notion': _notion_read(page['properties'].get(f)) if page and FIELDS[f][1] else None,
                 'site': _site_read(book, f) if book and FIELDS[f][0] else None} for f in fields}
 
 
@@ -137,7 +138,7 @@ def choose(item_id, index, actor, notion):
             changed = []
             for f, v in item.options[index]['set'].items():
                 v = _norm(v)
-                if item.notion_page_id and cur[f]['notion'] != v:
+                if item.notion_page_id and FIELDS[f][1] and cur[f]['notion'] != v:
                     changed.append([NOTION, f, cur[f]['notion'], v])
                 if item.book_id and FIELDS[f][0] and cur[f]['site'] != v:
                     changed.append([SITE, f, cur[f]['site'], v])

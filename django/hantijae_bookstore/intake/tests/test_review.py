@@ -11,7 +11,7 @@ from django.test import TestCase, override_settings
 from books.models import Book, Category
 from intake import review
 from intake.bot import REPLY_GUIDE, Bot
-from intake.messages import review_buttons
+from intake.messages import review_buttons, review_text
 from intake.models import ReviewItem, TelegramChat, WorkerState
 from intake.tests.test_bot import ADMIN, CONFIG, GROUP, FakeTG, cb, msg
 
@@ -147,6 +147,34 @@ class ReviewApplyTest(TestCase):
         self.assertEqual(props['판형']['select'], {'name': '130*204'})
         self.assertEqual(props['ISBN']['rich_text'][0]['plain_text'], '979-11-90178-35-8 03230')
         self.assertEqual({c[0] for c in changed}, {'노션'})
+
+
+@override_settings(INTAKE=CONFIG)
+class SaleStateReviewTest(TestCase):
+    """'판매 상태'는 사이트에만 있는 항목(노션 쪽 값 없음). 절판이면 책 페이지가 서점 버튼 대신 '절판된 책입니다'를 보인다."""
+    def setUp(self):
+        cat = Category.objects.create(name='교양')
+        self.book = Book.objects.create(title='기독교 본질 논쟁', subtitle='', full_price=12000, page_count=200,
+                                        category=cat, published_date=date(2017, 10, 10))
+        self.spec = {'book_id': self.book.id, 'title': '『기독교 본질 논쟁』 절판 표시', 'body': '',
+                     'options': [{'label': '절판으로 표시', 'set': {'판매 상태': False}},
+                                 {'label': '그대로 두기', 'set': {}}]}
+
+    def test_out_of_print_is_applied_to_site_only_and_undoable(self):
+        item = review.create_item('op', 1, self.spec, notion=None)
+        self.assertEqual(item.before, {'판매 상태': {'notion': None, 'site': True}})
+        item, changed = review.choose(item.id, 0, '운영진A', notion=None)
+        self.assertEqual(changed, [('사이트', '판매 상태', True, False)])
+        self.assertFalse(Book.objects.get(pk=self.book.id).visible)
+        self.assertIn('• 사이트 판매 상태 판매 중 → 절판', review_text(item, 1))
+        review.undo(item.id, '운영진A', notion=None)
+        self.assertTrue(Book.objects.get(pk=self.book.id).visible)
+
+    def test_notion_page_is_never_written_for_site_only_field(self):
+        notion = FakeNotion()
+        item = review.create_item('op', 1, {**self.spec, 'notion_page_id': PAGE}, notion)
+        _, changed = review.choose(item.id, 0, '운영진A', notion)
+        self.assertEqual((notion.updates, changed), ([], [('사이트', '판매 상태', True, False)]))
 
 
 @override_settings(INTAKE=CONFIG)
