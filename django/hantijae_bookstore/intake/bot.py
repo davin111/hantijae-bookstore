@@ -72,10 +72,10 @@ class Bot:
         group = self._chat(TelegramChat.REVIEWERS)
         return group if WorkerState.get('mode', 'admin_only') == 'live' and group else self._chat(TelegramChat.ADMIN)
 
-    def notify_admin(self, text):
+    def notify_admin(self, text, html=False):
         admin = self._chat(TelegramChat.ADMIN)
         if admin:
-            self.tg.send_message(admin, text)
+            self.tg.send_message(admin, text, html=html)
 
     def notify_reviewers_or_admin(self, text):
         chat = self.review_chat_id()

@@ -144,9 +144,12 @@ class Draft(BaseModel):
         # 편지의 '알리면 좋을 곳'은 본문과 따로 두고, 없으면 빈 목록
         return (self.extra or {}).get('places') or []
 
+    # 운영진에게 보이는 이름. 선택지(CHANNEL_CHOICES)를 바꾸면 마이그레이션이 생겨서 표시만 따로 둔다
+    DISPLAY = {BLOG: '네이버 블로그 글'}
+
     @property
     def label(self):
-        return dict(self.CHANNEL_CHOICES)[self.channel]
+        return self.DISPLAY.get(self.channel) or dict(self.CHANNEL_CHOICES)[self.channel]
 
 
 class DraftMessage(models.Model):
@@ -276,3 +279,27 @@ class GrantCall(models.Model):
     reminded_at = models.DateTimeField(null=True, blank=True, help_text='마감 이틀 전 알림을 보낸 시각')
     reminder_message_id = models.BigIntegerField(null=True, blank=True, help_text='그 알림 메시지(답장을 받으려고)')
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class BnkSale(models.Model):
+    """출판유통통합전산망 판매: 책 하나 × 하루 하나. 약 2일 늦게 들어와서 매일 최근 7일을 날짜째 바꿔 넣는다(bnk_sales)."""
+    day = models.DateField(db_index=True)
+    isbn = models.CharField(max_length=13)
+    book = models.ForeignKey(Book, null=True, blank=True, related_name='bnk_sales', on_delete=models.SET_NULL)
+    title = models.CharField(max_length=300)
+    kyobo = models.IntegerField(default=0)
+    yes24 = models.IntegerField(default=0)
+    aladin = models.IntegerField(default=0)
+    ypbooks = models.IntegerField(default=0, help_text='영풍문고')
+    local = models.IntegerField(default=0, help_text='지역서점')
+    total = models.IntegerField(default=0, help_text='반품이 많으면 음수일 수 있다')
+    fetched_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('day', 'isbn')
+
+
+class BnkDay(models.Model):
+    """전산망 하루를 마지막으로 읽은 날. 약 2일 늦게 들어오므로 월간 요약은 그 달 모든 날이 '그날+2일' 뒤에 읽혔을 때만 보낸다."""
+    day = models.DateField(unique=True)
+    read_on = models.DateField()

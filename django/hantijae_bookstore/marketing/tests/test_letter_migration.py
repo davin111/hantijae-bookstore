@@ -6,7 +6,7 @@ from django.test import SimpleTestCase, TestCase
 from marketing.models import Draft, Proposal
 from marketing.tests.fakes import make_book
 
-mig = importlib.import_module('marketing.migrations.0010_notion_copy')
+mig = importlib.import_module('marketing.migrations.0011_notion_copy')
 
 BRIEF = '알리면 좋을 곳\n· 농업·생협 단체\n· 귀농·귀촌 모임\n\n보낼 글\n안녕하세요. 도서출판 한티재입니다.'
 KIT = ('알리면 좋을 곳\n· 청송 지역 신문 ― 지역 시인\n· 귀농·귀촌 단체 ― 귀농 이야기\n\n'

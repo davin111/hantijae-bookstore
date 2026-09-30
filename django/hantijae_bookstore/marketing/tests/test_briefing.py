@@ -6,7 +6,8 @@ from marketing.briefing import build_weekly, compose, measure_line, save_briefin
 from marketing.candidates import Candidate
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM
-from marketing.tests.fakes import FakeLLM, make_book
+from intake.models import WorkerState
+from marketing.tests.fakes import FakeLLM, make_book, make_sale
 from marketing.timeutil import KST
 from web.models import Notice, StoreClick
 
@@ -321,3 +322,19 @@ class PromptRulesTest(TestCase):
     def test_briefing_suggests_small_actions_even_if_already_done(self):
         from marketing.prompts import BRIEFING_SYSTEM
         self.assertIn('댓글 달기·공유 같은 작은 일도 함께 권합니다', BRIEFING_SYSTEM)
+
+
+class BnkMeasureTest(TestCase):
+    def test_measure_line_uses_bnk_sales_when_available(self):
+        WorkerState.put('bnk_mode', 'on')
+        book = make_book()
+        p = Proposal.objects.create(kind=Proposal.KIT, book=book, headline='x')
+        Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='b', status=Draft.POSTED,
+                             posted_at=datetime(2026, 9, 10, 10, 0, tzinfo=KST))
+        make_sale(date(2026, 9, 1), 2, book=book)
+        make_sale(date(2026, 9, 15), 5, book=book)
+        make_sale(date(2026, 9, 25), 1, book=book)   # 뒤 2주(9/10~9/23) 밖, 가장 최근 판매일만 채운다
+        SalesSnapshot.objects.create(book=book, date=date(2026, 9, 10), sales_point=455)
+        SalesSnapshot.objects.create(book=book, date=date(2026, 9, 25), sales_point=520)
+        self.assertEqual(measure_line(TODAY),
+                         '지난번 올린 『나는 산속으로 더 깊이 들어간다』 글 ― 올리기 전 2주 2권 → 올린 뒤 2주 5권')

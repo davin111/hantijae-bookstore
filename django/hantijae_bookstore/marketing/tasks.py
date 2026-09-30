@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 from intake.models import WorkerState
-from marketing import (briefing, funding, grants, kit, midweek, moments, news, notion_sync, placements, reviews, sales, selections,
-                       social)
+from marketing import (bnk, bnk_sales, briefing, funding, grants, kit, midweek, moments, news, notion_sync, placements,
+                       reviews, sales, selections, social)
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
@@ -19,6 +19,9 @@ KIT_CHECK_SECONDS = 600
 SALES_AT, NEWS_AT, BRIEF_BUILD_AT, BRIEF_SEND_AT, BRIEF_GIVE_UP_AT = (6, 0), (6, 30), (7, 0), (9, 30), (21, 0)
 MOMENT_AT, MIDWEEK_BUILD_AT, MIDWEEK_SEND_AT = (5, 0), (5, 30), (9, 30)
 ADMIN_QUEUE = 'moment_admin_queue'
+BNK_AT = (6, 20)   # 알라딘(06:00)·선정(06:10) 다음, 지원사업(06:40) 전
+BNK_MONTH_DAY, BNK_MONTH_AT = 3, (9, 30)   # 전산망이 약 2일 늦어서 1일이 아니라 3일
+BNK_FAIL_ALERT_DAYS = 3
 GRANT_AT = (6, 40)   # 선정(06:10) 다음, 월요일 브리핑 만들기(07:00) 전. 한 번에 LLM 최대 3번(grants.JUDGE_PER_RUN)
 SELECTION_AT = (6, 10)   # 판매 지수(06:00) 다음. LLM을 쓰지 않아 07:00 브리핑 만들기 전에 끝난다
 REVIEW_AT = (4, 30)   # 새벽: 검색 200번 남짓과 판별 LLM으로 몇 분 워커를 붙잡는다(그동안 텔레그램 응답이 늦다)
@@ -137,6 +140,42 @@ def _grant_scan(deps, today, now, started):
         _notify_awake(deps, _later(now, started), text)
 
 
+def _bnk_login_rejected(deps, today, now, started, error):
+    """계정 거부: 다시 시도하면 대표 계정이 잠길 수 있어 자동 로그인을 멈추고 관리자에게 알린다(/bnk on으로 다시 시작)."""
+    bnk_sales.block(today)
+    _notify_awake(deps, _later(now, started), f'{bnk_sales.LOGIN_FAIL}\n사이트 안내: {error}')
+
+
+def _bnk_collect(deps, today, now, started):
+    """전산망 판매 수집. 계정 거부는 자동 로그인을 멈추고 알린다. 그 밖의 오류는 _guard가 하루 한 번 알리고,
+    사흘 연속이면 화면이 바뀌었을 수 있다고 한 번 더 알린다."""
+    try:
+        with bnk.client_from_settings() as client:
+            bnk_sales.collect(client, today)
+    except bnk.BnkLoginError as e:
+        _bnk_login_rejected(deps, today, now, started, e)
+        return
+    except Exception:
+        streak = (WorkerState.get('bnk_fail_streak') or 0) + 1
+        WorkerState.put('bnk_fail_streak', streak)
+        if streak == BNK_FAIL_ALERT_DAYS:
+            _notify_awake(deps, _later(now, started),
+                          f'⚠️ 전산망 판매를 {streak}일째 읽지 못했어요 — 화면이 바뀌었는지 확인해 주세요')
+        raise
+    WorkerState.put('bnk_fail_streak', 0)
+
+
+def _bnk_month(deps, today, now, started):
+    try:
+        with bnk.client_from_settings() as client:
+            text = bnk_sales.monthly_text(client, bnk_sales.last_month_start(today), html=True)
+    except bnk.BnkLoginError as e:
+        _bnk_login_rejected(deps, today, now, started, e)
+        return
+    if text:
+        deps.bot.notify_admin(text, html=True)
+
+
 def _build_midweek(deps, m, today, now, started):
     made, dropped = midweek.build(deps.llm, today, now, m.mode())
     if dropped:
@@ -189,6 +228,18 @@ def _run_due(deps, now):
     if _hm(local) >= SELECTION_AT and WorkerState.get('marketing_last_selection_scan') != day:
         WorkerState.put('marketing_last_selection_scan', day)
         _guard(deps, 'selection', now, lambda: selections.run_scan(deps, today, now))
+
+    bnk_on = bnk_sales.mode() == 'on' and not bnk_sales.blocked()   # 계정 거부 뒤에는 /bnk on 전까지 로그인하지 않는다
+    if bnk_on and _hm(local) >= BNK_AT and WorkerState.get('bnk_last_run') != day:
+        WorkerState.put('bnk_last_run', day)
+        _guard(deps, 'bnk', now, lambda: _bnk_collect(deps, today, now, started))
+    month_start = bnk_sales.last_month_start(today)
+    month = month_start.strftime('%Y-%m')
+    # 그 달을 다 읽었을 때만(로그인 전에 DB로 확인) 보내고, 그때 적는다 — 덜 읽은 달은 다음 날 다시 본다
+    if (bnk_on and local.day >= BNK_MONTH_DAY and _hm(local) >= BNK_MONTH_AT and not in_quiet_hours(now)
+            and WorkerState.get('bnk_last_monthly') != month and bnk_sales.month_ready(month_start)):
+        WorkerState.put('bnk_last_monthly', month)
+        _guard(deps, 'bnk_month', now, lambda: _bnk_month(deps, today, now, started))
 
     if (_hm(local) >= GRANT_AT and grants.mode() != 'off'
             and WorkerState.get('grant_last_scan') != day):

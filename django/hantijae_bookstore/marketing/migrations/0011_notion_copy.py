@@ -59,7 +59,7 @@ def backward(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('marketing', '0009_draft_placements'),
+        ('marketing', '0010_bnk_sales'),
     ]
 
     operations = [

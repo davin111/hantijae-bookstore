@@ -27,7 +27,7 @@ class FakeTG:
         self.next_id += 1
         return {'message_id': self.next_id}
 
-    def send_message(self, chat_id, text, reply_to=None, buttons=None, quote=None):
+    def send_message(self, chat_id, text, reply_to=None, buttons=None, quote=None, html=False, quote_entities=None):
         self.calls.append(('send', chat_id, text, buttons))
         return self._msg()
 
@@ -195,7 +195,7 @@ class StrictFakeTG(FakeTG):
         self.kinds[m['message_id']] = kind
         return m
 
-    def send_message(self, chat_id, text, reply_to=None, buttons=None, quote=None):
+    def send_message(self, chat_id, text, reply_to=None, buttons=None, quote=None, html=False, quote_entities=None):
         self.calls.append(('send', chat_id, text, buttons))
         return self._msg('text')
 
@@ -209,7 +209,7 @@ class StrictFakeTG(FakeTG):
             raise TelegramError('editMessageCaption: Bad Request: there is no caption in the message to edit')
         self.calls.append(('edit', chat_id, caption, buttons))
 
-    def edit_text(self, chat_id, message_id, text, buttons=None):
+    def edit_text(self, chat_id, message_id, text, buttons=None, html=False):
         from intake.telegram_api import TelegramError
         if self.kinds.get(message_id) == 'photo':
             raise TelegramError('editMessageText: Bad Request: there is no text in the message to edit')

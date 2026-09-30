@@ -15,7 +15,7 @@ from intake.models import TelegramChat, WorkerState
 from marketing import board
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
-from marketing import grants, messages, midweek, moments, notion_sync, social
+from marketing import bnk, bnk_sales, grants, messages, midweek, moments, notion_sync, social
 from marketing.hooks import add_hook, upcoming
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, GrantCall, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
@@ -24,7 +24,7 @@ from marketing.timeutil import KST, in_quiet_hours, kst_now, kst_today, week_sta
 from web.blog import fetch_rss, parse_rss
 
 log = logging.getLogger('intake')
-COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch', '/moment', '/grant')
+COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch', '/moment', '/grant', '/bnk')
 MODES = ('off', 'admin_only', 'live')
 KIT_DAILY_CAP = 2
 REMIND_AT = (9, 30)   # 지원사업 마감 이틀 전 알림을 보내기 시작하는 시각(KST)
@@ -32,7 +32,7 @@ KIT_SEND_MAX_FAILURES = 3  # 이 횟수에 닿으면 관리자에게 알리고 �
 BUILDING = '만들고 있어요. 몇 분 걸려요.'
 USAGE = ('사용법: /mk off|admin_only|live · /mk social on|off · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
          '/hook <MM-DD> <이름> | <책1>, <책2> · /hook list · /quiet <제목 일부> <YYYY-MM-DD> [이유] · /quiet list · '
-         '/watch <이름> [+ 좁히기 조건] · /watch list · /watch off <번호> · /moment · /grant · /mk notion on|off')
+         '/watch <이름> [+ 좁히기 조건] · /watch list · /watch off <번호> · /moment · /grant · /bnk · /mk notion on|off')
 MOMENT_USAGE = ('사용법: /moment off|admin_only|live · /moment midweek off|admin_only|live · /moment now (지금 한 번, 몇 분) · '
                 '/moment list')
 
@@ -221,6 +221,7 @@ class Marketing:
         # 이미 ACTED로 확정된 항목은 메시지에서는 빠지지만(위) 상태는 그대로 둔다(운영진 결정 보존)
         to_skip = [i for i in items if is_quiet(i) and i.status != Proposal.ACTED]
         grant_lines = self._grant_briefing_lines(today)
+        sales_line = self._bnk_sales_line(today)
         states = [board.item_state(p) for p in shown]  # 관리자 방 사본에서 이미 누른 결정도 버튼에 보인다
         url = (briefing.notion or {}).get('url', '')
         if record:  # 상황판·노션이 같은 항목을 그리게, 보낼 항목 순서를 먼저 적는다
@@ -228,10 +229,10 @@ class Marketing:
             briefing.save(update_fields=['shown'])
             url = self._notion_page(notion_sync.brief_target(
                 briefing, messages.briefing_text(briefing.week_start, shown, briefing.measure, grants=grant_lines,
-                                                 guide=False)), chat, now) or url
+                                                 sales=sales_line, guide=False)), chat, now) or url
         sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, shown, briefing.measure,
-                                                                 grants=grant_lines),
-                                    buttons=messages.briefing_buttons(briefing, shown, states, url))
+                                                                 grants=grant_lines, sales=sales_line),
+                                    buttons=messages.briefing_buttons(briefing, shown, states, url), html=True)
         if record:
             briefing.chat_id, briefing.message_id, briefing.sent_at, briefing.mode = chat, sent['message_id'], now, self.mode()
             briefing.save(update_fields=['chat_id', 'message_id', 'sent_at', 'mode'])
@@ -254,6 +255,15 @@ class Marketing:
             log.warning('grant briefing lines failed', exc_info=True)
             return []
 
+    @staticmethod
+    def _bnk_sales_line(today):
+        """월요 브리핑 첫 줄(전산망 최근 7일). 실패해도 브리핑은 나가게 비운다."""
+        try:
+            return bnk_sales.sales_line(today)
+        except Exception:
+            log.warning('bnk sales line failed', exc_info=True)
+            return ''
+
     def grant_target(self):
         """(받는 곳, 검수 방인가). grant_mode live이고 마케팅도 live면 검수 방, off면 없음, 그 밖에는 관리자 1:1 미리보기."""
         gm = grants.mode()
@@ -274,20 +284,22 @@ class Marketing:
         if not room:
             fresh = [c for c in calls if c.preview_at is None][:grants.PER_MESSAGE]
             if fresh:
-                self.tg.send_message(chat, messages.grant_preview_text(fresh))
+                self.tg.send_message(chat, messages.grant_preview_text(fresh), html=True)
                 GrantCall.objects.filter(pk__in=[c.pk for c in fresh]).update(preview_at=now)
                 sent += 1
             return sent
         if calls and not GrantCall.objects.filter(chat_id=chat, sent_at__gte=self._day_start(now)).exists():
             calls = calls[:grants.PER_MESSAGE]
-            msg = self.tg.send_message(chat, messages.grant_card_text(calls), buttons=messages.grant_buttons(calls))
+            msg = self.tg.send_message(chat, messages.grant_card_text(calls), buttons=messages.grant_buttons(calls),
+                                       html=True)
             GrantCall.objects.filter(pk__in=[c.pk for c in calls]).update(
                 state=GrantCall.ANNOUNCED, chat_id=chat, message_id=msg['message_id'], sent_at=now)
             sent += 1
         local = kst_now(now)
         if (local.hour, local.minute) >= REMIND_AT:
             for call in grants.due_reminders(today):
-                msg = self.tg.send_message(call.chat_id, messages.grant_reminder_text(call), reply_to=call.message_id)
+                msg = self.tg.send_message(call.chat_id, messages.grant_reminder_text(call), reply_to=call.message_id,
+                                           html=True)
                 GrantCall.objects.filter(pk=call.pk).update(reminded_at=now, reminder_message_id=msg['message_id'])
                 sent += 1
         return sent
@@ -306,7 +318,7 @@ class Marketing:
             return False
         url = self._notion_page(notion_sync.now_target(items, messages.midweek_text(items, guide=False), kst_today(now)),
                                 chat, now)
-        sent = self.tg.send_message(chat, messages.midweek_text(items),
+        sent = self.tg.send_message(chat, messages.midweek_text(items), html=True,
                                     buttons=messages.midweek_buttons(items, [board.item_state(p) for p in items], url))
         Proposal.objects.filter(pk__in=[p.id for p in items]).update(chat_id=chat, message_id=sent['message_id'],
                                                                      sent_at=now, status=Proposal.SHOWN)
@@ -443,7 +455,7 @@ class Marketing:
             if call and call.message_id:
                 calls = grants.card_calls(call.chat_id, call.message_id)
                 self.tg.edit_text(call.chat_id, call.message_id, messages.grant_card_text(calls),
-                                  buttons=messages.grant_buttons(calls))
+                                  buttons=messages.grant_buttons(calls), html=True)
             return answer
         return ''
 
@@ -493,7 +505,7 @@ class Marketing:
         now = now or timezone.now()
         handler = {'/mk': self._mk, '/brief': self._brief, '/kit': self._kit, '/hook': self._hook,
                    '/quiet': self._quiet, '/watch': self._watch, '/moment': self._moment,
-                   '/grant': self._grant}[cmd]
+                   '/grant': self._grant, '/bnk': self._bnk}[cmd]
         self.tg.send_message(chat_id, handler(chat_id, (arg or '').strip(), now, kst_today(now)) or '완료')
 
     def _mk(self, chat_id, arg, now, today):
@@ -541,6 +553,33 @@ class Marketing:
             sent = self.send_grants(now)
             return '\n'.join(x for x in (f'새 글 {report.new}건', grants.digest(report), f'보낸 메시지 {sent}개') if x)
         return grants.status_text(today) + '\n' + grants.USAGE
+
+    def _bnk(self, chat_id, arg, now, today):
+        if arg in bnk_sales.MODES:
+            WorkerState.put('bnk_mode', arg)
+            if arg == 'on':
+                bnk_sales.unblock()   # 새 비밀번호를 저장한 뒤 다시 켜는 길
+            return f'bnk_mode={arg}'
+        try:
+            if arg == 'now':
+                self.tg.send_message(chat_id, BUILDING)
+                with bnk.client_from_settings() as client:
+                    report = bnk_sales.collect(client, today)
+                bnk_sales.unblock()
+                WorkerState.put('bnk_last_run', today.isoformat())
+                return bnk_sales.report_text(report)
+            if arg == 'month':
+                start = bnk_sales.last_month_start(today)
+                if not bnk_sales.month_ready(start):   # 로그인하기 전에 DB로 확인
+                    return '지난달 하루하루를 다 읽은 기록이 아직 없어요'
+                with bnk.client_from_settings() as client:
+                    return bnk_sales.monthly_text(client, start)
+        except bnk.BnkLoginError as e:
+            bnk_sales.block(today)
+            return f'전산망 조회 실패: {e}'
+        except bnk.BnkError as e:
+            return f'전산망 조회 실패: {e}'
+        return bnk_sales.status_text(today)
 
     def _brief(self, chat_id, arg, now, today):
         b = Briefing.objects.filter(week_start=week_start(today)).first()

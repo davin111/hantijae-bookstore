@@ -1,6 +1,7 @@
 """마케팅 비서 텔레그램 문구·버튼 (순수 함수). 콜백은 'mk:<동작>:<번호>' (64바이트 제한 안)."""
 import re
 from datetime import date, timedelta
+from html import escape
 
 from django.utils import timezone
 
@@ -11,8 +12,13 @@ from marketing.text import clip, tg_len
 from marketing.timeutil import kst_today
 
 TEXT_LIMIT = 4096
-KIT_BULLET = {Draft.BLOG: '블로그 글', Draft.INSTAGRAM: '인스타 글', Draft.LINKS: '서점 링크 공지',
+KIT_BULLET = {Draft.BLOG: '네이버 블로그 글', Draft.INSTAGRAM: '인스타 글', Draft.LINKS: '서점 링크 공지',
               Draft.SHORT: '짧은 소개 (한 줄 3가지, 200자)', Draft.LETTER: '알리면 좋을 곳과 보낼 글'}
+
+
+def h(value):
+    """HTML 서식 메시지(텔레그램 parse_mode=HTML)에 넣는 바깥 글자. 책 제목의 <지역서점 …> 같은 글자가 태그로 읽히지 않게."""
+    return escape(str(value), quote=False)
 
 
 def cb(action, pk):
@@ -35,7 +41,7 @@ KIT_GUIDE = '버튼을 누르면 올릴 글만 따로 보내 드려요. 올렸�
 NOTION_BUTTON = '노션에서 크게 보기 ↗'
 ITEM_LABEL = {OPEN: '{}번 글 보기', POSTED: '{}번 ✅ 올림', SKIPPED: '{}번 넘김'}
 KIT_LABEL = {OPEN: '{} 글 보기', POSTED: '{} ✅ 올림', SKIPPED: '{} 넘김'}
-KIT_SHORT = {Draft.BLOG: '블로그', Draft.INSTAGRAM: '인스타'}
+KIT_SHORT = {Draft.BLOG: '네이버 블로그', Draft.INSTAGRAM: '인스타'}
 POSTED_TOAST = '기록했어요. 어디에 올리셨는지는 봇이 찾아보고, 2주쯤 뒤 반응을 브리핑에 알려 드려요'
 WORKING = '고치고 있어요. 2~3분쯤 걸려요.'
 REWRITE_FAILED = '지금은 고치지 못했어요. 잠시 뒤에 다시 적어 주세요.'
@@ -45,6 +51,11 @@ TOAST_NOTE = {'notion': ' · 노션에서 고친 글이에요', 'empty': ' · �
 def _with_guide(text, guide, limit):
     """안내가 잘리지 않게 본문을 먼저 줄인다."""
     return clip(text, limit - tg_len(guide) - 2) + '\n\n' + guide
+
+
+def _html_guide(text, guide):
+    """HTML 허브 글 끝에 안내 한 번. 태그를 자르지 않게 줄이지 않는다(main의 HTML 서식과 같은 방식)."""
+    return text + '\n\n' + h(BRIEF_GUIDE) if guide else text
 
 
 def _with_notion(rows, url):
@@ -59,7 +70,7 @@ def kit_caption(book, drafts, missing, blog_exists, today=None, guide=True):
     d, today = book.published_date, today or kst_today(timezone.now())
     year = '' if d.year == today.year else f'{d.year}년 '  # 올해 책이 아니면 연도를 붙인다
     lines = [f'『{book.title}』 홍보 자료를 만들어 두었어요.',
-             f'{year}{d.month}월 {d.day}일에 나온 책이에요.' + ('' if blog_exists else ' 아직 블로그 글이 없어요.'),
+             f'{year}{d.month}월 {d.day}일에 나온 책이에요.' + ('' if blog_exists else ' 아직 네이버 블로그 글이 없어요.'),
              '', '준비된 것', *[f'· {KIT_BULLET[x.channel]}' for x in drafts]]
     if missing:
         lines += ['', f'사이트에 {"·".join(missing)} 상품 링크가 비어 있어요.']
@@ -97,20 +108,23 @@ def draft_buttons(draft):
     return keyboard([[('올렸어요', cb('p', draft.id)), ('고치기', cb('e', draft.id)), ('다음에', cb('l', draft.id))]])
 
 
-def briefing_text(week_start, proposals, measure='', grants=(), guide=True):
+def briefing_text(week_start, proposals, measure='', grants=(), sales='', guide=True):
+    """HTML 서식(send_message(html=True)): 제목·항목 굵게. 모두 앞으로 할 일이라 접지 않는다(feedback-telegram-formatting).
+    guide: 버튼 안내를 끝에 한 번(노션 파란 상자에 옮길 때는 뺀다). 자르지 않는다 — 너무 길면 텔레그램 쪽이 일반 글로 보낸다."""
     end = week_start + timedelta(days=6)
-    lines = [f'이번 주 홍보 제안 ({week_start.month}월 {week_start.day}일 ~ {end.month}월 {end.day}일)']
+    lines = [f'<b>이번 주 홍보 제안</b> ({week_start.month}월 {week_start.day}일 ~ {end.month}월 {end.day}일)']
+    if sales:  # 전산망 최근 7일 판매 한 줄(bnk_sales.sales_line) — 보내는 때 계산해 넘긴다
+        lines += ['', h(sales)]
     for i, p in enumerate(proposals, 1):
-        lines += ['', f'{i}. {p.headline}', p.reason]
+        lines += ['', f'<b>{i}. {h(p.headline)}</b>', h(p.reason)]
         extra = getattr(p, 'extra', None) or {}
         if extra.get('link'):  # 무슨 기사·펀딩인지 운영진이 바로 열어 보게
-            lines.append(f"{extra.get('link_label') or '링크'}: {extra['link']}")
+            lines.append(f"{h(extra.get('link_label') or '링크')}: {h(extra['link'])}")
     if grants:  # 열린 지원사업 공고(grants.open_calls) — 보내는 때 계산해 넘긴다
-        lines += ['', '📌 지원사업 신청', *grants]
+        lines += ['', '<b>📌 지원사업 신청</b>', *(h(g) for g in grants)]
     if measure:
-        lines += ['', measure]
-    text = '\n'.join(lines)
-    return _with_guide(text, BRIEF_GUIDE, TEXT_LIMIT) if guide else clip(text, TEXT_LIMIT)
+        lines += ['', h(measure)]
+    return _html_guide('\n'.join(lines), guide)
 
 
 def _item_buttons(proposals, states):
@@ -124,11 +138,11 @@ def briefing_buttons(briefing, proposals, states=None, notion_url=''):
 
 
 def midweek_text(proposals, guide=True):
-    lines = ['이번 주에 앞둔 일이 있어 글을 준비해 뒀어요']
+    """HTML 서식, 안내는 끝에 한 번(briefing_text와 같게)."""
+    lines = ['<b>이번 주에 앞둔 일이 있어 글을 준비해 뒀어요</b>']
     for i, p in enumerate(proposals, 1):
-        lines += ['', f'{i}. {p.headline}', p.reason]
-    text = '\n'.join(lines)
-    return _with_guide(text, BRIEF_GUIDE, TEXT_LIMIT) if guide else clip(text, TEXT_LIMIT)
+        lines += ['', f'<b>{i}. {h(p.headline)}</b>', h(p.reason)]
+    return _html_guide('\n'.join(lines), guide)
 
 
 def midweek_buttons(proposals, states=None, notion_url=''):
@@ -200,31 +214,33 @@ def grant_deadline(call):
 
 
 def _grant_lines(call):
+    """HTML 서식: 마감일 굵게, 바깥 글자(LLM이 뽑은 줄·이름·주소)는 h()."""
     v = call.verdict or {}
     until = grant_deadline(call)
     if not until:
         lines = ['신청 기간은 공고에서 확인해 주세요']
     elif v.get('apply_from'):
-        lines = [f'신청 {_day(date.fromisoformat(v["apply_from"]))} ~ {until}']
+        lines = [f'신청 {_day(date.fromisoformat(v["apply_from"]))} ~ <b>{until}</b>']
     else:
-        lines = [f'신청 마감 {until}']
+        lines = [f'신청 마감 <b>{until}</b>']
     if v.get('support'):
-        lines.append(f'지원: {v["support"]}')
+        lines.append(f'지원: {h(v["support"])}')
     if v.get('prep'):
-        lines.append(f'준비: {v["prep"]}')
-    lines.append(f'공고: {call.url}')
+        lines.append(f'준비: {h(v["prep"])}')
+    lines.append(f'공고: {h(call.url)}')
     if call.state in DECISION and call.decided_by:
-        lines.append(DECISION[call.state].format(who=call.decided_by))
+        lines.append(DECISION[call.state].format(who=h(call.decided_by)))
     return lines
 
 
 def grant_card_text(calls):
+    """HTML 서식(send_message/edit_text html=True). 모두 앞으로 할 일이라 접지 않는다."""
     if len(calls) == 1:
-        return clip('\n'.join([f'📌 지원사업 공고 — {calls[0].title}', *_grant_lines(calls[0])]), TEXT_LIMIT)
-    lines = [f'📌 새 지원사업 공고 {len(calls)}건']
+        return '\n'.join([f'📌 <b>지원사업 공고 — {h(calls[0].title)}</b>', *_grant_lines(calls[0])])
+    lines = [f'📌 <b>새 지원사업 공고 {len(calls)}건</b>']
     for i, c in enumerate(calls, 1):
-        lines += ['', f'{i}. {c.title}', *_grant_lines(c)]
-    return clip('\n'.join(lines), TEXT_LIMIT)
+        lines += ['', f'<b>{i}. {h(c.title)}</b>', *_grant_lines(c)]
+    return '\n'.join(lines)
 
 
 def grant_buttons(calls):
@@ -240,13 +256,12 @@ def grant_preview_text(calls):
     for i, c in enumerate(calls, 1):
         v = c.verdict or {}
         head = f'{i}번 판단' if len(calls) > 1 else '판단'
-        notes.append(f'{head}: {v.get("reason", "")}' + ('' if v.get('date_checked') else ' (마감일 확인 못 함)'))
-    return clip('🔎 미리보기 — 검수 방에는 /grant live 뒤에 가요\n\n' + grant_card_text(calls) + '\n\n' + '\n'.join(notes),
-                TEXT_LIMIT)
+        notes.append(f'{head}: {h(v.get("reason", ""))}' + ('' if v.get('date_checked') else ' (마감일 확인 못 함)'))
+    return '🔎 미리보기 — 검수 방에는 /grant live 뒤에 가요\n\n' + grant_card_text(calls) + '\n\n' + '\n'.join(notes)
 
 
 def grant_reminder_text(call):
-    return f'⏰ 모레 {grant_deadline(call)}에 신청이 마감돼요 — {call.title}\n공고: {call.url}'
+    return f'⏰ 모레 <b>{grant_deadline(call)}</b>에 신청이 마감돼요 — {h(call.title)}\n공고: {h(call.url)}'
 
 
 def grant_briefing_lines(calls):

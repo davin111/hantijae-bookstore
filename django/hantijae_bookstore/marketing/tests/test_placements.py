@@ -46,7 +46,7 @@ class FindTest(TestCase):
         blog = [BlogPost('박강수의 두 번째 무대, 그리고 『그리운 바람이 나를 불러』', 'https://b/1', date(2026, 10, 1), '한티재의 책'),
                 BlogPost('『그리운 바람이 나를 불러』 출간', 'https://b/0', date(2026, 2, 10), '한티재의 책')]
         found = P.find(self.draft, {'facebook': None, 'instagram': None}, [], blog, LABELS)
-        self.assertEqual([(f['kind'], f['label'], f['url']) for f in found], [('blog', '블로그', 'https://b/1')])
+        self.assertEqual([(f['kind'], f['label'], f['url']) for f in found], [('blog', '네이버 블로그', 'https://b/1')])
 
     def test_ignores_other_books_other_days_and_cleared_text(self):
         far = OfficialPost('facebook', POSTED + timedelta(days=5), BODY, 'https://f/late', id='111_10')

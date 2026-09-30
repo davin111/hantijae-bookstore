@@ -9,8 +9,8 @@ from marketing.timeutil import KST
 
 TODAY = date(2026, 9, 30)
 NOW = datetime(2026, 9, 30, 10, 0, tzinfo=KST)
-CARD = ('📌 지원사업 공고 — 2026년 제3차 전자책 제작 지원 사업 공고\n'
-        '신청 10월 2일(금) ~ 10월 12일(월) 16시\n'
+CARD = ('📌 <b>지원사업 공고 — 2026년 제3차 전자책 제작 지원 사업 공고</b>\n'
+        '신청 10월 2일(금) ~ <b>10월 12일(월) 16시</b>\n'
         '지원: 전자책 제작비 지원(출판사당 10종까지)\n'
         '준비: 출판유통통합전산망 가입, 종이책 정보 등록\n'
         '공고: https://www.kpipa.or.kr/p/g1_2/2167')
@@ -24,6 +24,12 @@ class CardTextTest(TestCase):
             {'text': '신청할게요', 'callback_data': f'mk:ga:{c.id}'},
             {'text': '이번엔 넘기기', 'callback_data': f'mk:gp:{c.id}'}]]})
 
+    def test_titles_and_names_are_escaped(self):
+        c = make_call(title='<지역서점> & 출판사 공고', state=GrantCall.APPLYING, decided_by='A<B')
+        text = messages.grant_card_text([c])
+        self.assertIn('<b>지원사업 공고 — &lt;지역서점&gt; &amp; 출판사 공고</b>', text)
+        self.assertTrue(text.endswith('✍️ A&lt;B: 신청하기로 했어요'))
+
     def test_decision_line_after_button(self):
         c = make_call(state=GrantCall.APPLYING, decided_by='운영진A')
         self.assertTrue(messages.grant_card_text([c]).endswith('\n✍️ 운영진A: 신청하기로 했어요'))
@@ -35,32 +41,32 @@ class CardTextTest(TestCase):
         self.assertEqual(messages.grant_card_text([c]).split('\n')[1:],
                          ['신청 기간은 공고에서 확인해 주세요', '공고: https://www.kpipa.or.kr/p/g1_2/2167'])
         c = make_call(no='2169', verdict={'apply_from': '', 'until_time': '09:30'})
-        self.assertEqual(messages.grant_card_text([c]).split('\n')[1], '신청 마감 10월 12일(월) 9시 30분')
+        self.assertEqual(messages.grant_card_text([c]).split('\n')[1], '신청 마감 <b>10월 12일(월) 9시 30분</b>')
 
     def test_several_calls_are_numbered_with_buttons_per_row(self):
         a, b = make_call(), make_call(no='2170', title='2026년 제2차 오디오북 제작 지원 사업 신청 공고')
         text = messages.grant_card_text([a, b])
-        self.assertTrue(text.startswith('📌 새 지원사업 공고 2건\n\n1. 2026년 제3차 전자책 제작 지원 사업 공고\n'))
-        self.assertIn('\n\n2. 2026년 제2차 오디오북 제작 지원 사업 신청 공고\n', text)
+        self.assertTrue(text.startswith('📌 <b>새 지원사업 공고 2건</b>\n\n<b>1. 2026년 제3차 전자책 제작 지원 사업 공고</b>\n'))
+        self.assertIn('\n\n<b>2. 2026년 제2차 오디오북 제작 지원 사업 신청 공고</b>\n', text)
         rows = messages.grant_buttons([a, b])['inline_keyboard']
         self.assertEqual([[x['text'] for x in r] for r in rows], [['1번 신청할게요', '1번 넘기기'], ['2번 신청할게요', '2번 넘기기']])
 
     def test_preview_shows_llm_reason_and_no_buttons_needed(self):
         c = make_call(until=None)
         text = messages.grant_preview_text([c])
-        self.assertTrue(text.startswith('🔎 미리보기 — 검수 방에는 /grant live 뒤에 가요\n\n📌 지원사업 공고 —'))
+        self.assertTrue(text.startswith('🔎 미리보기 — 검수 방에는 /grant live 뒤에 가요\n\n📌 <b>지원사업 공고 —'))
         self.assertTrue(text.endswith('판단: 종이책이 있는 책이면 신청할 수 있어요 (마감일 확인 못 함)'))
 
     def test_reminder(self):
         self.assertEqual(messages.grant_reminder_text(make_call()),
-                         '⏰ 모레 10월 12일(월) 16시에 신청이 마감돼요 — 2026년 제3차 전자책 제작 지원 사업 공고\n'
+                         '⏰ 모레 <b>10월 12일(월) 16시</b>에 신청이 마감돼요 — 2026년 제3차 전자책 제작 지원 사업 공고\n'
                          '공고: https://www.kpipa.or.kr/p/g1_2/2167')
 
     def test_briefing_block(self):
         ps = [type('P', (), {'headline': '항목', 'reason': '이유', 'extra': {}})()]
         lines = ['· 2026년 제3차 전자책 제작 지원 사업 공고 — 10월 12일(월) 16시 마감 (신청하기로 함)']
         text = messages.briefing_text(date(2026, 10, 5), ps, measure='측정 줄', grants=lines, guide=False)
-        self.assertTrue(text.endswith('\n\n📌 지원사업 신청\n' + lines[0] + '\n\n측정 줄'))
+        self.assertTrue(text.endswith('\n\n<b>📌 지원사업 신청</b>\n' + lines[0] + '\n\n측정 줄'))
         self.assertNotIn('지원사업', messages.briefing_text(date(2026, 10, 5), ps))
         c = make_call(state=GrantCall.APPLYING)
         self.assertEqual(messages.grant_briefing_lines([c]), lines)

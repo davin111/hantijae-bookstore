@@ -44,7 +44,7 @@ def find(draft, official, social_posts, blog_posts, labels):
     first, last = start.astimezone(KST).date(), end.astimezone(KST).date()
     for b in blog_posts or []:
         if b.date and first <= b.date <= last and len(key) >= 4 and key in loose_key(b.title):
-            out.append({'kind': 'blog', 'label': '블로그', 'url': b.url, 'at': b.date.isoformat()})
+            out.append({'kind': 'blog', 'label': '네이버 블로그', 'url': b.url, 'at': b.date.isoformat()})
     return out
 
 

@@ -13,17 +13,18 @@ class FakeTG:
         self.next_id += 1
         return {'message_id': self.next_id}
 
-    def send_message(self, chat_id, text, reply_to=None, buttons=None, quote=None):
+    def send_message(self, chat_id, text, reply_to=None, buttons=None, quote=None, html=False, quote_entities=None):
         self.calls.append({'kind': 'send', 'chat': chat_id, 'text': text, 'reply_to': reply_to, 'buttons': buttons,
-                           'quote': quote})
+                           'quote': quote, 'html': html, 'quote_entities': quote_entities})
         return self._msg()
 
     def send_photo(self, chat_id, photo, caption, buttons=None, reply_to=None):
         self.calls.append({'kind': 'photo', 'chat': chat_id, 'text': caption, 'reply_to': reply_to, 'buttons': buttons})
         return self._msg()
 
-    def edit_text(self, chat_id, message_id, text, buttons=None):
-        self.calls.append({'kind': 'edit', 'chat': chat_id, 'message_id': message_id, 'text': text, 'buttons': buttons})
+    def edit_text(self, chat_id, message_id, text, buttons=None, html=False):
+        self.calls.append({'kind': 'edit', 'chat': chat_id, 'message_id': message_id, 'text': text, 'buttons': buttons,
+                           'html': html})
 
     def edit_markup(self, chat_id, message_id, buttons):
         self.calls.append({'kind': 'markup', 'chat': chat_id, 'message_id': message_id, 'buttons': buttons})
@@ -260,3 +261,36 @@ class FakeNotion:
     def text_of(self, block_id):
         b = self.blocks[block_id]
         return ''.join(r['plain_text'] for r in b[b['type']]['rich_text'])
+
+
+class FakeBnkClient:
+    """전산망 클라이언트 흉내. days: 날짜 → 행 목록 또는 예외(없는 날짜는 빈 목록). with 문을 쓸 수 있다."""
+    def __init__(self, days=None, readers=None):
+        self.days, self._readers = dict(days or {}), readers
+        self.asked, self.entered, self.exited = [], False, False
+
+    def __enter__(self):
+        self.entered = True
+        return self
+
+    def __exit__(self, *exc):
+        self.exited = True
+        return False
+
+    def sales_on(self, day):
+        self.asked.append(day)
+        value = self.days.get(day, [])
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    def readers(self, start, end):
+        self.asked.append((start, end))
+        return self._readers
+
+
+def make_sale(day, total, book=None, isbn=None, title='책', **stores):
+    from marketing.models import BnkSale
+    from web.presenters import isbn13
+    return BnkSale.objects.create(day=day, isbn=isbn or isbn13(book.isbn), book=book,
+                                  title=book.title if book else title, total=total, **stores)

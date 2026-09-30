@@ -42,7 +42,7 @@ class FakeBot:
     def __init__(self, mode):
         self.marketing, self.notes = FakeMarketing(mode), []
 
-    def notify_admin(self, text):
+    def notify_admin(self, text, html=False):
         self.notes.append(text)
 
 
@@ -448,3 +448,77 @@ class GrantScheduleTest(TestCase):
         off = Deps('off')
         tasks.run_due(off, datetime(2026, 9, 30, 10, 2, tzinfo=KST))
         self.assertFalse(hasattr(off.bot.marketing, 'grant_sends'))
+
+
+@mock.patch('marketing.tasks.kit.build_pending', return_value=[])
+@mock.patch('marketing.tasks.briefing.build_weekly',
+            return_value=(mock.Mock(**{'items.exists.return_value': True}), []))
+@mock.patch('marketing.tasks.news.collect_news', return_value=[])
+@mock.patch('marketing.tasks.funding.collect_funding', return_value=0)
+@mock.patch('marketing.tasks.sales.collect_sales', return_value=(0, []))
+class BnkScheduleTest(TestCase):
+    def setUp(self):
+        for target in ('marketing.tasks.selections.run_scan', 'marketing.tasks.social.run_due',
+                       'marketing.tasks.reviews.run'):
+            patcher = mock.patch(target, return_value=[])
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        from marketing.tests.fakes import FakeBnkClient
+        self.client = FakeBnkClient()
+        patcher = mock.patch('marketing.tasks.bnk.client_from_settings', return_value=self.client)
+        self.factory = patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('marketing.tasks.bnk_sales.collect')
+        self.collect = patcher.start()
+        self.addCleanup(patcher.stop)
+        WorkerState.put('bnk_mode', 'on')
+
+    def test_collect_once_per_day_after_0620(self, *_):
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 30, 6, 19, tzinfo=KST))
+        self.collect.assert_not_called()
+        tasks.run_due(deps, datetime(2026, 9, 30, 6, 20, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 30, 12, 0, tzinfo=KST))
+        self.assertEqual(self.collect.call_count, 1)
+        self.assertTrue(self.client.entered and self.client.exited)
+        self.assertEqual(WorkerState.get('bnk_fail_streak'), 0)
+
+    def test_off_skips(self, *_):
+        WorkerState.put('bnk_mode', 'off')
+        tasks.run_due(Deps(), datetime(2026, 9, 30, 7, 0, tzinfo=KST))
+        self.collect.assert_not_called()
+
+    def test_rejected_login_stops_auto_login_until_switched_on_again(self, *_):
+        from marketing import bnk
+        self.factory.side_effect = bnk.BnkLoginError('출판유통통합전산망 로그인 실패: 비밀번호가 맞지 않습니다')
+        deps = Deps()
+        for day in (28, 29, 30):
+            tasks.run_due(deps, datetime(2026, 9, day, 6, 20, tzinfo=KST))
+        self.assertEqual(self.factory.call_count, 1)   # 계정이 잠기지 않게 한 번만 시도
+        queued = WorkerState.get(tasks.ADMIN_QUEUE)
+        self.assertEqual(len([q for q in queued if '자동 로그인을 멈췄어요' in q]), 1)
+        self.assertIn('비밀번호가 맞지 않습니다', ''.join(queued))
+        self.assertEqual(WorkerState.get('bnk_login_blocked'), '2026-09-28')
+        self.assertEqual(deps.bot.notes, [])
+
+    def test_monthly_waits_until_the_month_is_fully_read(self, *_):
+        deps = Deps()
+        with mock.patch('marketing.tasks.bnk_sales.month_ready', return_value=False), \
+                mock.patch('marketing.tasks.bnk_sales.monthly_text') as monthly:
+            tasks.run_due(deps, datetime(2026, 10, 3, 10, 0, tzinfo=KST))
+        monthly.assert_not_called()
+        self.assertIsNone(WorkerState.get('bnk_last_monthly'))
+
+    def test_monthly_summary_on_the_third_after_0930_once(self, *_):
+        deps = Deps()
+        with mock.patch('marketing.tasks.bnk_sales.monthly_text', return_value='📊 9월 판매 요약') as monthly, \
+                mock.patch('marketing.tasks.bnk_sales.month_ready', return_value=True):
+            tasks.run_due(deps, datetime(2026, 10, 2, 10, 0, tzinfo=KST))
+            tasks.run_due(deps, datetime(2026, 10, 3, 9, 29, tzinfo=KST))
+            monthly.assert_not_called()
+            tasks.run_due(deps, datetime(2026, 10, 3, 9, 30, tzinfo=KST))
+            tasks.run_due(deps, datetime(2026, 10, 4, 10, 0, tzinfo=KST))
+        self.assertEqual(monthly.call_count, 1)
+        self.assertEqual(monthly.call_args[0][1], date(2026, 9, 1))
+        self.assertIn('📊 9월 판매 요약', deps.bot.notes)
+        self.assertEqual(WorkerState.get('bnk_last_monthly'), '2026-09')

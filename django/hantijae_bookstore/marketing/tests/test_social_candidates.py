@@ -50,15 +50,15 @@ class SocialCandidateTest(TestCase):
         [c] = C.social_candidates(TODAY, NOW, blog, fetch=lambda since: {'facebook': [], 'instagram': None})
         self.assertEqual((c.id, c.kind, c.urgency, c.books, c.signal), (f'sns:{s.id}', 'sns_event', 3, [self.rainbow], s))
         self.assertEqual(c.summary, '10월 3일 북토크(대구) ― 대표님 개인 페이스북에 안내가 있음, '
-                                    '공식 블로그·페이스북 페이지엔 아직 없음, 확인 못 한 곳: 인스타')
-        self.assertEqual(c.facts['official'], {'블로그': '없음', '인스타': '모름', '페이스북 페이지': '없음'})
+                                    '공식 네이버 블로그·페이스북 페이지엔 아직 없음, 확인 못 한 곳: 인스타')
+        self.assertEqual(c.facts['official'], {'네이버 블로그': '없음', '인스타': '모름', '페이스북 페이지': '없음'})
         self.assertEqual(C.KIND_LABEL['sns_event'], '다가오는 행사')
 
     def test_unknown_official_channel_is_not_called_missing(self):
         sns('n1', category='new_book', books=[self.farmer], summary='『농부, 짠한 형』 출간')
         [c] = C.social_candidates(TODAY, NOW, None, fetch=unknown)
         self.assertEqual(c.kind, 'sns_repost')
-        self.assertIn('확인 못 한 곳: 블로그·인스타·페이스북 페이지', c.summary)
+        self.assertIn('확인 못 한 곳: 네이버 블로그·인스타·페이스북 페이지', c.summary)
         self.assertNotIn('없음', c.summary)
 
     def test_event_after_and_far_future(self):

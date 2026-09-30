@@ -9,7 +9,7 @@ from django.db.models import Max, Q
 
 from books.models import Book
 from intake.models import WorkerState
-from marketing import meta
+from marketing import bnk_sales, meta
 from marketing.funding import ends_on, is_stalled, live_campaigns
 from marketing.hooks import upcoming
 from marketing.kit import blog_has
@@ -24,7 +24,7 @@ from marketing.timeutil import kst_today, week_start
 from web.models import Notice
 
 KIND_LABEL = {'hook': '기념일', 'fund': '진행 중 펀딩', 'news': '저자 소식', 'surge': '판매 지수 급등',
-              'blog': '블로그 글 없음', 'noreview': '리뷰 없음', 'selection': '공공 선정',
+              'blog': '네이버 블로그 글 없음', 'noreview': '리뷰 없음', 'selection': '공공 선정',
               'sns_event': '다가오는 행사', 'sns_after': '행사 후기', 'sns_repost': '공식 채널로 옮겨 싣기',
               'sns_press': '서평·기사 모음', 'moment': '대화 속 계기', 'review': '새 독자 서평'}
 LINK_LABEL = {'news': '기사 원문', 'fund': '펀딩 페이지', 'review': '서평 글'}  # 브리핑 메시지에서 링크 앞에 붙는 말
@@ -266,7 +266,19 @@ def with_moments(cands, moments, now):
     return keep + cands
 
 
+def _bnk_surge(r):
+    usual = bnk_sales.num(r['usual'])
+    top = r['top']
+    return Candidate(id=f'surge:{r["book"].id}:{r["end"].isoformat()}', kind='surge', books=[r['book']],
+                     summary=f'최근 7일 {r["week"]}권 팔렸음(평소 주 {usual}권)' + (f', {top[0]} {top[1]}권' if top else ''),
+                     facts={'week': r['week'], 'usual': usual, 'stores': r['stores']}, urgency=2)
+
+
 def surge_candidates(today):
+    """전산망(실판매)을 쓸 수 있으면 그것으로, 아니면 알라딘 판매 지수로."""
+    rows = bnk_sales.surges(today)
+    if rows is not None:
+        return [_bnk_surge(r) for r in rows]
     last = SalesSnapshot.objects.filter(date__lte=today).aggregate(d=Max('date'))['d']
     if not last:
         return []
@@ -289,7 +301,7 @@ def blog_gap_candidates(today, posts, days=180):
         if not blog_has(book, posts):
             d = book.published_date
             out.append(Candidate(id=f'blog:{book.id}', kind='blog', books=[book],
-                                 summary=f'{d.month}월 {d.day}일에 나왔는데 블로그 글이 아직 없음',
+                                 summary=f'{d.month}월 {d.day}일에 나왔는데 네이버 블로그 글이 아직 없음',
                                  facts={'published': d.isoformat()}, urgency=1))
     return out
 
@@ -334,7 +346,7 @@ def select(cands, today, now, limit=20):  # 12개면 운영진 SNS 후보가 LLM
 SNS_UPCOMING_DAYS, SNS_AFTER_DAYS, SNS_FOUND_DAYS, SNS_PRESS_MAX, SNS_OFFICIAL_LOOKBACK = 21, 10, 14, 5, 14
 OFFICIAL_PAGE = 'facebook.com/hantijae/'  # 한티재 공식 페북 페이지 주소(share_key 모양)
 PRESS_CATEGORIES = ('review', 'press', 'author_news')
-CHANNEL_LABEL = {'blog': '블로그', 'instagram': '인스타', 'facebook': '페이스북 페이지'}
+CHANNEL_LABEL = {'blog': '네이버 블로그', 'instagram': '인스타', 'facebook': '페이스북 페이지'}
 PLATFORM_LABEL = {'facebook': '페이스북', 'instagram': '인스타'}
 
 
