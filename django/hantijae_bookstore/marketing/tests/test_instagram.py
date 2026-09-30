@@ -234,7 +234,7 @@ class CommandTest(TestCase):
             call_command('marketing_scan_instagram', '--dry-run', '--partners', stdout=out)
         self.assertTrue(scan.call_args.kwargs['partners'])
         text = out.getvalue()
-        self.assertIn('새 글 1건(서평 1건), 기준선 1건', text)
+        self.assertIn('새 글 1건(서평 1건), 기준선 1건, 읽지 못한 곳 없음', text)
         self.assertIn('『무궁화호를 위하여』 [인스타 태그 @librariaq] 북클럽 이번 책 | 2026-09-26 | review 읽은 감상', text)
         self.assertIn('(dry-run: 기록하지 않았어요)', text)
         self.assertEqual(Signal.objects.count(), 0)

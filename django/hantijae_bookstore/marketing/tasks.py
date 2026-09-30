@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 from intake.models import WorkerState
-from marketing import (bnk, bnk_sales, briefing, funding, grants, instagram, kit, midweek, moments, news, placements, reviews, sales,
-                       selections, social)
+from marketing import (bnk, bnk_sales, briefing, funding, grants, instagram, kit, midweek, moments, news, placements,
+                       reviews, sales, selections, social)
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
