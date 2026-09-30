@@ -3,7 +3,7 @@
 import html
 import json
 import urllib.parse
-from datetime import date, timezone
+from datetime import timezone
 from xml.etree import ElementTree
 
 from marketing.review_search import Post, clean
@@ -53,8 +53,7 @@ def parse_alerts(xml_bytes):
 
 
 def youtube_search(query, key, published_after, get_json):
-    # KST 시간을 UTC로 변환
-    utc_time = published_after.astimezone(timezone.utc)
+    utc_time = published_after.astimezone(timezone.utc)   # 'Z'는 UTC — KST 시각을 그대로 쓰면 9시간 어긋난다
     params = {'part': 'snippet', 'type': 'video', 'order': 'date', 'maxResults': 25, 'q': query, 'key': key,
               'publishedAfter': utc_time.strftime('%Y-%m-%dT%H:%M:%SZ')}
     try:
