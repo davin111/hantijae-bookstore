@@ -66,6 +66,9 @@ def briefing_text(week_start, proposals, measure=''):
     lines = [f'이번 주 홍보 제안 ({week_start.month}월 {week_start.day}일 ~ {end.month}월 {end.day}일)']
     for i, p in enumerate(proposals, 1):
         lines += ['', f'{i}. {p.headline}', p.reason]
+        extra = getattr(p, 'extra', None) or {}
+        if extra.get('link'):  # 무슨 기사·펀딩인지 운영진이 바로 열어 보게
+            lines.append(f"{extra.get('link_label') or '링크'}: {extra['link']}")
     if measure:
         lines += ['', measure]
     return clip('\n'.join(lines), TEXT_LIMIT)

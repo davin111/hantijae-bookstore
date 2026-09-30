@@ -1,4 +1,5 @@
 """주간 브리핑: 후보를 LLM에 한 번 보내 최대 3개를 고르게 하고, 코드로 다시 검증한다."""
+import re
 from datetime import datetime, timedelta
 
 from django.db import transaction
@@ -16,7 +17,13 @@ from web.models import StoreClick
 
 MAX_ITEMS = 3
 SALES_WORDS = ('구매', '주문', '할인', '서점에서', '링크', 'http', '가격')
+MEMORIAL_REASON = '추모의 날이라 알리기만 하는 글이에요.'
+_SENTENCE_END = re.compile(r'(?<=[.!?])\s+')
 CHANNELS = (Draft.INSTAGRAM, Draft.BLOG, Draft.LETTER)
+
+
+def _without_sales_sentences(text):
+    return ' '.join(x for x in _SENTENCE_END.split(text) if x and not any(w in x for w in SALES_WORDS))
 
 
 def compose(llm, cands, today, context=(), midweek=False):
@@ -43,9 +50,13 @@ def compose(llm, cands, today, context=(), midweek=False):
         if bad:
             dropped.append(f'{cand.id}: 자료에 없는 숫자 {", ".join(bad)}')
             continue
-        if cand.memorial and any(w in ' '.join([headline, reason, body]) for w in SALES_WORDS):
-            dropped.append(f'{cand.id}: 추모 성격의 날에 판매 권유')
-            continue
+        if cand.memorial:
+            # 게시되는 글(제목·본문)과 방에 그대로 보이는 headline은 엄격히 본다
+            if any(w in ' '.join([headline, str(d.get('title', '')), body]) for w in SALES_WORDS):
+                dropped.append(f'{cand.id}: 추모 성격의 날에 판매 권유')
+                continue
+            # reason은 운영진에게 하는 말이다. "구매 링크는 붙이지 않았어요" 같은 설명 때문에 항목을 버리지 않고 그 문장만 뺀다
+            reason = _without_sales_sentences(reason) or MEMORIAL_REASON
         ids = {b.id for b in cand.books}
         if ids & used_books:
             dropped.append(f'{cand.id}: 같은 책이 이미 있음')
@@ -68,13 +79,15 @@ def save_briefing(items, today):
         Signal.objects.filter(Q(proposal__briefing=briefing) | Q(pk__in=more)).update(used_at=None)
         briefing.items.all().delete()
         for rank, (cand, headline, reason, d) in enumerate(items, 1):
-            extra = [s.pk for s in cand.more_signals]
+            more_ids = [s.pk for s in cand.more_signals]
+            extra = {'signals': more_ids} if more_ids else {}
+            if cand.link:  # 브리핑 메시지에 '기사 원문: 주소'처럼 붙인다
+                extra.update(link=cand.link, link_label=candidates.LINK_LABEL.get(cand.kind, '링크'))
             p = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=cand.books[0] if cand.books else None,
                                         signal=cand.signal, briefing=briefing, candidate_key=cand.id,
-                                        headline=headline[:300], reason=reason, rank=rank,
-                                        extra={'signals': extra} if extra else {})
+                                        headline=headline[:300], reason=reason, rank=rank, extra=extra)
             Draft.objects.create(proposal=p, channel=d['channel'], title=d['title'][:300], body=d['body'])
-            used = ([cand.signal.pk] if cand.signal else []) + extra
+            used = ([cand.signal.pk] if cand.signal else []) + more_ids
             if used:
                 Signal.objects.filter(pk__in=used).update(used_at=timezone.now())
     return briefing

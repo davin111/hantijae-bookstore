@@ -37,6 +37,8 @@ class CandidateTest(TestCase):
         [c] = C.funding_candidates(TODAY, NOW)
         self.assertIn('목표의 135%(677만 원, 376권)', c.summary)
         self.assertEqual((c.facts['days_left'], c.urgency, c.books), (13, 2, []))
+        self.assertEqual(c.link, 'u')  # 브리핑 메시지에 '펀딩 페이지'로 붙는다
+        self.assertNotIn('u', c.as_prompt()['facts'].values())  # 링크는 LLM에 보내지 않는다(글에 주소를 넣지 않게)
 
     def test_blog_gap_skipped_when_rss_failed(self):
         self.assertEqual(C.blog_gap_candidates(TODAY, None), [])
@@ -53,10 +55,11 @@ class CandidateTest(TestCase):
 
     def test_news_candidate_only_relevant_unused_not_sensitive(self):
         Signal.objects.create(kind=Signal.NEWS, key='a', book=self.naeran, title='좋은 소식', relevant=True,
-                              happens_on=TODAY, detail={'source': '한겨레', 'summary': '강연'})
+                              happens_on=TODAY, detail={'source': '한겨레', 'summary': '강연'},
+                              url='https://news.example/a')
         Signal.objects.create(kind=Signal.NEWS, key='b', book=self.naeran, title='부고', relevant=True, sensitive=True,
                               happens_on=TODAY)
-        self.assertEqual([c.signal.title for c in C.news_candidates(NOW)], ['좋은 소식'])
+        self.assertEqual([(c.signal.title, c.link) for c in C.news_candidates(NOW)], [('좋은 소식', 'https://news.example/a')])
 
     def test_select_drops_quiet_books_and_recently_proposed(self):
         BookProfile.objects.create(book=self.sibwol, quiet_until=date(2026, 10, 31))

@@ -56,6 +56,9 @@ class MessagesTest(SimpleTestCase):
         self.assertTrue(text.startswith('이번 주 홍보 제안 (9월 28일 ~ 10월 4일)'))
         self.assertIn('\n\n3. 항목 3\n이유', text)
         self.assertTrue(text.endswith('(2주 뒤)'))
+        linked = [SimpleNamespace(id=1, headline='항목', reason='이유',
+                                  extra={'link': 'https://news.example/a', 'link_label': '기사 원문'})]
+        self.assertIn('\n\n1. 항목\n이유\n기사 원문: https://news.example/a', messages.briefing_text(date(2026, 9, 28), linked))
         kb = messages.briefing_buttons(SimpleNamespace(id=5), ps)
         texts = [b['text'] for row in kb['inline_keyboard'] for b in row]
         self.assertEqual(texts, ['1번 글 보기', '2번 글 보기', '3번 글 보기', '이번 주는 넘기기'])

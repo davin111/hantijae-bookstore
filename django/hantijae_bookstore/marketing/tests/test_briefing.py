@@ -12,9 +12,9 @@ from web.models import Notice, StoreClick
 TODAY = date(2026, 9, 28)
 
 
-def item(cid, body='글', headline='『책』 ― 계기', reason='이유'):
+def item(cid, body='글', headline='『책』 ― 계기', reason='이유', title=''):
     return {'candidate_id': cid, 'headline': headline, 'reason': reason,
-            'draft': {'channel': 'instagram', 'title': '', 'body': body}}
+            'draft': {'channel': 'instagram', 'title': title, 'body': body}}
 
 
 class ComposeTest(TestCase):
@@ -48,13 +48,27 @@ class ComposeTest(TestCase):
         self.assertEqual(items, [])
         self.assertIn('추모', dropped[0])
 
-    def test_compose_drops_sales_push_in_memorial_headline_or_reason(self):
+    def test_compose_drops_sales_push_in_memorial_headline_or_draft_title(self):
         llm = FakeLLM([{'items': [item('hook:1', headline='『시월, 곡비의 노래』 ― 서점에서 만나요', body='소개')]},
-                       {'items': [item('hook:1', reason='지금 할인 중이라 알리면 좋아요.', body='소개')]}])
+                       {'items': [item('hook:1', title='지금 구매하세요', body='소개')]}])
         for _ in range(2):
             items, dropped = compose(llm, self.cands, TODAY)
             self.assertEqual(items, [])
             self.assertIn('추모', dropped[0])
+
+    def test_compose_keeps_memorial_item_when_only_the_reason_mentions_sales_words(self):
+        """reason은 운영진에게 하는 말이라 게시되지 않는다. '구매 링크는 붙이지 않았다'는 설명 때문에 항목을 버리지 않고,
+        판매 낱말이 든 문장만 뺀다(2026-09-30 10월항쟁 항목이 이 설명 때문에 두 번 버려졌다)."""
+        llm = FakeLLM([{'items': [item('hook:1', body='소개', reason='내일이 10월항쟁이 일어난 날이라 글을 준비했습니다. '
+                                                                 '추모의 날이라 구매 링크와 가격은 붙이지 않고 알리기만 했어요.')]},
+                       {'items': [item('hook:1', body='소개', reason='지금 할인 중이라 알리면 좋아요.')]}])
+        items, dropped = compose(llm, self.cands, TODAY)
+        self.assertEqual((len(items), dropped), (1, []))
+        self.assertEqual(items[0][2], '내일이 10월항쟁이 일어난 날이라 글을 준비했습니다.')
+        items, dropped = compose(llm, self.cands, TODAY)
+        self.assertEqual((len(items), dropped), (1, []))
+        self.assertTrue(items[0][2])
+        self.assertFalse(any(w in items[0][2] for w in ('할인', '구매', '링크')))
 
     def test_compose_drops_same_book_twice_and_caps_three(self):
         llm = FakeLLM({'items': [item('noreview:3'), item('hook:4'), item('hook:1', body='소개'), item('fund:2'),
@@ -66,6 +80,18 @@ class ComposeTest(TestCase):
         llm = FakeLLM({'items': [item('blog:5', headline='『커밍아웃 스토리 ― 부모들의 이야기』')]})
         items, _ = compose(llm, self.cands, TODAY)
         self.assertEqual(items[0][1], '『커밍아웃 스토리』 ― 부모들의 이야기')
+
+    def test_save_briefing_keeps_the_candidate_link_for_the_message(self):
+        news = Candidate(id='news:7', kind='news', books=[self.b], summary='강연', facts={}, urgency=2,
+                         link='https://news.example/a')
+        fund = Candidate(id='fund:2', kind='fund', books=[], summary='펀딩', facts={}, urgency=3,
+                         link='https://www.aladin.co.kr/shop/bookfund/3013')
+        d = {'channel': 'instagram', 'title': '', 'body': 'b'}
+        b = save_briefing([(news, 'h1', 'r', d), (fund, 'h2', 'r', d), (self.cands[2], 'h3', 'r', d)], TODAY)
+        extras = [p.extra for p in b.items.order_by('rank')]
+        self.assertEqual(extras[0], {'link': 'https://news.example/a', 'link_label': '기사 원문'})
+        self.assertEqual(extras[1], {'link': 'https://www.aladin.co.kr/shop/bookfund/3013', 'link_label': '펀딩 페이지'})
+        self.assertEqual(extras[2], {})
 
     def test_save_briefing_replaces_items_on_rebuild(self):
         cand = self.cands[2]

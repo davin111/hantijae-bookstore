@@ -25,6 +25,7 @@ KIND_LABEL = {'hook': '기념일', 'fund': '진행 중 펀딩', 'news': '저자 
               'blog': '블로그 글 없음', 'noreview': '리뷰 없음', 'selection': '공공 선정',
               'sns_event': '다가오는 행사', 'sns_after': '행사 후기', 'sns_repost': '공식 채널로 옮겨 싣기',
               'sns_press': '서평·기사 모음', 'moment': '대화 속 계기'}
+LINK_LABEL = {'news': '기사 원문', 'fund': '펀딩 페이지'}  # 브리핑 메시지에서 링크 앞에 붙는 말
 # 판매 지수 급등의 원인 가설로 붙일 만한 대화 속 계기
 ROOM_TALK_TYPES = ('group', 'stock', 'author', 'media', 'issue', 'selection')
 # 새 계기가 없는 후보는 같은 책을 3주 안에 다시 제안하지 않는다
@@ -45,6 +46,7 @@ class Candidate:
     memorial: bool = False
     signal: Optional[Signal] = field(default=None, repr=False)
     more_signals: List[Signal] = field(default_factory=list, repr=False)  # 한 후보가 여러 신호를 묶을 때 나머지
+    link: str = ''  # 운영진이 브리핑에서 바로 열어 볼 주소. LLM에는 보내지 않는다(글에 주소가 들어가지 않게)
 
     def as_prompt(self):
         return {'id': self.id, 'kind': KIND_LABEL[self.kind], 'memorial': self.memorial,
@@ -101,7 +103,7 @@ def funding_candidates(today, now):
             facts['stalled'] = True
         book = _book_for_campaign(camp)
         out.append(Candidate(id=f'fund:{camp.id}', kind='fund', books=[book] if book else [], summary=summary,
-                             facts=facts, urgency=3 if (left <= 7 or stalled) else 2))
+                             facts=facts, urgency=3 if (left <= 7 or stalled) else 2, link=camp.url))
     return out
 
 
@@ -117,7 +119,7 @@ def news_candidates(now, days=14):
         when = f'{d.month}월 {d.day}일 ' if d else ''
         out.append(Candidate(id=f'news:{s.id}', kind='news', books=[s.book],
                              summary=f'{when}〈{s.detail.get("source", "")}〉 「{s.title}」 ― {s.detail.get("summary", "")}',
-                             facts={'date': d.isoformat() if d else '', 'url': s.url}, urgency=2, signal=s))
+                             facts={'date': d.isoformat() if d else '', 'url': s.url}, urgency=2, signal=s, link=s.url))
     return out
 
 
