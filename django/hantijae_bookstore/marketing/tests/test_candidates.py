@@ -1,6 +1,7 @@
 import json
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
+from unittest import mock
 
 from django.test import TestCase
 
@@ -194,6 +195,25 @@ class CandidateTest(TestCase):
         self.assertIn(f'review:{self.sibwol.id}:2026-09-28', ids)
         self.assertNotIn(f'noreview:{self.sibwol.id}', ids)
         self.assertIn(f'noreview:{self.naeran.id}', ids)
+
+    def test_review_candidates_keep_the_five_busiest_books(self):
+        books = [self.sibwol, self.naeran] + [make_book(title=f'책 {i}', isbn=f'979-11-00050-{i:02d}-0', author=None)
+                                              for i in range(5)]
+        for i, book in enumerate(books):
+            for n in range(i + 1):
+                review(book, n)
+        cands = C.review_candidates(TODAY, NOW)
+        self.assertEqual([c.facts['count'] for c in cands], [7, 6, 5, 4, 3])
+        self.assertEqual([c.books[0] for c in cands], [books[6], books[5], books[4], books[3], books[2]])
+
+    def test_gather_puts_sns_before_reviews(self):
+        review(self.sibwol, 1)
+        # merge_fund_posts는 sns_repost 후보의 signal.detail을 본다(실제로는 늘 있다) → 최소한의 흉내만 준다
+        sns = [C.Candidate(id='sns:1', kind='sns_repost', books=[self.naeran], summary='s', facts={}, urgency=2,
+                           signal=SimpleNamespace(detail={}))]
+        with mock.patch('marketing.candidates.social_candidates', return_value=sns):
+            ids = [c.id for c in C.gather(TODAY, NOW, posts=None)]
+        self.assertLess(ids.index('sns:1'), ids.index(f'review:{self.sibwol.id}:2026-09-28'))
 
 
 class MomentCandidateTest(TestCase):

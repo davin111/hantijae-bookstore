@@ -144,7 +144,7 @@ def selection_candidates(now, days=14):
     return out
 
 
-REVIEW_DAYS, REVIEW_LINKS = 14, 3
+REVIEW_DAYS, REVIEW_LINKS, REVIEW_MAX = 14, 3, 5
 
 
 def _review_signals(today, now):
@@ -188,7 +188,9 @@ def review_candidates(today, now):
         out.append(Candidate(id=f'review:{book.id}:{week_start(today).isoformat()}', kind='review', books=[book],
                              summary=summary, facts=facts, urgency=2, signal=signals[0], more_signals=signals[1:],
                              link='\n'.join(s.url for s in signals[:REVIEW_LINKS])))
-    return out
+    # 책이 많을 때 브리핑을 서평으로만 채우지 않게 가장 서평이 몰린 책 다섯 권만 남긴다(나머지는 다음 주에 다시 후보)
+    out.sort(key=lambda c: (c.facts['count'], c.signal.happens_on or c.signal.found_at.date()), reverse=True)
+    return out[:REVIEW_MAX]
 
 
 def moment_books(s):
@@ -488,7 +490,7 @@ def gather(today, now, posts):
     sns = merge_fund_posts(funds, social_candidates(today, now, posts))
     reviews = review_candidates(today, now)
     reviewed = {b.id for c in reviews for b in c.books}   # 새 서평이 있는 책의 '리뷰 없음'은 서평 후보 하나로 합친다
-    cands = (hook_candidates(today) + funds + news_candidates(now) + selection_candidates(now) + reviews + sns
+    cands = (hook_candidates(today) + funds + news_candidates(now) + selection_candidates(now) + sns + reviews
              + surge_candidates(today) + blog_gap_candidates(today, posts)
              + [c for c in noreview_candidates(today) if not {b.id for b in c.books} & reviewed])
     if WorkerState.get('moment_mode', 'off') == 'live':
