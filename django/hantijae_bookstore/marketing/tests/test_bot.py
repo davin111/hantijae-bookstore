@@ -4,8 +4,9 @@ from unittest import mock
 from django.test import TestCase, override_settings
 
 from intake.models import TelegramChat, WorkerState
+from marketing import messages
 from marketing.bot import KIT_DAILY_CAP, Marketing
-from marketing.models import BookProfile, Briefing, CopyNote, Draft, Proposal, WatchQuery
+from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, Proposal, WatchQuery
 from marketing.tests.fakes import FakeLLM, FakeTG, make_book
 from marketing.timeutil import KST
 
@@ -282,10 +283,9 @@ class MarketingBotTest(TestCase):
         answer = self.m().handle_callback(f'mk:p:{d.id}', GROUP, cbq(), '검수자A')
         d.refresh_from_db()
         p.refresh_from_db()
-        self.assertEqual((d.status, d.posted_by, p.status, answer), (Draft.POSTED, '검수자A', Proposal.ACTED, '기록했어요'))
+        self.assertEqual((d.status, d.posted_by, p.status, answer), (Draft.POSTED, '검수자A', Proposal.ACTED, messages.POSTED_TOAST))
         self.assertIsNotNone(d.posted_at)
-        # 어디에 올렸는지 묻지 않는다(봇이 찾는다) — 운영진이 더 누를 것이 없다고 알려 준다
-        self.assertIn('어디에 올리셨는지는 봇이 찾아볼게요', self.tg.sent('send')[-1]['text'])
+        self.assertEqual(self.tg.sent('send'), [])  # 방에 메시지를 더 올리지 않고 알림으로만 알린다
 
     def test_edit_callback_answers_with_hint_only(self):
         d = kit(self.book).drafts.first()
@@ -310,6 +310,7 @@ class MarketingBotTest(TestCase):
         texts = [c['text'] for c in self.tg.sent('send')]
         self.assertEqual(texts[0], '고치고 있어요. 2~3분쯤 걸려요.')
         self.assertEqual(texts[1], '짧아진 인스타 글')
+        self.assertEqual(self.tg.sent('edit')[0]['text'], '고쳤어요: 첫 줄을 줄였어요')
 
     def test_rewrite_title_is_clipped(self):
         d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)
@@ -599,3 +600,154 @@ class MomentCommandTest(TestCase):
             self.m.admin_command(ADMIN, '/moment', 'now', now=DAY)
         daily.assert_called_once()
         self.assertEqual(self.last(), '새로 찾은 계기가 없어요')
+
+
+def hub_cb(message_id=555, text='', caption=''):
+    m = {'message_id': message_id, 'chat': {'id': GROUP}}
+    if text:
+        m['text'] = text
+    if caption:
+        m['caption'] = caption
+    return {'id': 'q', 'from': {'first_name': '검수자A'}, 'message': m}
+
+
+def briefing_with(book, n=2):
+    b = Briefing.objects.create(week_start=date(2026, 9, 28))
+    ps = []
+    for i in range(1, n + 1):
+        p = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=book, briefing=b, headline=f'항목 {i}',
+                                    reason='이유', rank=i, status=Proposal.SHOWN, chat_id=GROUP)
+        Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body=f'글 {i}')
+        ps.append(p)
+    b.chat_id, b.message_id, b.sent_at, b.shown = GROUP, 900, DAY, [p.id for p in ps]
+    b.save()
+    return b, ps
+
+
+@override_settings(SITE_URL='https://hantijae-bookstore.com')
+class HubFlowTest(TestCase):
+    def setUp(self):
+        self.tg, self.host = FakeTG(), FakeHost()
+        self.book = make_book()
+
+    def m(self, reply=None):
+        return Marketing(self.tg, FakeLLM(reply or {}), self.host)
+
+    def labels(self, call):
+        return [x['text'] for row in call['buttons']['inline_keyboard'] for x in row]
+
+    def test_briefing_item_is_sent_body_only_under_a_quote_of_its_line(self):
+        b, ps = briefing_with(self.book)
+        hub = messages.briefing_text(b.week_start, ps)
+        answer = self.m().handle_callback(f'mk:b:{ps[1].id}', GROUP, hub_cb(900, text=hub), '검수자A')
+        sent = self.tg.sent('send')[0]
+        self.assertEqual((sent['text'], sent['reply_to'], sent['quote']), ('글 2', 900, '2. 항목 2'))
+        self.assertEqual(answer, '2번 인스타 글을 보냈어요')
+
+    def test_quote_is_left_out_when_the_hub_line_is_missing(self):
+        b, ps = briefing_with(self.book)
+        self.m().handle_callback(f'mk:b:{ps[0].id}', GROUP, hub_cb(900, text='이번 주 홍보 제안\n\n1. 다른 제목…'), 'x')
+        self.assertIsNone(self.tg.sent('send')[0]['quote'])
+
+    def test_kit_view_quotes_the_caption_bullet(self):
+        p = kit(self.book)
+        d = p.drafts.get(channel=Draft.INSTAGRAM)
+        caption = '『책』 홍보 자료를 만들어 두었어요.\n\n준비된 것\n· 인스타 글\n· 서점 링크 공지'
+        answer = self.m().handle_callback(f'mk:v:{d.id}', GROUP, hub_cb(555, caption=caption), 'x')
+        sent = self.tg.sent('send')[0]
+        self.assertEqual((sent['text'], sent['quote']), ('인스타 본문', '· 인스타 글'))
+        self.assertEqual(answer, '인스타 글을 보냈어요')
+
+    def test_posted_marks_the_newest_version_and_redraws_the_hub_without_a_new_message(self):
+        b, ps = briefing_with(self.book)
+        first = ps[0].drafts.get()
+        newer = Draft.objects.create(proposal=ps[0], channel=Draft.INSTAGRAM, body='고친 글', version=2, parent=first)
+        answer = self.m().handle_callback(f'mk:p:{first.id}', GROUP, hub_cb(1234), '검수자A')
+        newer.refresh_from_db()
+        ps[0].refresh_from_db()
+        self.assertEqual((newer.status, newer.posted_by, ps[0].status), (Draft.POSTED, '검수자A', Proposal.ACTED))
+        self.assertEqual(answer, messages.POSTED_TOAST)
+        self.assertEqual(self.tg.sent('send'), [])  # '기록해 둘게요' 메시지를 더 올리지 않는다
+        markup = self.tg.sent('markup')[0]
+        self.assertEqual((markup['chat'], markup['message_id']), (GROUP, 900))
+        self.assertEqual(self.labels(markup)[:2], ['1번 ✅ 올림', '2번 글 보기'])
+
+    def test_skip_week_keeps_posted_items_posted(self):
+        b, ps = briefing_with(self.book)
+        Proposal.objects.filter(pk=ps[0].pk).update(status=Proposal.ACTED)
+        self.m().handle_callback(f'mk:sw:{b.id}', GROUP, hub_cb(900), 'x')
+        self.assertEqual(dict(b.items.values_list('rank', 'status')), {1: Proposal.ACTED, 2: Proposal.SKIPPED})
+        self.assertEqual(self.labels(self.tg.sent('markup')[0])[:2], ['1번 ✅ 올림', '2번 넘김'])
+
+    def test_skip_midweek_keeps_posted_items_posted(self):
+        ps = [Proposal.objects.create(kind=Proposal.NOW, book=self.book, headline=f'n{i}', rank=i, chat_id=GROUP,
+                                      message_id=700, status=Proposal.SHOWN) for i in (1, 2)]
+        Proposal.objects.filter(pk=ps[0].pk).update(status=Proposal.ACTED)
+        self.m().handle_callback(f'mk:sn:{ps[0].id}', GROUP, hub_cb(700), 'x')
+        self.assertEqual(list(Proposal.objects.filter(kind=Proposal.NOW).order_by('rank').values_list('status', flat=True)),
+                         [Proposal.ACTED, Proposal.SKIPPED])
+
+    def test_later_skips_every_open_version_of_that_writing(self):
+        p = kit(self.book)
+        first = p.drafts.get(channel=Draft.INSTAGRAM)
+        Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='2', version=2, parent=first)
+        self.m().handle_callback(f'mk:l:{first.id}', GROUP, hub_cb(), 'x')
+        self.assertEqual(set(p.drafts.filter(channel=Draft.INSTAGRAM).values_list('status', flat=True)), {Draft.SKIPPED})
+
+    def test_letter_sends_places_first_and_a_reply_to_them_rewrites_the_letter(self):
+        b, ps = briefing_with(self.book, n=1)
+        Draft.objects.filter(proposal=ps[0]).update(channel=Draft.LETTER, title='부탁드립니다', body='안녕하세요.',
+                                                    extra={'places': ['농민회', '생협']})
+        hub = messages.briefing_text(b.week_start, ps)
+        m = self.m({'title': '부탁드립니다', 'body': '안녕하십니까.', 'note': '인사를 바꿨어요'})
+        m.handle_callback(f'mk:b:{ps[0].id}', GROUP, hub_cb(900, text=hub), 'x')
+        places, letter = self.tg.sent('send')
+        self.assertEqual(places['text'], '알리면 좋을 곳\n· 농민회\n· 생협')
+        self.assertEqual(letter['text'], '부탁드립니다\n\n안녕하세요.')
+        self.assertEqual((places['quote'], letter['quote']), ('1. 항목 1', '1. 항목 1'))
+        places_id = self.tg.next_id - 1
+        self.assertTrue(m.owns_message(GROUP, places_id))
+        m.handle_reply(GROUP, places_id, {'message_id': 77}, '더 정중하게요', '검수자A')
+        new = Draft.objects.get(version=2)
+        self.assertEqual((new.body, new.places, new.origin), ('안녕하십니까.', ['농민회', '생협'], Draft.REWRITE))
+
+    def test_rewrite_edits_the_working_message_and_sends_only_the_new_text(self):
+        d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)
+        Draft.objects.filter(pk=d.pk).update(chat_id=GROUP, message_id=777)
+        self.m({'title': '', 'body': '짧아진 인스타 글', 'note': '첫 줄을 줄였어요'}).handle_reply(
+            GROUP, 777, {'message_id': 9}, '첫 줄이 길어요', 'x')
+        working, new = self.tg.sent('send')
+        self.assertEqual((working['text'], new['text'], new['reply_to']), (messages.WORKING, '짧아진 인스타 글', 9))
+        edit = self.tg.sent('edit')[0]
+        self.assertEqual((edit['message_id'], edit['text']), (1001, '고쳤어요: 첫 줄을 줄였어요'))
+
+    def test_rewrite_failure_edits_the_working_message(self):
+        d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)
+        Draft.objects.filter(pk=d.pk).update(chat_id=GROUP, message_id=777)
+        self.m('JSON이 아닌 답').handle_reply(GROUP, 777, {'message_id': 9}, '짧게요', 'x')
+        self.assertEqual(len(self.tg.sent('send')), 1)
+        self.assertEqual(self.tg.sent('edit')[0]['text'], messages.REWRITE_FAILED)
+        self.assertTrue(self.host.notes)
+
+    def test_rewrite_starts_from_the_newest_version_even_when_replying_to_an_old_copy(self):
+        d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)
+        Draft.objects.filter(pk=d.pk).update(chat_id=GROUP, message_id=777)
+        Draft.objects.create(proposal=d.proposal, channel=Draft.INSTAGRAM, body='노션에서 고친 글', version=2, parent=d,
+                             origin=Draft.NOTION)
+        llm = FakeLLM({'title': '', 'body': '셋째 판', 'note': ''})
+        Marketing(self.tg, llm, self.host).handle_reply(GROUP, 777, {'message_id': 9}, '짧게요', 'x')
+        self.assertIn('노션에서 고친 글', llm.calls[0][1])
+        self.assertEqual(Draft.objects.get(body='셋째 판').version, 3)
+
+    def test_send_briefing_records_shown_items_and_state_buttons(self):
+        WorkerState.put('marketing_mode', 'live')
+        b = Briefing.objects.create(week_start=date(2026, 9, 28))
+        p1 = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=self.book, briefing=b, headline='h1', rank=1,
+                                     status=Proposal.ACTED)
+        Draft.objects.create(proposal=p1, channel=Draft.INSTAGRAM, body='1')
+        self.assertTrue(self.m().send_briefing(b, DAY))
+        b.refresh_from_db()
+        self.assertEqual(b.shown, [p1.id])
+        sent = self.tg.sent('send')[0]
+        self.assertTrue(sent['text'].endswith(messages.BRIEF_GUIDE))
+        self.assertEqual(self.labels(sent)[0], '1번 ✅ 올림')

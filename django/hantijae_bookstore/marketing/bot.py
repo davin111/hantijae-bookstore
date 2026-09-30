@@ -12,6 +12,7 @@ from PIL import Image
 from books.models import Book
 from intake.llm import LLMError, complete_json
 from intake.models import TelegramChat, WorkerState
+from marketing import board
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
 from marketing import grants, messages, midweek, moments, social
@@ -117,10 +118,11 @@ class Marketing:
 
     # ---- 보내기 ----
     def send_kit(self, proposal, chat):
-        drafts = list(proposal.drafts.filter(parent__isnull=True).order_by('id'))
+        drafts = board.kit_drafts(proposal)
         caption = messages.kit_caption(proposal.book, drafts, proposal.extra.get('missing_stores', []),
                                        proposal.extra.get('blog_exists', False))
-        buttons = messages.kit_buttons(proposal, drafts)
+        states = {c: board.channel_state(proposal, c) for c in (Draft.BLOG, Draft.INSTAGRAM)}
+        buttons = messages.kit_buttons(proposal, drafts, states, (proposal.notion or {}).get('url', ''))
         photo = cover_jpeg(proposal.book)
         sent = (self.tg.send_photo(chat, photo, caption, buttons=buttons) if photo
                 else self.tg.send_message(chat, caption, buttons=buttons))
@@ -196,12 +198,15 @@ class Marketing:
         # 이미 ACTED로 확정된 항목은 메시지에서는 빠지지만(위) 상태는 그대로 둔다(운영진 결정 보존)
         to_skip = [i for i in items if is_quiet(i) and i.status != Proposal.ACTED]
         grant_lines = self._grant_briefing_lines(today)
+        states = [board.item_state(p) for p in shown]  # 관리자 방 사본에서 이미 누른 결정도 버튼에 보인다
         sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, shown, briefing.measure,
                                                                  grants=grant_lines),
-                                    buttons=messages.briefing_buttons(briefing, shown))
+                                    buttons=messages.briefing_buttons(briefing, shown, states,
+                                                                      (briefing.notion or {}).get('url', '')))
         if record:
             briefing.chat_id, briefing.message_id, briefing.sent_at, briefing.mode = chat, sent['message_id'], now, self.mode()
-            briefing.save(update_fields=['chat_id', 'message_id', 'sent_at', 'mode'])
+            briefing.shown = [i.id for i in shown]
+            briefing.save(update_fields=['chat_id', 'message_id', 'sent_at', 'mode', 'shown'])
             if to_skip:  # 보내기 전에 미리 SKIPPED로 적어 두면 보내기가 실패했을 때도 그대로 남는다 — 보낸 뒤에만 적는다
                 Proposal.objects.filter(pk__in=[i.id for i in to_skip]).update(status=Proposal.SKIPPED)
             # 운영진이 이미 관리자 방 사본에서 누른 ACTED/SKIPPED 결정은 검수 방으로 넘길 때도 덮지 않는다
@@ -271,7 +276,7 @@ class Marketing:
             items = [p for p in items if not p.candidate_key.startswith('moment:')]
         if not items:
             return False
-        sent = self.tg.send_message(chat, messages.midweek_text(items), buttons=messages.midweek_buttons(items))
+        sent = self.tg.send_message(chat, messages.midweek_text(items), buttons=messages.midweek_buttons(items, [board.item_state(p) for p in items]))
         Proposal.objects.filter(pk__in=[p.id for p in items]).update(chat_id=chat, message_id=sent['message_id'],
                                                                      sent_at=now, status=Proposal.SHOWN)
         self._midweek_week_notice(now)
@@ -285,8 +290,12 @@ class Marketing:
             WorkerState.put('moment_week_notice', wk.isoformat())
             self.host.notify_admin('ℹ️ 이번 주 주중 제안이 두 번째예요. 너무 잦으면 /moment midweek 로 조정하세요')
 
-    def _send_draft(self, draft, chat_id, reply_to=None, note=''):
-        sent = self.tg.send_message(chat_id, messages.draft_text(draft), reply_to=reply_to,
+    def _send_draft(self, draft, chat_id, reply_to=None, quote=None):
+        places = messages.places_text(draft)
+        if places:  # 편지: 보낼 곳을 먼저 짧게(올릴 글이 아니라 본문에서 뺐다). 여기에 단 답장도 편지 고치기로 간다
+            sent = self.tg.send_message(chat_id, places, reply_to=reply_to, quote=quote)
+            DraftMessage.objects.create(draft=draft, chat_id=chat_id, message_id=sent['message_id'])
+        sent = self.tg.send_message(chat_id, messages.draft_text(draft), reply_to=reply_to, quote=quote,
                                     buttons=messages.draft_buttons(draft))
         Draft.objects.filter(pk=draft.pk).update(chat_id=chat_id, message_id=sent['message_id'])  # 마지막 사본
         DraftMessage.objects.create(draft=draft, chat_id=chat_id, message_id=sent['message_id'])
@@ -307,50 +316,89 @@ class Marketing:
             qs = qs.filter(channel=channel)
         return qs.order_by('-version', '-id').first()
 
+    def _current(self, proposal, channel):
+        """(보낼·기록할·고칠 최신 판, 알림 종류). Task 9에서 노션에서 고친 글을 읽도록 바뀐다."""
+        return self._newest(proposal.id, channel), ''
+
+    def _after_status(self, proposal):
+        """버튼을 누른 뒤 허브 버튼(진행 상황판)을 다시 그린다. 실패해도 버튼 처리는 끝난 것으로 둔다."""
+        try:
+            board.refresh(self.tg, board.hub_of(Proposal.objects.select_related('briefing').get(pk=proposal.pk)))
+        except Exception:
+            log.warning('marketing hub refresh failed for proposal %s', proposal.pk, exc_info=True)
+
     # ---- 버튼 ----
     def handle_callback(self, data, chat_id, cq, actor):
         action, pk = messages.parse_cb(data)
-        here = cq['message']['message_id']
+        here_msg = cq['message']
+        here = here_msg['message_id']
+        hub_text = here_msg.get('text') or here_msg.get('caption') or ''
         if action == 'v':
-            d = Draft.objects.filter(pk=pk).first()
-            if d:
-                self._send_draft(self._newest(d.proposal_id, d.channel), chat_id, reply_to=here)
-            return ''
-        if action == 'b':
-            d = self._newest(pk)
-            if d:
-                self._send_draft(d, chat_id, reply_to=here)
-            return ''
-        if action == 'm':
-            p = Proposal.objects.filter(pk=pk).first()
-            if p:
-                if p.caution:
-                    self.tg.send_message(chat_id, '조심할 점\n\n' + p.caution, reply_to=here)
-                for d in p.drafts.filter(channel__in=(Draft.LINKS, Draft.SHORT, Draft.LETTER), parent__isnull=True).order_by('id'):
-                    self._send_draft(self._newest(p.id, d.channel), chat_id, reply_to=here)
-            return ''
-        if action == 'p':
-            d = Draft.objects.filter(pk=pk).first()
+            d = Draft.objects.filter(pk=pk).select_related('proposal').first()
             if not d:
                 return ''
-            Draft.objects.filter(pk=pk).update(status=Draft.POSTED, posted_at=timezone.now(), posted_by=actor[:100])
+            cur, note = self._current(d.proposal, d.channel)
+            self._send_draft(cur, chat_id, reply_to=here, quote=messages.kit_line(hub_text, d.channel))
+            return messages.sent_toast(None, cur, note)
+        if action == 'b':
+            p = Proposal.objects.filter(pk=pk).first()
+            newest = self._newest(pk) if p else None
+            if not newest:
+                return ''
+            cur, note = self._current(p, newest.channel)
+            line = messages.item_line(hub_text, p.headline)
+            self._send_draft(cur, chat_id, reply_to=here, quote=line)
+            return messages.sent_toast(messages.line_number(line), cur, note)
+        if action == 'm':
+            p = Proposal.objects.filter(pk=pk).first()
+            if not p:
+                return ''
+            if p.caution:
+                self.tg.send_message(chat_id, '조심할 점\n\n' + p.caution, reply_to=here)
+            notes = []
+            for d in p.drafts.filter(channel__in=(Draft.LINKS, Draft.SHORT, Draft.LETTER), parent__isnull=True).order_by('id'):
+                cur, note = self._current(p, d.channel)
+                notes.append(note)
+                self._send_draft(cur, chat_id, reply_to=here, quote=messages.kit_line(hub_text, d.channel))
+            return '나머지 글을 보냈어요' + (' · 노션에서 고친 글이 있어요' if 'notion' in notes else '')
+        if action == 'p':
+            d = Draft.objects.filter(pk=pk).select_related('proposal').first()
+            if not d:
+                return ''
+            cur, _ = self._current(d.proposal, d.channel)  # 올린 글 = 그 순간의 최신 판(노션 포함, 2026-09-30 사용자)
+            Draft.objects.filter(pk=cur.pk).update(status=Draft.POSTED, posted_at=timezone.now(), posted_by=actor[:100])
             Proposal.objects.filter(pk=d.proposal_id).update(status=Proposal.ACTED)
-            self.tg.send_message(chat_id, '기록해 둘게요. 어디에 올리셨는지는 봇이 찾아볼게요. '
-                                          '2주쯤 뒤 판매 지수와 반응이 어떻게 달라졌는지 브리핑에 적어 드릴게요.', reply_to=here)
-            return '기록했어요'
+            self._after_status(d.proposal)
+            return messages.POSTED_TOAST
         if action == 'e':
             return '이 초안에 답장으로 고칠 점을 적어 주세요'
         if action == 'l':
-            Draft.objects.filter(pk=pk).update(status=Draft.SKIPPED)
+            d = Draft.objects.filter(pk=pk).select_related('proposal').first()
+            if not d:
+                return ''
+            # 누른 판만이 아니라 그 글의 아직 안 올린 판 모두(상황판 이름이 판마다 흔들리지 않게)
+            Draft.objects.filter(proposal_id=d.proposal_id, channel=d.channel, status=Draft.DRAFT).update(status=Draft.SKIPPED)
+            self._after_status(d.proposal)
             return '알겠어요'
         if action == 'sk':
-            Proposal.objects.filter(pk=pk, kind=Proposal.KIT).update(status=Proposal.SKIPPED)
+            p = Proposal.objects.filter(pk=pk, kind=Proposal.KIT).first()
+            if p:
+                Proposal.objects.filter(pk=pk).exclude(status=Proposal.ACTED).update(status=Proposal.SKIPPED)
+                self._after_status(p)
             return '이번엔 넘길게요'
         if action == 'sn':
-            Proposal.objects.filter(kind=Proposal.NOW, chat_id=chat_id, message_id=here).update(status=Proposal.SKIPPED)
+            ps = Proposal.objects.filter(kind=Proposal.NOW, chat_id=chat_id, message_id=here)
+            first = ps.order_by('rank', 'id').first()
+            ps.exclude(status=Proposal.ACTED).update(status=Proposal.SKIPPED)  # 이미 올린 항목은 그대로
+            if first:
+                self._after_status(first)
             return '이번엔 넘길게요'
         if action == 'sw':
-            Proposal.objects.filter(briefing_id=pk).update(status=Proposal.SKIPPED)
+            items = Proposal.objects.filter(briefing_id=pk)
+            first = items.order_by('rank', 'id').first()
+            items.exclude(status=Proposal.ACTED).update(status=Proposal.SKIPPED)  # 이미 올린 항목은 그대로
+            if first:
+                self._after_status(first)
             return '이번 주는 넘길게요'
         if action in ('ga', 'gp'):
             call, answer = grants.decide(pk, action == 'ga', actor, timezone.now())
@@ -376,21 +424,27 @@ class Marketing:
             return
         if not text or is_acknowledgement(text):  # 고맙다·좋다는 답뿐이면 고치지 않는다
             return
-        CopyNote.objects.create(draft=draft, text=text, by=actor[:100])
-        self.tg.send_message(chat_id, '고치고 있어요. 2~3분쯤 걸려요.', reply_to=msg['message_id'])
-        book = draft.proposal.book
+        if not text or is_acknowledgement(text):  # 고맙다·좋다는 답뿐이면 고치지 않는다
+            return
+        base, _ = self._current(draft.proposal, draft.channel)  # 옛 사본에 답장해도 최신 판(노션 포함)을 고친다
+        CopyNote.objects.create(draft=base, text=text, by=actor[:100])
+        working = self.tg.send_message(chat_id, messages.WORKING, reply_to=msg['message_id'])
+        book = base.proposal.book
         source = (book.description or book.short_description or '') if book else ''
         try:
-            out = complete_json(self.llm, REWRITE_SYSTEM, build_rewrite_user(draft, text, source))
+            out = complete_json(self.llm, REWRITE_SYSTEM, build_rewrite_user(base, text, source))
         except LLMError as e:
             self.host.notify_admin(f'⚠️ 마케팅 초안 고치기 실패: {type(e).__name__}: {e}')
-            self.tg.send_message(chat_id, '지금은 고치지 못했어요. 잠시 뒤에 다시 적어 주세요.', reply_to=msg['message_id'])
+            self.tg.edit_text(chat_id, working['message_id'], messages.REWRITE_FAILED)
             return
-        new = Draft.objects.create(proposal=draft.proposal, channel=draft.channel,
+        new = Draft.objects.create(proposal=base.proposal, channel=base.channel,
                                    title=fix_title_marks(str(out.get('title') or '').strip())[:300],
-                                   body=fix_title_marks(str(out.get('body') or '').strip()) or draft.body,
-                                   version=draft.version + 1, parent=draft)
+                                   body=fix_title_marks(str(out.get('body') or '').strip()) or base.body,
+                                   version=base.version + 1, parent=base, origin=Draft.REWRITE, extra=base.extra)
+        # '고치고 있어요'를 '고쳤어요: …'로 고쳐 써 방에 메시지가 하나만 늘게 하고, 새 글은 본문만
+        self.tg.edit_text(chat_id, working['message_id'], messages.rewrite_done(str(out.get('note') or '').strip()))
         self._send_draft(new, chat_id, reply_to=msg['message_id'])
+        self._after_status(new.proposal)  # [다음에] 했던 글이 다시 열리면 버튼 이름도 돌아온다
 
     # ---- 관리자 명령 ----
     def admin_command(self, chat_id, cmd, arg, now=None):
