@@ -91,6 +91,8 @@ class Briefing(models.Model):
     sent_at = models.DateTimeField(null=True, blank=True)
     mode = models.CharField(max_length=20, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    shown = models.JSONField(default=list, blank=True, help_text='검수 방 메시지에 보인 항목(Proposal id) 순서')
+    notion = models.JSONField(default=dict, blank=True, help_text='노션 페이지: page·url·state·tries·since·last_try·hub_text')
 
 
 class Proposal(BaseModel):
@@ -110,12 +112,14 @@ class Proposal(BaseModel):
     chat_id = models.BigIntegerField(null=True, blank=True)
     message_id = models.BigIntegerField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
+    notion = models.JSONField(default=dict, blank=True, help_text='노션: heading(항목 제목 블록) 또는 headings(채널별), 페이지 칸')
 
 
 class Draft(BaseModel):
     BLOG, INSTAGRAM, LINKS, SHORT, LETTER = 'blog', 'instagram', 'links', 'short', 'letter'
     CHANNEL_CHOICES = ((BLOG, '블로그 글'), (INSTAGRAM, '인스타 글'), (LINKS, '서점 링크 공지'),
                        (SHORT, '짧은 소개'), (LETTER, '보낼 글'))
+    BOT, REWRITE, NOTION = 'bot', 'rewrite', 'notion'
     DRAFT, POSTED, SKIPPED = 'draft', 'posted', 'skipped'
     proposal = models.ForeignKey(Proposal, related_name='drafts', on_delete=models.CASCADE)
     channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES)
@@ -130,6 +134,15 @@ class Draft(BaseModel):
     message_id = models.BigIntegerField(null=True, blank=True)
     placements = models.JSONField(default=list, blank=True,
                                   help_text='[올렸어요] 뒤 봇이 찾은 실제 게시 위치: kind·label·url·id·at (placements.py)')
+    origin = models.CharField(max_length=10, default=BOT,
+                              choices=((BOT, '봇 첫 글'), (REWRITE, '텔레그램 고치기'), (NOTION, '노션에서 고침')))
+    extra = models.JSONField(default=dict, blank=True, help_text='편지: places(알리면 좋을 곳), to(받는 곳)')
+    notion = models.JSONField(default=dict, blank=True, help_text='box(📝 상자 블록), title(제목 블록)')
+
+    @property
+    def places(self):
+        # 편지의 '알리면 좋을 곳'은 본문과 따로 두고, 없으면 빈 목록
+        return (self.extra or {}).get('places') or []
 
     @property
     def label(self):
