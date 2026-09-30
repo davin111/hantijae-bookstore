@@ -100,12 +100,13 @@ def _words(values, name):
     return out[:NARROW_MAX_WORDS]
 
 
-def narrow_text(words, book):
-    """낱말이 없으면 빈 문자열(이름만으로 찾기). 있으면 한티재와 책 제목도 함께 — 책을 다룬 기사는 분야 낱말이 없어도 잡힌다."""
+def narrow_text(words, book, name):
+    """낱말이 없으면 빈 문자열(이름만으로 찾기). 있으면 한티재·책 제목·'이름의'도 함께 — 책을 다룬 기사와
+    '[하승우의 풀뿌리]' 같은 저자 칼럼은 분야 낱말이 없어도 잡힌다('칼럼 OR 기고'보다 동명이인 잡음이 적었다)."""
     if not words:
         return ''
-    title = book.title.replace('"', '').strip()
-    return '(' + ' OR '.join([*words, '한티재', f'"{title}"']) + ')'
+    title, name = book.title.replace('"', '').strip(), name.replace('"', '').strip()
+    return '(' + ' OR '.join([*words, '한티재', f'"{title}"', f'"{name}의"']) + ')'
 
 
 def narrow_new(llm, watches, now):
@@ -123,7 +124,7 @@ def narrow_new(llm, watches, now):
     for i, w in enumerate(todo):
         if i not in by_id:  # 답에서 빠진 사람은 다음 수집 때 다시 묻는다
             continue
-        w.narrow, w.narrowed_at = narrow_text(_words(by_id[i].get('words'), w.query), w.book), now
+        w.narrow, w.narrowed_at = narrow_text(_words(by_id[i].get('words'), w.query), w.book, w.query), now
         w.save(update_fields=['narrow', 'narrowed_at', 'updated_at'])
 
 

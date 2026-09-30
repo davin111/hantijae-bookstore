@@ -112,9 +112,11 @@ class NarrowTest(TestCase):
         llm = FakeLLM([{'items': [{'id': 0, 'words': ['가수', '노래', '포크']}]}, {'items': []}, {'items': []}])
         self.collect(llm)
         w = WatchQuery.objects.get(query='박강수')
-        self.assertEqual(w.narrow, '(가수 OR 노래 OR 포크 OR 한티재 OR "그리운 바람이 나를 불러")')
+        # "박강수의": '[하승우의 풀뿌리]' 같은 저자 칼럼은 분야 낱말 없이도 잡히게(2026-09-30 실측: 관련 6건 중 칼럼 2건이 빠짐)
+        self.assertEqual(w.narrow, '(가수 OR 노래 OR 포크 OR 한티재 OR "그리운 바람이 나를 불러" OR "박강수의")')
         self.assertIsNotNone(w.narrowed_at)
-        self.assertIn('"박강수" (가수 OR 노래 OR 포크 OR 한티재 OR "그리운 바람이 나를 불러") when:14d', self.urls[0])
+        self.assertIn('"박강수" (가수 OR 노래 OR 포크 OR 한티재 OR "그리운 바람이 나를 불러" OR "박강수의") when:14d',
+                      self.urls[0])
         self.assertIn('박강수', llm.calls[0][1])
         self.assertIn('싱어송라이터', llm.calls[0][1])  # 책 소개를 근거로 고른다
         self.collect(llm)
@@ -125,7 +127,7 @@ class NarrowTest(TestCase):
         llm = FakeLLM([{'items': [{'id': 0, 'words': words}]}, {'items': []}])
         self.collect(llm)
         self.assertEqual(WatchQuery.objects.get(query='박강수').narrow,
-                         '(가수 OR 한티재 OR "그리운 바람이 나를 불러")')
+                         '(가수 OR 한티재 OR "그리운 바람이 나를 불러" OR "박강수의")')
 
     def test_no_usable_words_keeps_plain_query_and_does_not_ask_again(self):
         llm = FakeLLM([{'items': [{'id': 0, 'words': []}]}, {'items': []}, {'items': []}])
