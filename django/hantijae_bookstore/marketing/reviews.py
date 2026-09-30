@@ -1,13 +1,31 @@
 """독자 서평 수집(스펙 §4, 결정 B): 책마다 네이버·카카오에서 찾고 → 코드로 1차 거르기 → 새 글만 LLM 1회 판별 → Signal(kind=review)."""
+import hashlib
 import logging
+import time
+from collections import Counter
+from dataclasses import dataclass, field
+from datetime import timedelta
+from typing import Dict, List, Tuple
 
+from django.conf import settings
+
+from books.models import Book
 from intake.llm import complete_json
+from intake.models import WorkerState
+from marketing.http import http_get_json
+from marketing.models import Signal
 from marketing.prompts import REVIEW_JUDGE_SYSTEM, build_review_user
-from marketing.review_search import SOURCE_LABEL
+from marketing.review_filter import excluded, mentions_book, queries, terms
+from marketing.review_search import SOURCE_LABEL, normalize_url, sources
 
 log = logging.getLogger('intake')
 VERDICTS = ('review', 'promo', 'unrelated')
 PER_LLM_CALL = 40
+
+FRESH_DAYS = 14
+ROTATION = 7      # 책마다 주 1회: 날마다 id % 7이 맞는 책만
+SPACING = 0.5
+SCANNED = 'review_scanned_books'   # 한 번이라도 찾아본 책 id. 날짜 없는 네이버 카페 글은 첫 검색 결과를 기준선으로만 둔다
 
 
 def _book_line(t):
@@ -43,3 +61,99 @@ def judge(llm, rows):
     if batches and failed == batches:
         raise RuntimeError(f'서평 판별 LLM 호출 {failed}번이 모두 실패했어요')
     return out
+
+
+@dataclass
+class Report:
+    books: int = 0
+    found: int = 0      # 거르기를 통과한 새 글
+    baseline: int = 0   # 오래됐거나 첫 검색이라 판별 없이 적어 둔 글
+    failed: List[str] = field(default_factory=list)   # 그날 호출이 모두 실패한 출처
+    reviews: List[Signal] = field(default_factory=list)
+    verdicts: Dict[str, Tuple[str, str]] = field(default_factory=dict)
+
+
+def todays_books(today):
+    return [b for b in Book.objects.filter(is_published=True).prefetch_related('authors__author').order_by('id')
+            if b.id % ROTATION == today.toordinal() % ROTATION]
+
+
+def signal_key(book, post):
+    return f'review:{book.id}:' + hashlib.sha1(normalize_url(post.url).encode()).hexdigest()
+
+
+def _save(book, post, key, verdict, reason):
+    s, _ = Signal.objects.get_or_create(key=key, defaults={
+        'kind': Signal.REVIEW, 'book': book, 'title': post.title[:500], 'url': post.url[:1000],
+        'happens_on': post.posted_on, 'relevant': verdict == 'review',
+        'detail': {'source': post.source, 'where': post.where[:100], 'snippet': post.snippet[:200],
+                   'verdict': verdict, 'reason': reason}})
+    return s
+
+
+def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
+    """검색하고 코드로 거른다. 오래된 글과 첫 검색의 날짜 없는 글은 바로 기준선으로 적고,
+    새 글은 판별하도록 [(BookTerms, Post, key)]로 돌려준다."""
+    cfg = getattr(settings, 'MARKETING', {}) if cfg is None else cfg
+    srcs = sources(cfg)
+    report = Report()
+    if not srcs:
+        return report, []
+    books = todays_books(today) if books is None else books
+    scanned = set(WorkerState.get(SCANNED) or [])
+    calls, errors, ok_books = Counter(), Counter(), set()
+    fresh, seen, waited = [], set(), False
+    for book in books:
+        t = terms(book)
+        report.books += 1
+        for source, search, creds in srcs:
+            for q in queries(t):
+                if waited:
+                    sleep(SPACING)
+                waited = True
+                calls[source] += 1
+                try:
+                    posts = search(source, q, creds, get_json)
+                except Exception:
+                    errors[source] += 1
+                    if errors[source] == 1:   # 한도 초과면 수십 번 실패한다 → 출처마다 한 번만 남긴다
+                        log.warning('review search failed: %s', source, exc_info=True)
+                    continue
+                ok_books.add(book.id)
+                for p in posts:
+                    key = signal_key(book, p)
+                    if key in seen or excluded(p) or not mentions_book(p, t):
+                        continue
+                    seen.add(key)
+                    if Signal.objects.filter(key=key).exists():
+                        continue
+                    if p.posted_on:
+                        is_fresh = p.posted_on >= today - timedelta(days=FRESH_DAYS)
+                    else:
+                        is_fresh = book.id in scanned
+                    if is_fresh:
+                        fresh.append((t, p, key))
+                    else:
+                        _save(book, p, key, 'old', '')
+                        report.baseline += 1
+    report.failed = [s for s in calls if errors[s] == calls[s]]
+    report.found = len(fresh)
+    WorkerState.put(SCANNED, sorted(scanned | ok_books))
+    return report, fresh
+
+
+def save_judged(llm, fresh, report):
+    """새 글을 판별해 적는다. 판정이 빠진 글은 적지 않는다(다음 검색에서 다시).
+    판별이 모두 실패하면 예외 — 기준선은 이미 적었다."""
+    if not fresh:
+        return report
+    verdicts = judge(llm, [(t, p) for t, p, _ in fresh])
+    for i, (t, p, key) in enumerate(fresh):
+        if i not in verdicts:
+            continue
+        verdict, reason = verdicts[i]
+        s = _save(t.book, p, key, verdict, reason)
+        report.verdicts[key] = (verdict, reason)
+        if verdict == 'review':
+            report.reviews.append(s)
+    return report
