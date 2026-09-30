@@ -13,7 +13,7 @@ from marketing import bnk_sales, meta
 from marketing.funding import ends_on, is_stalled, live_campaigns
 from marketing.hooks import upcoming
 from marketing.kit import blog_has
-from marketing.models import BookProfile, Proposal, SalesSnapshot, Signal
+from marketing.models import BookProfile, LoanSnapshot, Proposal, SalesSnapshot, Signal
 from marketing.moments import TYPE_LABEL, find_book, seen_on
 from marketing.review_search import SOURCE_LABEL
 from marketing.sales import latest
@@ -26,12 +26,12 @@ from web.models import Notice
 KIND_LABEL = {'hook': '기념일', 'fund': '진행 중 펀딩', 'news': '저자 소식', 'surge': '판매 지수 급등',
               'blog': '네이버 블로그 글 없음', 'noreview': '리뷰 없음', 'selection': '공공 선정',
               'sns_event': '다가오는 행사', 'sns_after': '행사 후기', 'sns_repost': '공식 채널로 옮겨 싣기',
-              'sns_press': '서평·기사 모음', 'moment': '대화 속 계기', 'review': '새 독자 서평'}
+              'sns_press': '서평·기사 모음', 'moment': '대화 속 계기', 'review': '새 독자 서평', 'loan': '도서관 대출'}
 LINK_LABEL = {'news': '기사 원문', 'fund': '펀딩 페이지', 'review': '서평 글'}  # 브리핑 메시지에서 링크 앞에 붙는 말
 # 판매 지수 급등의 원인 가설로 붙일 만한 대화 속 계기
 ROOM_TALK_TYPES = ('group', 'stock', 'author', 'media', 'issue', 'selection')
 # 새 계기가 없는 후보는 같은 책을 3주 안에 다시 제안하지 않는다
-NEEDS_REST = ('blog', 'noreview', 'surge')
+NEEDS_REST = ('blog', 'noreview', 'surge', 'loan')
 # 책 없이도 브리핑에 올릴 수 있는 후보(사이트에 아직 없는 신간·행사, 펀딩)
 SNS_KINDS = ('sns_event', 'sns_after', 'sns_repost', 'sns_press')
 BOOKLESS_OK = ('fund',) + SNS_KINDS
@@ -318,6 +318,36 @@ def noreview_candidates(today):
     return out
 
 
+LOAN_MIN, LOAN_TOP, LOAN_AGE_DAYS = 10, 3, 365
+
+
+def loan_candidates(today):
+    """도서관에서 꾸준히 읽히는 구간 책(스펙 §7): 가장 최근 달 대출이 LOAN_MIN 이상이고 앞선 달 평균보다 줄지 않은,
+    나온 지 1년 넘은 책을 대출 많은 순으로 LOAN_TOP권. 같은 책은 NEEDS_REST로 3주 쉰다."""
+    latest = LoanSnapshot.objects.aggregate(m=Max('month'))['m']
+    if not latest:
+        return []
+    picked = []
+    for snap in (LoanSnapshot.objects.filter(month=latest, loans__gte=LOAN_MIN, book__is_published=True,
+                                             book__visible=True,
+                                             book__published_date__lte=today - timedelta(days=LOAN_AGE_DAYS))
+                 .select_related('book')):
+        prev = list(LoanSnapshot.objects.filter(book=snap.book, month__lt=latest,
+                                                month__gte=latest - timedelta(days=335)).values_list('loans', flat=True))
+        avg = round(sum(prev) / len(prev)) if prev else 0
+        if prev and snap.loans < avg:
+            continue
+        picked.append((snap, avg, len(prev)))
+    picked.sort(key=lambda x: (-x[0].loans, x[0].book_id))
+    out = []
+    for snap, avg, n in picked[:LOAN_TOP]:
+        summary = f'{latest.month}월 도서관 대출 {snap.loans}회' + (f'(앞선 {n}달 평균 {avg}회)' if n else '')
+        out.append(Candidate(id=f'loan:{snap.book_id}:{latest.isoformat()}', kind='loan', books=[snap.book],
+                             summary=summary, facts={'month': latest.strftime('%Y-%m'), 'loans': snap.loans, 'avg': avg},
+                             urgency=1))
+    return out
+
+
 def _recently_proposed(today, now):
     """3주 쉬기에 세는 책: 실제로 보낸 지난 브리핑의 항목만. 이번 주 브리핑은 다시 만들 때 자기 항목에 걸리지 않게 뺀다."""
     return set(Proposal.objects.filter(kind=Proposal.BRIEF_ITEM, created_at__gte=now - timedelta(days=21),
@@ -504,7 +534,8 @@ def gather(today, now, posts):
     reviewed = {b.id for c in reviews for b in c.books}   # 새 서평이 있는 책의 '리뷰 없음'은 서평 후보 하나로 합친다
     cands = (hook_candidates(today) + funds + news_candidates(now) + selection_candidates(now) + sns + reviews
              + surge_candidates(today) + blog_gap_candidates(today, posts)
-             + [c for c in noreview_candidates(today) if not {b.id for b in c.books} & reviewed])
+             + [c for c in noreview_candidates(today) if not {b.id for b in c.books} & reviewed]
+             + loan_candidates(today))
     if WorkerState.get('moment_mode', 'off') == 'live':
         cands = with_moments(cands, moment_candidates(today, now), now)
     return select(cands, today, now)

@@ -8,7 +8,7 @@ from django.test import TestCase
 from intake.models import FundingCampaign, WorkerState
 from marketing import candidates as C
 from marketing.hooks import seed
-from marketing.models import BookProfile, Briefing, FundingSnapshot, Proposal, SalesSnapshot, Signal
+from marketing.models import BookProfile, Briefing, FundingSnapshot, LoanSnapshot, Proposal, SalesSnapshot, Signal
 from marketing.tests.fakes import make_book, make_sale
 from marketing.timeutil import KST
 from web.models import Notice
@@ -21,6 +21,11 @@ def review(book, n, source='naver_blog', where='', day=date(2026, 9, 25), used_a
     return Signal.objects.create(kind=Signal.REVIEW, key=f'review:{book.id}:{n}', book=book, title=f'서평 {n}',
                                  url=f'https://blog.naver.com/r/{n}', happens_on=day, relevant=True, used_at=used_at,
                                  detail={'source': source, 'where': where, 'verdict': 'review'})
+
+
+def loans_of(book, *pairs):
+    for month, n in pairs:
+        LoanSnapshot.objects.create(book=book, month=month, loans=n)
 
 
 class CandidateTest(TestCase):
@@ -221,6 +226,35 @@ class CandidateTest(TestCase):
         [c] = C.review_candidates(TODAY, NOW)
         self.assertEqual(c.summary, '새 독자 서평 2건(네이버 블로그 1, 인스타 태그 1)')
         self.assertEqual(c.facts['items'][0]['where'], '인스타 태그 「@hagobooks」')
+
+    def test_loan_candidate_for_steady_old_book(self):
+        old = make_book(title='커밍아웃 스토리', published=date(2018, 6, 11), isbn='979-11-00000-31-1', author=None)
+        loans_of(old, (date(2026, 6, 1), 20), (date(2026, 7, 1), 22), (date(2026, 8, 1), 30))
+        [c] = C.loan_candidates(TODAY)
+        self.assertEqual((c.id, c.kind, c.urgency, c.books), (f'loan:{old.id}:2026-08-01', 'loan', 1, [old]))
+        self.assertEqual(c.summary, '8월 도서관 대출 30회(앞선 2달 평균 21회)')
+        self.assertEqual(c.facts, {'month': '2026-08', 'loans': 30, 'avg': 21})
+        self.assertEqual(C.KIND_LABEL['loan'], '도서관 대출')
+
+    def test_declining_new_or_hidden_books_are_not_candidates(self):
+        down = make_book(title='줄어드는 책', published=date(2019, 1, 1), isbn='979-11-00000-32-8', author=None)
+        loans_of(down, (date(2026, 7, 1), 50), (date(2026, 8, 1), 20))
+        loans_of(self.sibwol, (date(2026, 8, 1), 90))            # 2026-06 출간 — 1년이 안 됨
+        hidden = make_book(title='숨긴 책', published=date(2019, 1, 1), isbn='979-11-00000-33-5', author=None, visible=False)
+        loans_of(hidden, (date(2026, 8, 1), 90))
+        few = make_book(title='적은 책', published=date(2019, 1, 1), isbn='979-11-00000-34-2', author=None)
+        loans_of(few, (date(2026, 8, 1), 9))
+        self.assertEqual(C.loan_candidates(TODAY), [])
+
+    def test_top_three_by_latest_loans(self):
+        books = [make_book(title=f'책{i}', published=date(2019, 1, 1), isbn=f'979-11-00000-4{i}-0', author=None)
+                 for i in range(5)]
+        for i, b in enumerate(books):
+            loans_of(b, (date(2026, 8, 1), 10 + i))
+        self.assertEqual([c.books[0] for c in C.loan_candidates(TODAY)], [books[4], books[3], books[2]])
+
+    def test_loan_is_rested(self):
+        self.assertIn('loan', C.NEEDS_REST)
 
 
 class MomentCandidateTest(TestCase):
