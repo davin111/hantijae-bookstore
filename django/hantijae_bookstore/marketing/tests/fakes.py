@@ -1,6 +1,7 @@
 import json
 from datetime import date
 
+import requests
 from books.models import Author, Book, BookAuthor, Category
 
 
@@ -167,3 +168,95 @@ def make_call(no='2167', state='ready', until=date(2026, 10, 12), posted=date(20
     return GrantCall.objects.create(key=f'kpipa:{no}', title=kw.pop('title', '2026년 제3차 전자책 제작 지원 사업 공고'),
                                     url=f'https://www.kpipa.or.kr/p/g1_2/{no}', posted_on=posted, state=state,
                                     apply_until=until, verdict=verdict, **kw)
+
+
+def http_error(status):
+    res = requests.Response()
+    res.status_code = status
+    return requests.HTTPError(str(status), response=res)
+
+
+class FakeNotion:
+    """노션 블록 나무를 메모리에 둔다. 진짜 API처럼 rich_text에 plain_text를 채워 돌려준다."""
+
+    def __init__(self):
+        self.blocks, self.kids, self.pages, self.calls, self.fail, self.n = {}, {}, {}, [], {}, 0
+
+    def _check(self, name):
+        self.calls.append(name)
+        if name in self.fail:
+            raise self.fail.pop(name)
+
+    def _plain(self, data):
+        for r in data.get('rich_text', []):
+            r['plain_text'] = r['text']['content']
+
+    def _add(self, parent, block):
+        block = json.loads(json.dumps(block))
+        data = block[block['type']]
+        children = data.pop('children', [])
+        self._plain(data)
+        self.n += 1
+        bid = f'blk{self.n}'
+        block.update(id=bid, object='block')
+        self.blocks[bid] = block
+        self.kids.setdefault(parent, []).append(bid)
+        self.kids.setdefault(bid, [])
+        for c in children:
+            self._add(bid, c)
+        return block
+
+    def create_database(self, parent_page_id, title, properties):
+        self._check('create_database')
+        return {'id': 'db1', 'url': 'https://notion.test/db1', 'data_sources': [{'id': 'ds1'}]}
+
+    def create_page(self, data_source_id, properties, children=()):
+        self._check('create_page')
+        self.n += 1
+        pid = f'page{self.n}'
+        self.pages[pid] = {'ds': data_source_id, 'properties': json.loads(json.dumps(properties)), 'in_trash': False}
+        self.kids[pid] = []
+        for c in children:
+            self._add(pid, c)
+        return {'id': pid, 'url': f'https://notion.test/{pid}'}
+
+    def children(self, block_id, timeout=30):
+        self._check('children')
+        if block_id not in self.kids:
+            raise http_error(404)
+        return [self.blocks[i] for i in self.kids[block_id]]
+
+    def append_children(self, block_id, children, timeout=10):
+        self._check('append_children')
+        if block_id not in self.kids:
+            raise http_error(404)
+        return [self._add(block_id, c) for c in children]
+
+    def update_block(self, block_id, payload):
+        self._check('update_block')
+        for key, value in json.loads(json.dumps(payload)).items():
+            self.blocks[block_id][key].update(value)
+            self._plain(self.blocks[block_id][key])
+
+    def update_page(self, page_id, properties):
+        self._check('update_page')
+        self.pages[page_id]['properties'].update(properties)
+
+    def trash_page(self, page_id):
+        self._check('trash_page')
+        self.pages[page_id]['in_trash'] = True
+
+    # ---- 시험용: 운영진이 노션에서 고친 것처럼 ----
+    def edit(self, block_id, text):
+        b = self.blocks[block_id]
+        b[b['type']]['rich_text'] = [{'type': 'text', 'text': {'content': text}, 'plain_text': text}]
+
+    def remove(self, block_id):
+        for kids in self.kids.values():
+            if block_id in kids:
+                kids.remove(block_id)
+        self.kids.pop(block_id, None)
+
+    def text_of(self, block_id):
+        b = self.blocks[block_id]
+        return ''.join(r['plain_text'] for r in b[b['type']]['rich_text'])
