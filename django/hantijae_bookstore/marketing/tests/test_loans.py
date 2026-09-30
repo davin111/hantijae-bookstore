@@ -1,6 +1,9 @@
 from datetime import date
+from io import StringIO
+from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
+from django.core.management import call_command
 from django.test import TestCase
 
 from marketing import loans
@@ -87,3 +90,23 @@ class LoansTest(TestCase):
         loans.collect(date(2026, 10, 3), key='k', get_json=Api({'9791192455846': MISSING, '9788997090884': MISSING}),
                       sleep=sleeps.append)
         self.assertEqual(sleeps, [loans.SPACING])
+
+
+class CommandTest(TestCase):
+    def test_dry_run_rolls_back_and_prints(self):
+        book = make_book(title='커밍아웃 스토리', published=date(2018, 6, 11), isbn='978-89-97090-88-4 (03810)', author=None)
+
+        def fake_collect(today, books=None, **kw):
+            LoanSnapshot.objects.create(book=book, month=date(2026, 8, 1), loans=30)
+            return loans.LoanReport(books=1, saved=1)
+
+        out = StringIO()
+        with mock.patch('marketing.loans.collect', side_effect=fake_collect), \
+                mock.patch('marketing.search.week_line', return_value='지난 7일 구글 검색: 노출 3·클릭 1'):
+            call_command('marketing_scan_loans', '--dry-run', stdout=out)
+        text = out.getvalue()
+        self.assertIn('책 1권, 기록 1건, 도서관 자료에 없음 0권, 실패 0권', text)
+        self.assertIn('- 『커밍아웃 스토리』 8월 도서관 대출 30회', text)
+        self.assertIn('지난 7일 구글 검색: 노출 3·클릭 1', text)
+        self.assertIn('(dry-run: 기록하지 않았어요)', text)
+        self.assertEqual(LoanSnapshot.objects.count(), 0)
