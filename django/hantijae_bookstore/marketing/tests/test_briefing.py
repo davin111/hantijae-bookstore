@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 
 from django.test import TestCase
 
-from marketing.briefing import build_weekly, compose, measure_line, save_briefing
+from marketing.briefing import _fit_measure, build_weekly, compose, measure_line, save_briefing
 from marketing.candidates import Candidate
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM
@@ -314,6 +314,44 @@ class BuildWeeklyTest(TestCase):
         self.assertIn('지난주 공식 채널: 페북 2건', briefing.measure)
         self.assertIn('지난주 공식 채널: 페북 2건', llm.calls[0][1])
         self.assertIn('<참고: 운영진 개인 SNS 소식·지난주 공식 채널 현황(후보 아님)>', llm.calls[0][1])
+
+
+class FitMeasureTest(TestCase):
+    def test_fits_both_lines_when_possible(self):
+        first = 'ㄱ' * 50
+        line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「작은책」 22'
+        result = _fit_measure(first, line)
+        self.assertEqual(result, first + '\n' + line)
+        self.assertLessEqual(len(result), 300)
+
+    def test_drops_top_post_when_both_lines_too_long(self):
+        first = 'ㄱ' * 150
+        line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「' + 'ㄴ' * 140 + '」 22'
+        result = _fit_measure(first, line)
+        expected_line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1'
+        self.assertEqual(result, first + '\n' + expected_line)
+        self.assertLessEqual(len(result), 300)
+        self.assertNotIn('「', result)
+
+    def test_drops_channel_line_when_still_too_long(self):
+        first = 'ㄱ' * 280
+        line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「' + 'ㄴ' * 140 + '」 22'
+        result = _fit_measure(first, line)
+        self.assertEqual(result, first)
+        self.assertLessEqual(len(result), 300)
+
+    def test_old_behavior_when_no_channel_line(self):
+        first = 'ㄱ' * 350
+        result = _fit_measure(first, '')
+        self.assertEqual(result, 'ㄱ' * 300)
+        self.assertEqual(len(result), 300)
+
+    def test_short_both_lines_unchanged(self):
+        first = 'ㄱ' * 50
+        line = 'ㄴ' * 50
+        result = _fit_measure(first, line)
+        self.assertEqual(result, first + '\n' + line)
+        self.assertEqual(len(result), 101)  # 50 + newline + 50
 
 
 class PromptRulesTest(TestCase):

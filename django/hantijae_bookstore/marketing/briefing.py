@@ -130,6 +130,19 @@ def _reactions(draft, counts):
     return out
 
 
+MEASURE_MAX = 300   # Briefing.measure 칸 길이
+
+
+def _fit_measure(first, line):
+    """성과 줄과 공식 채널 줄을 measure 칸에 넣는다. 넘치면 채널 줄의 '반응이 가장 큰 글' 부분을 빼고, 그래도 넘치면
+    채널 줄을 뺀다 — 반쯤 잘린 줄을 운영진에게 보이지 않게. 성과 줄만으로 넘치면 그 줄을 자른다(예전과 같다)."""
+    for cand in (line, line.split('. 반응이 가장 큰 글:')[0] if line else ''):
+        text = '\n'.join(x for x in (first, cand) if x)
+        if len(text) <= MEASURE_MAX:
+            return text
+    return first[:MEASURE_MAX]
+
+
 def measure_line(today, counts=meta.post_counts):
     """게시하고 14~28일 지난 글 가운데 가장 최근 것의 판매 전후. 인과가 아니라 전후 비교다.
     전산망 실판매가 있으면 그것(전후 2주 부수), 없으면 알라딘 판매 지수. 올라간 곳(봇이 찾은 것)과 공식 글의 반응 수를 함께 적는다."""
@@ -169,6 +182,6 @@ def build_weekly(llm, today, now, posts, resolve=gnews.original_url, channel_lin
         if cand.link:
             cand.link = resolve(cand.link)
     briefing = save_briefing(items, today)
-    briefing.measure = '\n'.join(x for x in (measure_line(today), line) if x)[:300]
+    briefing.measure = _fit_measure(measure_line(today), line)
     briefing.save(update_fields=['measure'])
     return briefing, dropped
