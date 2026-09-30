@@ -65,10 +65,24 @@ def scan(today, partners=False, books=None, get=requests.get):
 
     def tagger(m):
         if m.username and m.username not in pro:
-            pro[m.username] = meta.business_media(m.username, limit=1, get=get) is not None
+            try:
+                pro[m.username] = meta.business_media(m.username, limit=1, get=get) is not None
+            except meta.MetaAuthError:
+                raise
+            except meta.MetaError as e:
+                log.warning('instagram tagger check %s: %s', m.username, e)
+                pro[m.username] = False
         return f'@{m.username}' if m.username and pro[m.username] else ''
 
-    _collect('ig_tag', meta.tagged_media(get=get), today, book_terms, tagger, report, fresh, seen)
+    try:
+        tags = meta.tagged_media(get=get)
+    except meta.MetaAuthError:
+        raise
+    except meta.MetaError as e:
+        log.warning('instagram tags: %s', e)
+        report.failed.append('ig_tag')
+        tags = []
+    _collect('ig_tag', tags, today, book_terms, tagger, report, fresh, seen)
     if partners:
         for handle in PARTNERS:
             try:
@@ -108,4 +122,7 @@ def run(deps, today, notify, get=requests.get):
             WorkerState.put('meta_auth_alert_day', today.isoformat())
             notify(AUTH_NOTE)
         return None
-    return reviews.save_judged(deps.llm, fresh, report)
+    result = reviews.save_judged(deps.llm, fresh, report)
+    if 'ig_tag' in report.failed:
+        raise RuntimeError('인스타 태그 글을 읽지 못했어요(Meta 오류)')
+    return result

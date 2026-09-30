@@ -21,8 +21,8 @@ def media(mid, caption, day, username='', url=None):
 class Graph:
     """tags: 태그 글 목록, pros: 프로페셔널 아이디 → 최근 글 목록, auth: 모든 호출이 code 190, broken: 오류 날 아이디."""
 
-    def __init__(self, tags=(), pros=None, auth=False, broken=()):
-        self.tags, self.pros, self.auth, self.broken, self.calls = list(tags), pros or {}, auth, set(broken), []
+    def __init__(self, tags=(), pros=None, auth=False, broken=(), tags_broken=False):
+        self.tags, self.pros, self.auth, self.broken, self.tags_broken, self.calls = list(tags), pros or {}, auth, set(broken), tags_broken, []
 
     def __call__(self, url, params=None, timeout=None):
         path = url.split('/v26.0/', 1)[1]
@@ -30,6 +30,8 @@ class Graph:
         if self.auth:
             return self._r(400, {'error': {'code': 190}})
         if path.endswith('/tags'):
+            if self.tags_broken:
+                return self._r(500, {'error': {'code': 2}})
             return self._r(200, {'data': self.tags})
         name = params['fields'].split('business_discovery.username(', 1)[1].split(')', 1)[0]
         if name in self.broken:
@@ -144,3 +146,19 @@ class InstagramTest(TestCase):
         g = Graph()
         self.assertEqual(instagram.run(self.deps(), date(2026, 12, 20), self.notes.append, get=g).found, 0)
         self.assertEqual((g.calls, self.notes), ([], []))
+
+    def test_tagger_check_error_leaves_the_name_out(self):
+        g = Graph(tags=[media('A', '『무궁화호를 위하여』 읽었다', date(2026, 9, 26), 'flaky.shop')], broken={'flaky.shop'})
+        with self.assertLogs('intake', level='WARNING'):
+            instagram.run(self.deps(), TODAY, self.notes.append, get=g)
+        s = Signal.objects.get()
+        self.assertEqual(s.detail['where'], '')
+
+    def test_tags_error_still_reads_partners_then_raises(self):
+        g = Graph(tags=[], pros={p: [] for p in instagram.PARTNERS}, tags_broken=True)
+        g.pros['todakbook'] = [media('B', '『무궁화호를 위하여』 입고', date(2026, 10, 3))]
+        with self.assertLogs('intake', level='WARNING'):
+            with self.assertRaises(RuntimeError):
+                instagram.run(self.deps(), SUNDAY, self.notes.append, get=g)
+        s = Signal.objects.get()
+        self.assertEqual(s.detail['where'], '@todakbook')
