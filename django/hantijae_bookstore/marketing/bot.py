@@ -457,18 +457,26 @@ class Marketing:
     def _bnk(self, chat_id, arg, now, today):
         if arg in bnk_sales.MODES:
             WorkerState.put('bnk_mode', arg)
+            if arg == 'on':
+                bnk_sales.unblock()   # 새 비밀번호를 저장한 뒤 다시 켜는 길
             return f'bnk_mode={arg}'
         try:
             if arg == 'now':
                 self.tg.send_message(chat_id, BUILDING)
                 with bnk.client_from_settings() as client:
                     report = bnk_sales.collect(client, today)
+                bnk_sales.unblock()
                 WorkerState.put('bnk_last_run', today.isoformat())
                 return bnk_sales.report_text(report)
             if arg == 'month':
+                start = bnk_sales.last_month_start(today)
+                if not bnk_sales.month_ready(start):   # 로그인하기 전에 DB로 확인
+                    return '지난달 하루하루를 다 읽은 기록이 아직 없어요'
                 with bnk.client_from_settings() as client:
-                    text = bnk_sales.monthly_text(client, bnk_sales.last_month_start(today))
-                return text or '지난달 전체를 덮는 판매 기록이 아직 없어요'
+                    return bnk_sales.monthly_text(client, start)
+        except bnk.BnkLoginError as e:
+            bnk_sales.block(today)
+            return f'전산망 조회 실패: {e}'
         except bnk.BnkError as e:
             return f'전산망 조회 실패: {e}'
         return bnk_sales.status_text(today)

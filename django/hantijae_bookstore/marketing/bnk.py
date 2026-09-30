@@ -112,9 +112,11 @@ class BnkClient:
             raise BnkError('로그인 화면에서 _csrf를 찾지 못했어요(화면이 바뀌었을 수 있어요)')
         res = self.s.post(LOGIN, data={'loginid': self.user_id, 'loginpwd': self._pw, '_csrf': token, 'reprice': '',
                                        'returnUrl': ''}, timeout=TIMEOUT)
-        if 'logoutAjax' not in res.text:   # 로그인하면 보이는 로그아웃 폼이 없으면 실패(로그인 화면으로 돌아옴)
+        if 'logoutAjax' not in res.text:   # 로그인하면 보이는 로그아웃 폼이 없으면 실패
             m = _LOGIN_ERROR.search(res.text)
-            raise BnkLoginError('출판유통통합전산망 로그인 실패' + (f': {m.group(1)}' if m and m.group(1) else ''))
+            if m and m.group(1):   # 사이트가 계정을 거부했다 → 다시 시도하면 계정이 잠길 수 있다
+                raise BnkLoginError(f'출판유통통합전산망 로그인 실패: {m.group(1)}')
+            raise BnkError('로그인 뒤 화면을 알아보지 못했어요(점검 중이거나 화면이 바뀌었을 수 있어요)')
         self._token = page_token(res.text)
         return self
 

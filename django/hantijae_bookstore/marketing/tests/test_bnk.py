@@ -93,6 +93,12 @@ class LoginTest(SimpleTestCase):
         self.assertIn('아이디 또는 비밀번호를 확인해 주세요.', str(e.exception))
         self.assertNotIn('pw-secret', str(e.exception))
 
+    def test_unrecognized_page_after_login_is_not_a_credential_error(self):
+        s = FakeSession(routes() | {('POST', bnk.LOGIN): Res(bnk.LOGIN_PAGE, LOGIN_HTML)})   # 문구 없는 화면(점검 등)
+        with self.assertRaises(bnk.BnkError) as e:
+            client(s).login()
+        self.assertNotIsInstance(e.exception, bnk.BnkLoginError)
+
     def test_missing_credentials_raise_login_error(self):
         with self.assertRaises(bnk.BnkLoginError):
             bnk.BnkClient('', '', session=FakeSession({}))

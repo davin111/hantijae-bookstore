@@ -39,15 +39,26 @@ class BnkCommandTest(TestCase):
         self.assertTrue(self.last().startswith('읽은 날 35일 · 판매 줄 0개'))
         self.assertEqual(WorkerState.get('bnk_last_run'), '2026-09-30')
 
-    def test_login_failure_is_reported_not_raised(self):
+    def test_login_failure_is_reported_not_raised_and_blocks_auto_login(self):
         with mock.patch('marketing.bot.bnk.client_from_settings', side_effect=bnk.BnkLoginError('전산망 로그인 실패')):
             self.m().admin_command(ADMIN, '/bnk', 'now', now=NOW)
         self.assertEqual(self.last(), '전산망 조회 실패: 전산망 로그인 실패')
+        self.assertEqual(WorkerState.get('bnk_login_blocked'), '2026-09-30')
 
-    def test_month_preview(self):
+    def test_on_and_successful_now_lift_the_block(self):
+        WorkerState.put('bnk_login_blocked', '2026-09-28')
+        self.m().admin_command(ADMIN, '/bnk', 'on', now=NOW)
+        self.assertFalse(WorkerState.get('bnk_login_blocked'))
+        WorkerState.put('bnk_login_blocked', '2026-09-28')
         with mock.patch('marketing.bot.bnk.client_from_settings', return_value=FakeBnkClient()):
+            self.m().admin_command(ADMIN, '/bnk', 'now', now=NOW)
+        self.assertFalse(WorkerState.get('bnk_login_blocked'))
+
+    def test_month_preview_checks_records_before_logging_in(self):
+        with mock.patch('marketing.bot.bnk.client_from_settings') as factory:
             self.m().admin_command(ADMIN, '/bnk', 'month', now=NOW)
-        self.assertEqual(self.last(), '지난달 전체를 덮는 판매 기록이 아직 없어요')
+        factory.assert_not_called()
+        self.assertEqual(self.last(), '지난달 하루하루를 다 읽은 기록이 아직 없어요')
 
     def test_briefing_gets_sales_line(self):
         WorkerState.put('marketing_mode', 'live')

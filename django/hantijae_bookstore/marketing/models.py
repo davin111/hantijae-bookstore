@@ -271,13 +271,19 @@ class BnkSale(models.Model):
     isbn = models.CharField(max_length=13)
     book = models.ForeignKey(Book, null=True, blank=True, related_name='bnk_sales', on_delete=models.SET_NULL)
     title = models.CharField(max_length=300)
-    kyobo = models.PositiveIntegerField(default=0)
-    yes24 = models.PositiveIntegerField(default=0)
-    aladin = models.PositiveIntegerField(default=0)
-    ypbooks = models.PositiveIntegerField(default=0, help_text='영풍문고')
-    local = models.PositiveIntegerField(default=0, help_text='지역서점')
-    total = models.PositiveIntegerField(default=0)
+    kyobo = models.IntegerField(default=0)
+    yes24 = models.IntegerField(default=0)
+    aladin = models.IntegerField(default=0)
+    ypbooks = models.IntegerField(default=0, help_text='영풍문고')
+    local = models.IntegerField(default=0, help_text='지역서점')
+    total = models.IntegerField(default=0, help_text='반품이 많으면 음수일 수 있다')
     fetched_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ('day', 'isbn')
+
+
+class BnkDay(models.Model):
+    """전산망 하루를 마지막으로 읽은 날. 약 2일 늦게 들어오므로 월간 요약은 그 달 모든 날이 '그날+2일' 뒤에 읽혔을 때만 보낸다."""
+    day = models.DateField(unique=True)
+    read_on = models.DateField()

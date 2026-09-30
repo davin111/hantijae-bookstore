@@ -480,20 +480,31 @@ class BnkScheduleTest(TestCase):
         tasks.run_due(Deps(), datetime(2026, 9, 30, 7, 0, tzinfo=KST))
         self.collect.assert_not_called()
 
-    def test_login_failure_is_queued_for_the_morning_and_third_day_warns_again(self, *_):
+    def test_rejected_login_stops_auto_login_until_switched_on_again(self, *_):
         from marketing import bnk
-        self.factory.side_effect = bnk.BnkLoginError('출판유통통합전산망 로그인 실패')
+        self.factory.side_effect = bnk.BnkLoginError('출판유통통합전산망 로그인 실패: 비밀번호가 맞지 않습니다')
         deps = Deps()
         for day in (28, 29, 30):
             tasks.run_due(deps, datetime(2026, 9, day, 6, 20, tzinfo=KST))
+        self.assertEqual(self.factory.call_count, 1)   # 계정이 잠기지 않게 한 번만 시도
         queued = WorkerState.get(tasks.ADMIN_QUEUE)
-        self.assertEqual(sum('로그인하지 못했어요' in q for q in queued), 3)
-        self.assertEqual(sum('3일째 읽지 못했어요' in q for q in queued), 1)
+        self.assertEqual(len([q for q in queued if '자동 로그인을 멈췄어요' in q]), 1)
+        self.assertIn('비밀번호가 맞지 않습니다', ''.join(queued))
+        self.assertEqual(WorkerState.get('bnk_login_blocked'), '2026-09-28')
         self.assertEqual(deps.bot.notes, [])
+
+    def test_monthly_waits_until_the_month_is_fully_read(self, *_):
+        deps = Deps()
+        with mock.patch('marketing.tasks.bnk_sales.month_ready', return_value=False), \
+                mock.patch('marketing.tasks.bnk_sales.monthly_text') as monthly:
+            tasks.run_due(deps, datetime(2026, 10, 3, 10, 0, tzinfo=KST))
+        monthly.assert_not_called()
+        self.assertIsNone(WorkerState.get('bnk_last_monthly'))
 
     def test_monthly_summary_on_the_third_after_0930_once(self, *_):
         deps = Deps()
-        with mock.patch('marketing.tasks.bnk_sales.monthly_text', return_value='📊 9월 판매 요약') as monthly:
+        with mock.patch('marketing.tasks.bnk_sales.monthly_text', return_value='📊 9월 판매 요약') as monthly, \
+                mock.patch('marketing.tasks.bnk_sales.month_ready', return_value=True):
             tasks.run_due(deps, datetime(2026, 10, 2, 10, 0, tzinfo=KST))
             tasks.run_due(deps, datetime(2026, 10, 3, 9, 29, tzinfo=KST))
             monthly.assert_not_called()

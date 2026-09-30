@@ -5,7 +5,7 @@ from django.test import TestCase
 from intake.models import WorkerState
 from marketing import bnk, bnk_sales, messages
 from marketing.bnk import parse_readers
-from marketing.models import BnkSale
+from marketing.models import BnkDay, BnkSale
 from marketing.tests.fakes import FakeBnkClient, make_book, make_sale
 from marketing.tests.test_bnk import READERS_JSON
 
@@ -22,13 +22,13 @@ class CollectTest(TestCase):
         c = FakeBnkClient()
         bnk_sales.collect(c, TODAY)
         self.assertEqual((c.asked[0], c.asked[-1], len(c.asked)), (date(2026, 9, 29), date(2026, 8, 26), 35))
-        self.assertEqual(WorkerState.get('bnk_backfilled'), '2026-09-30')
+        self.assertEqual(WorkerState.get('bnk_ok_on'), '2026-09-30')
         c2 = FakeBnkClient()
         bnk_sales.collect(c2, TODAY + timedelta(days=1))
         self.assertEqual((c2.asked[0], len(c2.asked)), (date(2026, 9, 30), 7))
 
     def test_day_is_replaced_and_linked_by_isbn13(self):
-        WorkerState.put('bnk_backfilled', '2026-09-29')
+        WorkerState.put('bnk_ok_on', '2026-09-29')
         book = make_book()   # isbn 979-11-92455-95-2
         make_sale(date(2026, 9, 28), 9, isbn='9791192455999', title='사라진 줄')
         c = FakeBnkClient({date(2026, 9, 28): [row('9791192455952', 3, yes24=2, kyobo=1),
@@ -39,13 +39,13 @@ class CollectTest(TestCase):
         self.assertEqual((report.days, report.rows, report.latest), (7, 2, date(2026, 9, 28)))
 
     def test_empty_answer_keeps_existing_day(self):
-        WorkerState.put('bnk_backfilled', '2026-09-29')
+        WorkerState.put('bnk_ok_on', '2026-09-29')
         make_sale(date(2026, 9, 29), 4, isbn='9791192455952')
         bnk_sales.collect(FakeBnkClient(), TODAY)   # 어제는 아직 비어 있다(2일 늦음)
         self.assertEqual(BnkSale.objects.get(day=date(2026, 9, 29)).total, 4)
 
     def test_failed_day_is_skipped_and_all_failed_raises(self):
-        WorkerState.put('bnk_backfilled', '2026-09-29')
+        WorkerState.put('bnk_ok_on', '2026-09-29')
         with self.assertLogs('intake', 'WARNING'):
             report = bnk_sales.collect(FakeBnkClient({date(2026, 9, 28): bnk.BnkError('x')}), TODAY)
         self.assertEqual((report.days, report.failed), (6, [date(2026, 9, 28)]))
@@ -54,9 +54,37 @@ class CollectTest(TestCase):
             bnk_sales.collect(FakeBnkClient(every), TODAY)
 
     def test_login_error_is_not_swallowed(self):
-        WorkerState.put('bnk_backfilled', '2026-09-29')
+        WorkerState.put('bnk_ok_on', '2026-09-29')
         with self.assertRaises(bnk.BnkLoginError):
             bnk_sales.collect(FakeBnkClient({date(2026, 9, 29): bnk.BnkLoginError('풀림')}), TODAY)
+
+    def test_a_gap_since_the_last_success_is_read_again(self):
+        WorkerState.put('bnk_ok_on', '2026-09-20')   # 열흘 동안 못 읽었다(로그인 막힘·꺼짐)
+        c = FakeBnkClient()
+        bnk_sales.collect(c, TODAY)
+        self.assertEqual((c.asked[0], c.asked[-1], len(c.asked)), (date(2026, 9, 29), date(2026, 9, 14), 16))
+
+    def test_duplicate_isbn_rows_are_merged_and_returns_kept(self):
+        WorkerState.put('bnk_ok_on', '2026-09-29')
+        c = FakeBnkClient({date(2026, 9, 28): [row('9791192455952', 3, yes24=3), row('9791192455952', -1, yes24=-1),
+                                               row('9791190178716', 2, kyobo=2)]})
+        bnk_sales.collect(c, TODAY)
+        got = {s.isbn: (s.total, s.yes24) for s in BnkSale.objects.filter(day=date(2026, 9, 28))}
+        self.assertEqual(got, {'9791192455952': (2, 2), '9791190178716': (2, 0)})
+
+    def test_a_bad_row_fails_only_its_day(self):
+        WorkerState.put('bnk_ok_on', '2026-09-29')
+        c = FakeBnkClient({date(2026, 9, 28): [{'isbn': '9791192455952'}],   # 필드가 빠진 이상한 줄
+                           date(2026, 9, 27): [row('9791190178716', 2, kyobo=2)]})
+        with self.assertLogs('intake', 'WARNING'):
+            report = bnk_sales.collect(c, TODAY)
+        self.assertEqual((report.failed, BnkSale.objects.filter(day=date(2026, 9, 27)).count()), ([date(2026, 9, 28)], 1))
+
+    def test_read_days_are_recorded(self):
+        WorkerState.put('bnk_ok_on', '2026-09-29')
+        bnk_sales.collect(FakeBnkClient(), TODAY)
+        self.assertEqual(sorted(BnkDay.objects.values_list('day', 'read_on')),
+                         [(TODAY - timedelta(days=i), TODAY) for i in range(7, 0, -1)])
 
     def test_latest_day_only_within_ten_days(self):
         make_sale(date(2026, 9, 18), 1, isbn='9791192455952')
@@ -163,6 +191,8 @@ class MonthlyTest(Books, TestCase):
         make_sale(date(2026, 9, 25), 3, book=self.rainbow, kyobo=1, yes24=1, aladin=1)
         make_sale(date(2026, 9, 10), 5, isbn='9791192455999', title='다른 책', local=5)
         make_sale(date(2026, 10, 1), 7, book=self.bap)   # 다음 달은 빼야 한다
+        for i in range(30):   # 9월 하루하루를 10/3에 읽었다(모두 '그날+2일' 뒤)
+            BnkDay.objects.create(day=date(2026, 9, 1) + timedelta(days=i), read_on=date(2026, 10, 3))
 
     def test_monthly_text(self):
         c = FakeBnkClient(readers=parse_readers(READERS_JSON))
@@ -175,12 +205,18 @@ class MonthlyTest(Books, TestCase):
         self.assertEqual(c.asked, [(date(2026, 9, 1), date(2026, 9, 30))])
 
     def test_monthly_text_needs_the_whole_month(self):
-        BnkSale.objects.filter(day=date(2026, 9, 1)).delete()   # 9/1을 덮는 기록이 없다(처음 켠 달)
+        self.assertTrue(bnk_sales.month_ready(date(2026, 9, 1)))
+        BnkDay.objects.filter(day=date(2026, 9, 30)).update(read_on=date(2026, 10, 1))   # 말일이 아직 덜 들어왔을 때 읽음
+        self.assertFalse(bnk_sales.month_ready(date(2026, 9, 1)))
+        BnkDay.objects.filter(day=date(2026, 9, 30)).update(read_on=date(2026, 10, 3))
+        BnkDay.objects.filter(day=date(2026, 9, 12)).delete()   # 한 번도 못 읽은 날(처음 켠 달·빈틈)
+        self.assertFalse(bnk_sales.month_ready(date(2026, 9, 1)))
         c = FakeBnkClient(readers=parse_readers(READERS_JSON))
         self.assertEqual(bnk_sales.monthly_text(c, date(2026, 9, 1)), '')
         self.assertEqual(c.asked, [])
 
     def test_status_text(self):
         text = bnk_sales.status_text(date(2026, 10, 2))
-        self.assertTrue(text.startswith('bnk_mode=on\nbnk_last_run=None\n가장 최근 판매일=2026-10-01\n최근 7일 합계=10권'))
+        self.assertTrue(text.startswith('bnk_mode=on\nbnk_last_run=None\n자동 로그인 멈춤=-\n가장 최근 판매일=2026-10-01\n'
+                                        '최근 7일 합계=10권'))
         self.assertTrue(text.endswith(bnk_sales.USAGE))

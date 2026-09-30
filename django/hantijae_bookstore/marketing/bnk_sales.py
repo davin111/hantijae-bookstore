@@ -11,7 +11,7 @@ from django.db.models import Max, Sum
 from books.models import Book
 from intake.models import WorkerState
 from marketing.bnk import BnkError, BnkLoginError
-from marketing.models import BnkSale
+from marketing.models import BnkDay, BnkSale
 from web.presenters import isbn13
 
 log = logging.getLogger('intake')
@@ -42,6 +42,26 @@ def _books_by_isbn():
     return out
 
 
+def _merge(rows):
+    """같은 ISBN이 한 날짜에 두 줄 오면(판·유통 경로가 나뉜 경우 등) 부수를 합친다."""
+    out = {}
+    for r in rows:
+        if r['isbn'] in out:
+            for k in ('kyobo', 'yes24', 'aladin', 'ypbooks', 'local', 'total'):
+                out[r['isbn']][k] += r[k]
+        else:
+            out[r['isbn']] = dict(r)
+    return list(out.values())
+
+
+def _span(today):
+    """읽을 날 수. 처음이면 35일, 아니면 마지막 성공 뒤 빈틈까지(최소 7일·최대 35일)."""
+    ok = WorkerState.get('bnk_ok_on')
+    if not ok:
+        return BACKFILL_DAYS
+    return min(BACKFILL_DAYS, max(DAILY_DAYS, (today - date.fromisoformat(ok)).days + DAILY_DAYS - 1))
+
+
 def _replace_day(day, rows, books):
     """그날 행을 새 응답으로 바꾼다. 빈 응답인데 이미 행이 있으면(늦게 들어오는 중·일시 오류) 그대로 둔다."""
     if not rows and BnkSale.objects.filter(day=day).exists():
@@ -56,26 +76,24 @@ def _replace_day(day, rows, books):
 
 
 def collect(client, today):
-    """어제부터 거꾸로 7일(처음이면 35일)을 날짜마다 바꿔 넣는다. 하루 실패는 건너뛰고, 모두 실패하면 예외.
-    로그인이 풀린 오류(BnkLoginError)는 부르는 쪽이 관리자에게 알리도록 그대로 올린다."""
-    first = not WorkerState.get('bnk_backfilled')
+    """어제부터 거꾸로 7일(처음이면 35일, 멈췄던 빈틈이 있으면 그만큼 더)을 날짜마다 바꿔 넣는다.
+    하루 실패(조회·이상한 줄)는 그날만 건너뛰고, 모두 실패하면 예외. 계정 거부(BnkLoginError)는 그대로 올린다."""
     books, report = _books_by_isbn(), Report()
-    for i in range(1, (BACKFILL_DAYS if first else DAILY_DAYS) + 1):
+    for i in range(1, _span(today) + 1):
         day = today - timedelta(days=i)
         try:
-            rows = client.sales_on(day)
+            report.rows += _replace_day(day, _merge(client.sales_on(day)), books)
         except BnkLoginError:
             raise
         except Exception:
             log.warning('bnk day failed: %s', day, exc_info=True)
             report.failed.append(day)
             continue
-        report.rows += _replace_day(day, rows, books)
+        BnkDay.objects.update_or_create(day=day, defaults={'read_on': today})
         report.days += 1
     if not report.days:
         raise BnkError('전산망 판매를 하루도 읽지 못했어요')
-    if first:
-        WorkerState.put('bnk_backfilled', today.isoformat())
+    WorkerState.put('bnk_ok_on', today.isoformat())
     report.latest = latest_day(today)
     return report
 
@@ -97,9 +115,39 @@ STORE_LABEL = {'kyobo': '교보', 'yes24': '예스24', 'aladin': '알라딘', 'y
 STORE_KEYS = tuple(STORE_LABEL)
 SURGE_MIN, SURGE_RATIO, NEW_BOOK_DAYS, BASE_WEEKS = 5, 3, 60, 4
 TOP_STORE_SHARE = 0.6   # 한 서점이 이보다 많으면 괄호로 밝힌다
-LOGIN_FAIL = ('⚠️ 출판유통통합전산망에 로그인하지 못했어요. 대표님이 비밀번호를 바꾸셨으면 새 비밀번호를 알려 주세요 '
-              '(판매 요약·급증 후보는 알라딘 지수로 돌아가요)')
-USAGE = '사용법: /bnk on|off · /bnk now (지금 수집, 처음이면 35일) · /bnk month (지난달 요약 미리 보기)'
+LOGIN_FAIL = ('⚠️ 출판유통통합전산망이 로그인을 거부해서 자동 로그인을 멈췄어요(대표님 계정이 잠기지 않게). '
+              '대표님이 비밀번호를 바꾸셨으면 새 비밀번호를 저장한 뒤 /bnk on 해 주세요')
+USAGE = ('사용법: /bnk on|off (on은 자동 로그인 멈춤도 풂) · /bnk now (지금 수집, 처음이면 35일) · '
+         '/bnk month (지난달 요약 미리 보기)')
+
+
+def blocked():
+    """계정 거부로 자동 로그인을 멈춘 날(ISO), 아니면 빈 값."""
+    return WorkerState.get('bnk_login_blocked') or ''
+
+
+def block(today):
+    WorkerState.put('bnk_login_blocked', today.isoformat())
+
+
+def unblock():
+    WorkerState.put('bnk_login_blocked', '')
+
+
+def _month_end(month_start):
+    return (month_start.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+
+
+def month_ready(month_start):
+    """그 달 모든 날을 '그날+2일' 뒤에 한 번 이상 읽었는가(늦게 들어오는 날까지 다 반영됐는가). 로그인 없이 DB만 본다."""
+    end = _month_end(month_start)
+    read = dict(BnkDay.objects.filter(day__range=(month_start, end)).values_list('day', 'read_on'))
+    day = month_start
+    while day <= end:
+        if day not in read or read[day] < day + timedelta(days=2):
+            return False
+        day += timedelta(days=1)
+    return True
 
 
 def active(today):
@@ -192,9 +240,9 @@ def last_month_start(today):
 
 
 def monthly_text(client, month_start):
-    """지난달 요약(관리자 1:1). 기록이 그 달 1일부터 있지 않으면(처음 켠 달) 틀린 합계를 보내지 않게 ''."""
-    month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-    if not BnkSale.objects.filter(day__lte=month_start).exists():
+    """지난달 요약(관리자 1:1). 그 달을 다 읽지 못했으면(처음 켠 달·빈틈·말일 미반영) 틀린 합계를 보내지 않게 ''."""
+    month_end = _month_end(month_start)
+    if not month_ready(month_start):
         return ''
     qs = BnkSale.objects.filter(day__range=(month_start, month_end))
     s = _sums(qs)
@@ -216,4 +264,5 @@ def status_text(today):
     end = latest_day(today)
     week = _sums(BnkSale.objects.filter(day__range=(end - timedelta(days=6), end)))['total'] if end else 0
     return '\n'.join([f'bnk_mode={mode()}', f'bnk_last_run={WorkerState.get("bnk_last_run")}',
+                      f'자동 로그인 멈춤={blocked() or "-"}',
                       f'가장 최근 판매일={end.isoformat() if end else "-"}', f'최근 7일 합계={week}권', USAGE])
