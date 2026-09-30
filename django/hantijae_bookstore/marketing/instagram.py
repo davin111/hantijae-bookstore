@@ -87,6 +87,7 @@ def scan(today, partners=False, books=None, get=requests.get):
         tags = []
     _collect('ig_tag', tags, today, book_terms, tagger, report, fresh, seen)
     if partners:
+        any_ok = False
         for handle in PARTNERS:
             try:
                 medias = meta.business_media(handle, get=get)
@@ -98,7 +99,10 @@ def scan(today, partners=False, books=None, get=requests.get):
             if medias is None:
                 log.warning('instagram partner %s: not a professional account', handle)
                 continue
+            any_ok = True
             _collect('ig_partner', medias, today, book_terms, lambda m, h=handle: f'@{h}', report, fresh, seen)
+        if not any_ok:   # 12곳이 다 안 되면 우연이 아니라 연결 문제일 가능성이 크다 — 운영진에게 알린다
+            report.failed.append('ig_partner')
     report.found = len(fresh)
     return report, fresh
 
@@ -127,5 +131,7 @@ def run(deps, today, notify, get=requests.get):
         return None
     result = reviews.save_judged(deps.llm, fresh, report)
     if 'ig_tag' in report.failed:
-        raise RuntimeError('인스타 태그 글을 읽지 못했어요(Meta 오류)')
+        notify('⚠️ 인스타 태그 글을 읽지 못했어요(Meta 오류) — 서버 로그의 instagram tags 줄을 확인해 주세요')
+    if 'ig_partner' in report.failed:
+        notify(f'⚠️ 인스타 협력 계정 {len(PARTNERS)}곳을 모두 읽지 못했어요 — 서버 로그의 instagram partner 줄을 확인해 주세요')
     return result

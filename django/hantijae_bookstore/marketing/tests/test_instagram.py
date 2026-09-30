@@ -169,14 +169,20 @@ class InstagramTest(TestCase):
         self.assertNotIn('friend.personal', s.detail['snippet'])
         self.assertNotIn('friend.personal', llm.calls[0][1])
 
-    def test_tags_error_still_reads_partners_then_raises(self):
+    def test_tags_error_still_reads_partners_then_notifies(self):
         g = Graph(tags=[], pros={p: [] for p in instagram.PARTNERS}, tags_broken=True)
         g.pros['todakbook'] = [media('B', '『무궁화호를 위하여』 입고', date(2026, 10, 3))]
         with self.assertLogs('intake', level='WARNING'):
-            with self.assertRaises(RuntimeError):
-                instagram.run(self.deps(), SUNDAY, self.notes.append, get=g)
+            instagram.run(self.deps(), SUNDAY, self.notes.append, get=g)
         s = Signal.objects.get()
         self.assertEqual(s.detail['where'], '@todakbook')
+        self.assertEqual(len([n for n in self.notes if '인스타 태그 글을 읽지 못했어요' in n]), 1)
+
+    def test_all_partners_failing_notifies_once(self):
+        g = Graph(pros={p: [] for p in instagram.PARTNERS}, broken=set(instagram.PARTNERS))
+        with self.assertLogs('intake', level='WARNING'):
+            instagram.run(self.deps(), SUNDAY, self.notes.append, get=g)
+        self.assertEqual(len([n for n in self.notes if '협력 계정' in n]), 1)
 
 
 class CommandTest(TestCase):
