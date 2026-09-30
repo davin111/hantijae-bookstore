@@ -1,4 +1,5 @@
 import importlib
+from types import SimpleNamespace
 
 from django.apps import apps
 from django.test import SimpleTestCase, TestCase
@@ -6,7 +7,8 @@ from django.test import SimpleTestCase, TestCase
 from marketing.models import Draft, Proposal
 from marketing.tests.fakes import make_book
 
-mig = importlib.import_module('marketing.migrations.0011_notion_copy')
+mig = importlib.import_module('marketing.migrations.0012_split_letters')
+schema = importlib.import_module('marketing.migrations.0011_notion_copy')
 
 BRIEF = '알리면 좋을 곳\n· 농업·생협 단체\n· 귀농·귀촌 모임\n\n보낼 글\n안녕하세요. 도서출판 한티재입니다.'
 KIT = ('알리면 좋을 곳\n· 청송 지역 신문 ― 지역 시인\n· 귀농·귀촌 단체 ― 귀농 이야기\n\n'
@@ -30,6 +32,17 @@ class SplitLetterTest(SimpleTestCase):
         self.assertIsNone(mig.split_letter('', '안녕하세요.'))
         # 머리에 목록 말고 다른 문단이 끼어 있으면 글을 잃지 않게 그대로 둔다
         self.assertIsNone(mig.split_letter('', '알리면 좋을 곳\n· A\n\n메모 문단\n\n보낼 글\n본문'))
+
+    def test_moved_title_is_clipped_to_the_field_length(self):
+        long_kit = KIT.replace('제목: 신간 소식', '제목: ' + '가' * 400)
+        title, body, extra = mig.split_letter('', long_kit)
+        self.assertEqual((title, body, extra['title_moved']), ('가' * 300, '안녕하세요.\n\n도서출판 한티재 드림', True))
+
+    def test_letter_with_a_title_and_an_inner_title_is_left_alone(self):
+        # 제목이 이미 있는데 본문 안에도 '제목:' 줄이 있으면 나누면서 그 줄을 잃으므로 건드리지 않는다
+        self.assertIsNone(mig.split_letter('있는 제목', KIT))
+        empty_inner = KIT.replace('제목: 신간 소식', '제목: ')
+        self.assertEqual(mig.split_letter('있는 제목', empty_inner)[:2], ('있는 제목', '안녕하세요.\n\n도서출판 한티재 드림'))
 
     def test_join_restores_both_shapes(self):
         for title, body in (('부탁드립니다', BRIEF), ('', KIT)):
@@ -57,3 +70,37 @@ class LetterMigrationTest(TestCase):
         d = Draft.objects.create(proposal=Proposal.objects.create(kind=Proposal.KIT, book=make_book(), headline='h'),
                                  channel=Draft.INSTAGRAM, body='글')
         self.assertEqual((d.origin, d.extra, d.notion, d.places), (Draft.BOT, {}, {}, []))
+
+
+class FakeEditor:
+    def __init__(self, vendor):
+        self.connection, self.sql = SimpleNamespace(vendor=vendor), []
+
+    def quote_name(self, name):
+        return f'`{name}`'
+
+    def execute(self, sql, params=()):
+        self.sql.append(sql)
+
+
+class OriginDefaultTest(SimpleTestCase):
+    """예전 코드는 origin 없이 초안을 넣는다 → MySQL(strict)에서는 칸 기본값이 DB에 있어야 배포 중·코드만 되돌린 뒤에도 된다."""
+
+    def test_mysql_keeps_the_default_in_the_database_and_drops_it_going_back(self):
+        ed = FakeEditor('mysql')
+        schema.set_origin_default(apps, ed)
+        schema.drop_origin_default(apps, ed)
+        self.assertEqual(ed.sql, ["ALTER TABLE `marketing_draft` ALTER COLUMN `origin` SET DEFAULT 'bot'",
+                                  'ALTER TABLE `marketing_draft` ALTER COLUMN `origin` DROP DEFAULT'])
+
+    def test_other_databases_do_nothing(self):
+        ed = FakeEditor('sqlite')
+        schema.set_origin_default(apps, ed)
+        schema.drop_origin_default(apps, ed)
+        self.assertEqual(ed.sql, [])
+
+    def test_schema_and_letter_data_are_separate_migrations(self):
+        ops = schema.Migration.operations
+        self.assertEqual(ops[-1].code, schema.set_origin_default)
+        self.assertFalse(hasattr(schema, 'split_letter'))
+        self.assertEqual(mig.Migration.dependencies, [('marketing', '0011_notion_copy')])
