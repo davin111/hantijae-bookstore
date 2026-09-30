@@ -46,6 +46,7 @@ class MetaAuthError(MetaError):
 
 AUTH_CODES = {190, 102, 10, 200}
 NOT_BUSINESS = 110   # business_discovery: 개인 계정이거나 없는 아이디(subcode 2207013)
+TAGS_PAGE, TAGS_PAGES = 10, 5   # /tags는 한 번에 10개 넘게 물으면 code 1로 거절한다
 _USERNAME = re.compile(r'^[A-Za-z0-9._]{1,30}$')
 
 
@@ -155,14 +156,34 @@ def _media(rows, with_username=False):
     return out
 
 
-def tagged_media(limit=50, get=requests.get):
-    """한티재 인스타를 태그한 공개 글(최근 것부터). 설정이 없으면 []. 오류는 올린다."""
+def tagged_media(get=requests.get):
+    """한티재 인스타를 태그한 공개 글(최근 것부터), 최대 TAGS_PAGES쪽을 TAGS_PAGE개씩(더 크게 물으면 Graph가 거절한다).
+    설정이 없으면 []. 첫 쪽이 실패하면 올린다(권한 문제는 어느 쪽이든 올린다). 다음 쪽이 실패하면 그때까지 읽은 것을 돌려준다.
+    next 주소는 부르지 않는다(토큰이 들어 있다) — 대신 cursors.after로 다음 쪽을 요청한다."""
     cfg = _ig_config()
     if not cfg:
         return []
-    return _media(_rows(get, f'{cfg["META_IG_USER_ID"]}/tags',
-                        {'fields': 'id,caption,permalink,timestamp,username,like_count,comments_count', 'limit': limit},
-                        cfg), with_username=True)
+    fields = 'id,caption,permalink,timestamp,username,like_count,comments_count'
+    rows, after = [], None
+    for page in range(1, TAGS_PAGES + 1):
+        params = {'fields': fields, 'limit': TAGS_PAGE}
+        if after:
+            params['after'] = after
+        try:
+            data = _call(get, f'{cfg["META_IG_USER_ID"]}/tags', params, cfg)
+        except MetaAuthError:
+            raise
+        except MetaError as e:
+            if page == 1:
+                raise
+            log.warning('meta tags page %d stopped: %s', page, e)
+            break
+        rows.extend(data.get('data', []))
+        paging = data.get('paging') or {}
+        after = (paging.get('cursors') or {}).get('after')
+        if not paging.get('next') or not after:
+            break
+    return _media(rows, with_username=True)
 
 
 def business_media(username, limit=25, get=requests.get) -> Optional[List[Media]]:

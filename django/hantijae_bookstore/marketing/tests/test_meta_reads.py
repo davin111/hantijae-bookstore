@@ -42,6 +42,43 @@ class ReadTest(SimpleTestCase):
         self.assertEqual(params['appsecret_proof'], meta.proof('ptok', 'sec'))
         self.assertIn('username', params['fields'])
 
+    def test_tagged_media_reads_across_pages_of_ten(self):
+        page1 = {'data': [{'id': '1', 'caption': '첫 쪽', 'permalink': 'https://www.instagram.com/p/A/',
+                           'timestamp': '2026-09-25T21:00:38+0000', 'username': 'librariaq',
+                           'like_count': 1, 'comments_count': 0}],
+                 'paging': {'cursors': {'after': 'C1'}, 'next': 'https://x'}}
+        page2 = {'data': [{'id': '2', 'caption': '둘째 쪽', 'permalink': 'https://www.instagram.com/p/B/',
+                           'timestamp': '2026-09-25T21:00:38+0000', 'username': 'hagobooks',
+                           'like_count': 2, 'comments_count': 0}]}
+
+        def route(path, params):
+            if int(params['limit']) > 10:
+                return 500, {'error': {'code': 1, 'message': 'x', 'type': 'OAuthException'}}
+            return (200, page2) if params.get('after') == 'C1' else (200, page1)
+
+        get = FakeGraph(route)
+        got = meta.tagged_media(get=get)
+        self.assertEqual([m.id for m in got], ['1', '2'])
+        self.assertTrue(all(int(params['limit']) == 10 for _, params in get.calls))
+        self.assertEqual(get.calls[1][1].get('after'), 'C1')
+
+    def test_tagged_media_stops_and_logs_when_a_later_page_fails(self):
+        page1 = {'data': [{'id': '1', 'caption': '첫 쪽', 'permalink': 'https://www.instagram.com/p/A/',
+                           'timestamp': '2026-09-25T21:00:38+0000', 'username': 'librariaq',
+                           'like_count': 1, 'comments_count': 0}],
+                 'paging': {'cursors': {'after': 'C1'}, 'next': 'https://x'}}
+
+        def route(path, params):
+            if params.get('after') == 'C1':
+                return 500, {'error': {'code': 2, 'message': 'x', 'type': 'OAuthException'}}
+            return 200, page1
+
+        get = FakeGraph(route)
+        with self.assertLogs('intake', level='WARNING') as cm:
+            got = meta.tagged_media(get=get)
+        self.assertEqual([m.id for m in got], ['1'])
+        self.assertIn('meta tags page', '\n'.join(cm.output))
+
     def test_business_media_returns_none_for_personal_accounts(self):
         get = FakeGraph(lambda path, params: err(110))
         self.assertIsNone(meta.business_media('someone', get=get))
