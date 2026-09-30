@@ -5,11 +5,11 @@ from unittest import mock
 
 from django.test import TestCase
 
-from intake.models import FundingCampaign
+from intake.models import FundingCampaign, WorkerState
 from marketing import candidates as C
 from marketing.hooks import seed
 from marketing.models import BookProfile, Briefing, FundingSnapshot, Proposal, SalesSnapshot, Signal
-from marketing.tests.fakes import make_book
+from marketing.tests.fakes import make_book, make_sale
 from marketing.timeutil import KST
 from web.models import Notice
 
@@ -308,3 +308,24 @@ class MomentOrderTest(TestCase):
         kept = C.select(C.with_moments(base, moments, NOW), TODAY, NOW, limit=12)
         self.assertEqual(len(kept), 12)
         self.assertEqual([c.kind for c in kept[:2]], ['moment', 'moment'])
+
+
+class BnkSurgeTest(TestCase):
+    def setUp(self):
+        WorkerState.put('bnk_mode', 'on')
+        self.naeran = make_book(title='내란 앞에서', published=date(2026, 7, 17), isbn='979-11-92455-89-1', author='김해원')
+        SalesSnapshot.objects.create(book=self.naeran, date=TODAY - timedelta(days=7), sales_point=200)
+        SalesSnapshot.objects.create(book=self.naeran, date=TODAY, sales_point=420)
+
+    def test_surge_uses_bnk_sales_when_on(self):
+        make_sale(date(2026, 9, 23), 8, book=self.naeran, yes24=7, kyobo=1)
+        [s] = C.surge_candidates(TODAY)
+        self.assertEqual((s.id, s.kind, s.books), (f'surge:{self.naeran.id}:2026-09-23', 'surge', [self.naeran]))
+        self.assertEqual(s.summary, '최근 7일 8권 팔렸음(평소 주 0권), 예스24 7권')
+        self.assertEqual(s.facts, {'week': 8, 'usual': '0',
+                                   'stores': {'교보': 1, '예스24': 7, '알라딘': 0, '영풍': 0, '지역서점': 0}})
+
+    def test_surge_falls_back_to_aladin_without_fresh_bnk_rows(self):
+        make_sale(date(2026, 9, 1), 8, book=self.naeran)   # 10일 넘게 지난 기록뿐
+        [s] = C.surge_candidates(TODAY)
+        self.assertEqual(s.facts, {'before': 200, 'after': 420})

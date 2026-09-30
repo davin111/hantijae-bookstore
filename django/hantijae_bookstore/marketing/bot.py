@@ -14,7 +14,7 @@ from intake.llm import LLMError, complete_json
 from intake.models import TelegramChat, WorkerState
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
-from marketing import grants, messages, midweek, moments, social
+from marketing import bnk, bnk_sales, grants, messages, midweek, moments, social
 from marketing.hooks import add_hook, upcoming
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, GrantCall, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
@@ -23,7 +23,7 @@ from marketing.timeutil import KST, in_quiet_hours, kst_now, kst_today, week_sta
 from web.blog import fetch_rss, parse_rss
 
 log = logging.getLogger('intake')
-COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch', '/moment', '/grant')
+COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch', '/moment', '/grant', '/bnk')
 MODES = ('off', 'admin_only', 'live')
 KIT_DAILY_CAP = 2
 REMIND_AT = (9, 30)   # 지원사업 마감 이틀 전 알림을 보내기 시작하는 시각(KST)
@@ -31,7 +31,7 @@ KIT_SEND_MAX_FAILURES = 3  # 이 횟수에 닿으면 관리자에게 알리고 �
 BUILDING = '만들고 있어요. 몇 분 걸려요.'
 USAGE = ('사용법: /mk off|admin_only|live · /mk social on|off · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
          '/hook <MM-DD> <이름> | <책1>, <책2> · /hook list · /quiet <제목 일부> <YYYY-MM-DD> [이유] · /quiet list · '
-         '/watch <이름> [+ 좁히기 조건] · /watch list · /watch off <번호> · /moment · /grant')
+         '/watch <이름> [+ 좁히기 조건] · /watch list · /watch off <번호> · /moment · /grant · /bnk')
 MOMENT_USAGE = ('사용법: /moment off|admin_only|live · /moment midweek off|admin_only|live · /moment now (지금 한 번, 몇 분) · '
                 '/moment list')
 
@@ -196,8 +196,9 @@ class Marketing:
         # 이미 ACTED로 확정된 항목은 메시지에서는 빠지지만(위) 상태는 그대로 둔다(운영진 결정 보존)
         to_skip = [i for i in items if is_quiet(i) and i.status != Proposal.ACTED]
         grant_lines = self._grant_briefing_lines(today)
+        sales_line = self._bnk_sales_line(today)
         sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, shown, briefing.measure,
-                                                                 grants=grant_lines),
+                                                                 grants=grant_lines, sales=sales_line),
                                     buttons=messages.briefing_buttons(briefing, shown))
         if record:
             briefing.chat_id, briefing.message_id, briefing.sent_at, briefing.mode = chat, sent['message_id'], now, self.mode()
@@ -220,6 +221,15 @@ class Marketing:
         except Exception:
             log.warning('grant briefing lines failed', exc_info=True)
             return []
+
+    @staticmethod
+    def _bnk_sales_line(today):
+        """월요 브리핑 첫 줄(전산망 최근 7일). 실패해도 브리핑은 나가게 비운다."""
+        try:
+            return bnk_sales.sales_line(today)
+        except Exception:
+            log.warning('bnk sales line failed', exc_info=True)
+            return ''
 
     def grant_target(self):
         """(받는 곳, 검수 방인가). grant_mode live이고 마케팅도 live면 검수 방, off면 없음, 그 밖에는 관리자 1:1 미리보기."""
@@ -397,7 +407,7 @@ class Marketing:
         now = now or timezone.now()
         handler = {'/mk': self._mk, '/brief': self._brief, '/kit': self._kit, '/hook': self._hook,
                    '/quiet': self._quiet, '/watch': self._watch, '/moment': self._moment,
-                   '/grant': self._grant}[cmd]
+                   '/grant': self._grant, '/bnk': self._bnk}[cmd]
         self.tg.send_message(chat_id, handler(chat_id, (arg or '').strip(), now, kst_today(now)) or '완료')
 
     def _mk(self, chat_id, arg, now, today):
@@ -443,6 +453,25 @@ class Marketing:
             sent = self.send_grants(now)
             return '\n'.join(x for x in (f'새 글 {report.new}건', grants.digest(report), f'보낸 메시지 {sent}개') if x)
         return grants.status_text(today) + '\n' + grants.USAGE
+
+    def _bnk(self, chat_id, arg, now, today):
+        if arg in bnk_sales.MODES:
+            WorkerState.put('bnk_mode', arg)
+            return f'bnk_mode={arg}'
+        try:
+            if arg == 'now':
+                self.tg.send_message(chat_id, BUILDING)
+                with bnk.client_from_settings() as client:
+                    report = bnk_sales.collect(client, today)
+                WorkerState.put('bnk_last_run', today.isoformat())
+                return bnk_sales.report_text(report)
+            if arg == 'month':
+                with bnk.client_from_settings() as client:
+                    text = bnk_sales.monthly_text(client, bnk_sales.last_month_start(today))
+                return text or '지난달 전체를 덮는 판매 기록이 아직 없어요'
+        except bnk.BnkError as e:
+            return f'전산망 조회 실패: {e}'
+        return bnk_sales.status_text(today)
 
     def _brief(self, chat_id, arg, now, today):
         b = Briefing.objects.filter(week_start=week_start(today)).first()

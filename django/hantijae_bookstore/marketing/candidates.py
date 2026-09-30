@@ -9,7 +9,7 @@ from django.db.models import Max, Q
 
 from books.models import Book
 from intake.models import WorkerState
-from marketing import meta
+from marketing import bnk_sales, meta
 from marketing.funding import ends_on, is_stalled, live_campaigns
 from marketing.hooks import upcoming
 from marketing.kit import blog_has
@@ -266,7 +266,19 @@ def with_moments(cands, moments, now):
     return keep + cands
 
 
+def _bnk_surge(r):
+    usual = bnk_sales.num(r['usual'])
+    top = r['top']
+    return Candidate(id=f'surge:{r["book"].id}:{r["end"].isoformat()}', kind='surge', books=[r['book']],
+                     summary=f'최근 7일 {r["week"]}권 팔렸음(평소 주 {usual}권)' + (f', {top[0]} {top[1]}권' if top else ''),
+                     facts={'week': r['week'], 'usual': usual, 'stores': r['stores']}, urgency=2)
+
+
 def surge_candidates(today):
+    """전산망(실판매)을 쓸 수 있으면 그것으로, 아니면 알라딘 판매 지수로."""
+    rows = bnk_sales.surges(today)
+    if rows is not None:
+        return [_bnk_surge(r) for r in rows]
     last = SalesSnapshot.objects.filter(date__lte=today).aggregate(d=Max('date'))['d']
     if not last:
         return []
