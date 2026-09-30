@@ -84,6 +84,14 @@ class RunDueTest(TestCase):
         self.assertIs(retry.call_args.args[0], deps.bot)
         self.assertEqual(deps.bot.notes, [])  # 가짜 deps에 tg가 없어도 오류 알림이 나가지 않는다
 
+    def test_run_due_flushes_notion_pages_every_loop(self, *_):
+        deps = Deps()
+        with mock.patch('marketing.tasks.notion_sync.flush', return_value=0) as flush:
+            tasks.run_due(deps, datetime(2026, 9, 29, 23, 0, tzinfo=KST))  # 방에 보내지 않으니 밤에도
+            tasks.run_due(deps, datetime(2026, 9, 29, 23, 1, tzinfo=KST))
+        self.assertEqual(flush.call_count, 2)
+        self.assertIs(flush.call_args.args[0], deps.bot)
+
     def test_off_mode_does_nothing(self, sales_, fund_, news_, brief_, kit_):
         tasks.run_due(Deps('off'), datetime(2026, 9, 28, 7, 0, tzinfo=KST))
         for m in (sales_, fund_, news_, brief_, kit_):

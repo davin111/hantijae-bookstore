@@ -201,6 +201,7 @@ class FakeNotion:
 
     def __init__(self):
         self.blocks, self.kids, self.pages, self.calls, self.fail, self.n = {}, {}, {}, [], {}, 0
+        self.timeouts = {}
 
     def _check(self, name):
         self.calls.append(name)
@@ -258,8 +259,9 @@ class FakeNotion:
             self.blocks[block_id][key].update(value)
             self._plain(self.blocks[block_id][key])
 
-    def update_page(self, page_id, properties):
+    def update_page(self, page_id, properties, timeout=30):
         self._check('update_page')
+        self.timeouts['update_page'] = timeout
         self.pages[page_id]['properties'].update(properties)
 
     def trash_page(self, page_id):

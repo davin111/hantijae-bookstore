@@ -273,6 +273,8 @@ def _run_due(deps, now):
     _guard(deps, 'grant_send', now, lambda: m.send_grants(_later(now, started)))
     # 노션 '글 모음' 페이지를 만들지 못한 허브: 10분마다 다시(08~21시), 되면 텔레그램 허브에 노션 버튼을 덧단다
     _guard(deps, 'notion', now, lambda: notion_sync.retry_pending(deps.bot, getattr(deps, 'tg', None), _later(now, started)))
+    # 버튼으로 '갱신 필요'가 된 노션 페이지: 매 바퀴 다시 적는다(방에 보내지 않으니 밤에도, 한 바퀴에 몇 장만)
+    _guard(deps, 'notion_flush', now, lambda: notion_sync.flush(deps.bot, _later(now, started)))
 
 
 def run_due(deps, now=None):

@@ -3,6 +3,7 @@
 쓰기 범위: 페이지는 WorkerState('marketing_notion_ds') 데이터 소스에만 만들고, 블록은 우리 기록(notion 칸)에 적힌 id에만 쓴다.
 임의의 페이지·블록 id를 받는 쓰기 함수는 두지 않는다.
 노션에서 고친 글은 '읽는 순간'에만 읽는다([글 보기]·[올렸어요]·고치기). 바뀜은 글 비교로만(last_edited_time은 분 단위로 반올림).
+버튼 콜백 안에서는 노션에 쓰지 않는다 — '갱신 필요(dirty)'만 적고 워커(flush)가 매 바퀴 다시 적는다.
 """
 import logging
 from datetime import datetime, timedelta
@@ -18,8 +19,10 @@ from marketing.timeutil import in_quiet_hours, kst_today
 
 log = logging.getLogger('intake')
 SWITCH, DS = 'marketing_notion', 'marketing_notion_ds'
-READ_TIMEOUT = 5
+READ_TIMEOUT, WRITE_TIMEOUT = 5, 10
 RETRY_EVERY, GIVE_UP = timedelta(minutes=10), timedelta(days=7)
+FLUSH_MAX = 5  # 한 바퀴에 다시 적는 페이지 수(워커가 텔레그램을 오래 못 보지 않게)
+NET_ERRORS = (requests.Timeout, requests.ConnectionError)  # 노션에 닿지 않음 → 남은 쓰기도 기다리기만 한다
 BRIEF, NOW, KIT = 'brief', 'now', 'kit'
 KIND_LABEL = {BRIEF: '주간 브리핑', NOW: '주중 제안', KIT: '신간 묶음'}
 
@@ -175,20 +178,26 @@ def refresh(client, t):
     """항목 제목 앞 상태와 '진행' 칸을 DB 기준으로 다시 적는다(멱등). 봇이 노션에서 고치는 곳은 이 둘뿐이다."""
     if t is None or t.info().get('state') != 'done':
         return
-    states, first_exc = [], None
-    for p, ch, label in t.sections:
+    states = []
+    for p, ch, _ in t.sections:
         p.refresh_from_db()
-        s = _state(p, ch)
-        states.append(s)
-        if _heading_id(p, ch):
-            try:  # 제목 하나가 지워졌어도 나머지 제목과 '진행'은 계속 고친다
-                client.update_block(_heading_id(p, ch), nb.heading_update(nb.heading_text(label, s)))
-            except Exception as e:
-                log.warning('notion heading update failed', exc_info=True)
-                first_exc = first_exc or e
+        states.append(_state(p, ch))
+    first_exc = None
+    for (p, ch, label), s in zip(t.sections, states):
+        if not _heading_id(p, ch):
+            continue
+        try:  # 제목 하나가 지워졌어도(4xx) 나머지 제목과 '진행'은 계속 고친다
+            client.update_block(_heading_id(p, ch), nb.heading_update(nb.heading_text(label, s)))
+        except NET_ERRORS:
+            log.warning('notion refresh stopped (%s)', t.name, exc_info=True)
+            raise  # 노션에 닿지 않으면 남은 제목·'진행'도 기다리기만 한다 — 다음 갱신 때 처음부터
+        except Exception as e:
+            log.warning('notion heading update failed', exc_info=True)
+            first_exc = first_exc or e
     try:
-        client.update_page(t.info()['page'], nb.progress_property(states))
+        client.update_page(t.info()['page'], nb.progress_property(states), timeout=WRITE_TIMEOUT)
     except Exception as e:
+        log.warning('notion progress update failed (%s)', t.name, exc_info=True)
         first_exc = first_exc or e
     if first_exc is not None:
         raise first_exc
@@ -223,18 +232,41 @@ def _notice(host, now, e):
             log.warning('notion read notice failed', exc_info=True)
 
 
+def _holders(proposal):
+    """이 제안이 든 노션 페이지의 칸(page·url·dirty…)을 적는 모델들. 페이지가 적혀 있지 않으면 []."""
+    if proposal.kind == Proposal.BRIEF_ITEM:
+        b = proposal.briefing
+        return [b] if b and (b.notion or {}).get('page') else []
+    if not (proposal.notion or {}).get('page'):
+        return []
+    return board.midweek_items(proposal) if proposal.kind == Proposal.NOW else [proposal]
+
+
+def mark_dirty(proposal):
+    """버튼을 누른 뒤: 이 제안이 든 페이지를 '갱신 필요'로만 적는다(DB만, 예외를 내지 않는다). 워커의 flush가 고친다."""
+    try:
+        p = Proposal.objects.select_related('briefing').get(pk=proposal.pk)
+        for h in _holders(p):
+            h.notion = {**(h.notion or {}), 'dirty': True}
+            h.save(update_fields=['notion'])
+    except Exception:
+        log.warning('notion mark dirty failed for proposal %s', proposal.pk, exc_info=True)
+
+
+def _needs_append(d):
+    """최신 판에 📝 상자가 없고 이전 판에는 있다 = 텔레그램 고치기 뒤 노션 덧붙이기가 빠졌다."""
+    return (d is not None and not (d.notion or {}).get('box')
+            and any((x.notion or {}).get('box') for x in Draft.objects.filter(proposal_id=d.proposal_id, channel=d.channel)))
+
+
 def current(client, proposal, channel, host=None, now=None):
     """(최신 판, 알림). 알림: '' | 'notion'(노션에서 고친 글) | 'empty'(상자가 비었거나 없어짐). client가 None이면 읽지 않는다."""
     d = newest(proposal, channel)
     if client is None or d is None:
         return d, ''
     if not (d.notion or {}).get('box'):
-        has_older = any((x.notion or {}).get('box') for x in Draft.objects.filter(proposal=proposal, channel=d.channel))
-        if has_older:  # 텔레그램 고치기 뒤 덧붙이기가 빠졌던 판: 지금 덧붙인다(방금 쓴 글이라 읽을 필요 없음)
-            try:
-                append_version(client, d)
-            except Exception:
-                log.warning('notion append retry failed for draft %s', d.pk, exc_info=True)
+        if _needs_append(d):  # 덧붙이기가 빠졌던 판: 여기는 버튼 안이라 쓰지 않고 워커에 맡긴다(방금 쓴 글이라 읽을 필요 없음)
+            mark_dirty(proposal)
         return d, ''
     try:
         blocks = client.children(d.notion['box'], timeout=READ_TIMEOUT)
@@ -289,6 +321,71 @@ def retry_pending(host, tg, now):
             continue
         done += 1
         board.refresh(tg, t.hub())
+    if first_exc is not None:
+        raise first_exc
+    return done
+
+
+def _dirty_targets(limit):
+    """'갱신 필요' 페이지(페이지마다 하나, 많아야 limit개). 페이지 기록이 없어진 표시는 지운다."""
+    out, seen = [], set()
+    marked = [*Briefing.objects.filter(notion__dirty=True).order_by('id'),
+              *Proposal.objects.filter(notion__dirty=True).select_related('book', 'briefing').order_by('id')]
+    for obj in marked:
+        page = obj.notion.get('page')
+        if page in seen:  # 같은 주중 제안 메시지의 다른 항목
+            continue
+        t = None
+        if page:
+            t = brief_target(obj, obj.notion.get('hub_text', '')) if isinstance(obj, Briefing) else target_of(obj)
+        if t is None:
+            obj.notion = {**obj.notion, 'dirty': False}
+            obj.save(update_fields=['notion'])
+            continue
+        seen.add(page)
+        out.append(t)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _flush_one(client, t):
+    """페이지 하나: 빠진 '고친 글'을 먼저 덧붙이고 제목 앞 상태·'진행'을 다시 적는다. 첫 오류를 다시 낸다."""
+    first_exc = None
+    for p, ch, _ in t.sections:
+        d = newest(p, ch)
+        if not _needs_append(d):
+            continue
+        try:
+            append_version(client, d)
+        except NET_ERRORS:
+            raise
+        except Exception as e:  # 제목 하나가 지워졌어도 다른 항목과 상태는 계속 고친다
+            log.warning('notion append retry failed for draft %s', d.pk, exc_info=True)
+            first_exc = first_exc or e
+    refresh(client, t)
+    if first_exc is not None:
+        raise first_exc
+
+
+def flush(host, now):
+    """워커 매 바퀴: 버튼으로 '갱신 필요'가 된 페이지를 다시 적는다(방에 보내지 않으니 밤에도). 되면 표시를 지우고,
+    실패하면 남겨 다음 바퀴에 다시. 첫 오류를 다시 내 _guard가 하루 한 번 알린다."""
+    client = client_for(host)
+    if client is None:
+        return 0
+    done, first_exc = 0, None
+    for t in _dirty_targets(FLUSH_MAX):
+        try:
+            _flush_one(client, t)
+        except Exception as e:
+            log.warning('notion flush failed (%s)', t.name, exc_info=True)
+            first_exc = first_exc or e
+            if isinstance(e, NET_ERRORS):
+                break  # 노션에 닿지 않으면 다른 페이지도 기다리기만 한다 — 다음 바퀴에
+            continue
+        t.put(dirty=False)
+        done += 1
     if first_exc is not None:
         raise first_exc
     return done

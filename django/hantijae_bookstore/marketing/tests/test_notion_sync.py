@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 
+import requests
 from django.test import TestCase
 
 from intake.models import WorkerState
@@ -171,15 +172,112 @@ class NotionSyncTest(TestCase):
         self.assertEqual(self.fake.text_of(first.notion['box']), nb.OLD_BOX_LABEL)
         self.assertEqual(ns.current(self.fake, ps[0], Draft.INSTAGRAM), (new, ''))
 
-    def test_missing_append_is_retried_on_the_next_read(self):
+    def test_missing_append_is_left_to_the_worker(self):
         b, ps = briefing(self.book)
         self.page(b)
         first = ps[0].drafts.get()
         new = Draft.objects.create(proposal=ps[0], channel=Draft.INSTAGRAM, body='둘째', version=2, parent=first)
+        before = len(self.fake.calls)
         d, note = ns.current(self.fake, ps[0], Draft.INSTAGRAM)
+        self.assertEqual((d.pk, note, self.fake.calls[before:]), (new.pk, '', []))  # 버튼 안에서는 노션에 쓰지 않는다
+        b.refresh_from_db()
+        self.assertTrue(b.notion['dirty'])
+        self.assertEqual(ns.flush(self.host, NOW), 1)
         new.refresh_from_db()
-        self.assertEqual((d.pk, note), (new.pk, ''))
-        self.assertTrue(new.notion.get('box'))
+        heading = Proposal.objects.get(pk=ps[0].pk).notion['heading']
+        self.assertEqual(self.fake.kids[heading][-1], new.notion['box'])
+
+    def kit(self, message_id=800):
+        p = Proposal.objects.create(kind=Proposal.KIT, book=self.book, headline='h', chat_id=-200, message_id=message_id)
+        for ch in (Draft.BLOG, Draft.INSTAGRAM):
+            Draft.objects.create(proposal=p, channel=ch, body=f'{ch} 글')
+        ns.ensure_page(self.fake, ns.kit_target(p, '카드 글', date(2026, 10, 5)), NOW)
+        return p
+
+    def test_mark_dirty_marks_every_holder_of_the_page(self):
+        b, ps = briefing(self.book)
+        ns.mark_dirty(ps[0])
+        b.refresh_from_db()
+        self.assertNotIn('dirty', b.notion)  # 페이지가 없으면 표시하지 않는다
+        self.page(b)
+        ns.mark_dirty(ps[0])
+        b.refresh_from_db()
+        self.assertTrue(b.notion['dirty'])
+        now_items = [Proposal.objects.create(kind=Proposal.NOW, book=self.book, headline=f'n{i}', rank=i,
+                                             chat_id=-200, message_id=801) for i in (1, 2)]
+        for p in now_items:
+            Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='글')
+        ns.ensure_page(self.fake, ns.now_target(now_items, '주중 글', date(2026, 10, 1)), NOW)
+        ns.mark_dirty(now_items[1])
+        self.assertTrue(all(Proposal.objects.get(pk=p.pk).notion['dirty'] for p in now_items))
+        kit = self.kit()
+        before = len(self.fake.calls)
+        ns.mark_dirty(kit)
+        kit.refresh_from_db()
+        self.assertTrue(kit.notion['dirty'])
+        self.assertEqual(self.fake.calls[before:], [])  # DB에만 적는다
+        with self.assertLogs('intake', 'WARNING'):
+            ns.mark_dirty(Proposal(pk=987654, kind=Proposal.KIT))  # 없는 제안이어도 예외를 내지 않는다
+
+    def test_flush_rewrites_status_and_clears_the_mark(self):
+        b, ps = briefing(self.book)
+        self.page(b)
+        Proposal.objects.filter(pk=ps[1].pk).update(status=Proposal.ACTED)
+        ns.mark_dirty(ps[1])
+        self.assertEqual(ns.flush(self.host, NOW), 1)
+        self.assertEqual(self.fake.text_of(Proposal.objects.get(pk=ps[1].pk).notion['heading']), '✅ 2. 항목 2')
+        b.refresh_from_db()
+        self.assertEqual(self.fake.pages[b.notion['page']]['properties']['진행']['rich_text'][0]['text']['content'],
+                         '✅ 1 · 남음 1')
+        self.assertFalse(b.notion['dirty'])
+        self.assertEqual(self.fake.timeouts['update_page'], 10)
+        before = len(self.fake.calls)
+        self.assertEqual(ns.flush(self.host, NOW), 0)  # 표시가 없으면 노션을 부르지 않는다
+        self.assertEqual(self.fake.calls[before:], [])
+
+    def test_failing_flush_keeps_the_mark_and_raises(self):
+        b, ps = briefing(self.book)
+        self.page(b)
+        ns.mark_dirty(ps[0])
+        self.fake.fail['update_page'] = RuntimeError('노션 오류')
+        with self.assertRaises(RuntimeError), self.assertLogs('intake', 'WARNING') as logs:
+            ns.flush(self.host, NOW)
+        self.assertTrue(any('progress' in line for line in logs.output))
+        b.refresh_from_db()
+        self.assertTrue(b.notion['dirty'])
+        self.assertEqual(ns.flush(self.host, NOW), 1)  # 다음 바퀴에 다시
+        b.refresh_from_db()
+        self.assertFalse(b.notion['dirty'])
+
+    def test_flush_does_nothing_when_off(self):
+        b, ps = briefing(self.book)
+        self.page(b)
+        ns.mark_dirty(ps[0])
+        WorkerState.put(ns.SWITCH, 'off')
+        before = len(self.fake.calls)
+        self.assertEqual(ns.flush(self.host, NOW), 0)
+        self.assertEqual(self.fake.calls[before:], [])
+
+    def test_flush_rewrites_a_few_pages_per_loop(self):
+        for i in range(ns.FLUSH_MAX + 1):
+            ns.mark_dirty(self.kit(800 + i))
+        self.assertEqual(ns.flush(self.host, NOW), ns.FLUSH_MAX)
+        self.assertEqual(ns.flush(self.host, NOW), 1)
+
+    def test_network_error_stops_the_rewrite_early(self):
+        b, ps = briefing(self.book)
+        self.page(b)
+        ns.mark_dirty(ps[0])
+        kit = self.kit()
+        ns.mark_dirty(kit)
+        self.fake.fail['update_block'] = requests.Timeout('느림')
+        before = len(self.fake.calls)
+        with self.assertRaises(requests.Timeout), self.assertLogs('intake', 'WARNING'):
+            ns.flush(self.host, NOW)
+        self.assertEqual(self.fake.calls[before:], ['update_block'])  # 남은 제목·'진행'·다른 페이지는 다음 바퀴에
+        b.refresh_from_db()
+        kit.refresh_from_db()
+        self.assertTrue(b.notion['dirty'] and kit.notion['dirty'])
 
     def test_kit_page_uses_a_heading_per_channel(self):
         p = Proposal.objects.create(kind=Proposal.KIT, book=self.book, headline='h', caution='조심',

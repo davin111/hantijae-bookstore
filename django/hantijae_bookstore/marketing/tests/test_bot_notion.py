@@ -129,7 +129,36 @@ class BotNotionTest(TestCase):
         posted = Draft.objects.get(status=Draft.POSTED)
         self.assertEqual((posted.body, posted.origin, posted.posted_by), ('최종 글', Draft.NOTION, '대표'))
         p.refresh_from_db()
+        self.assertEqual(self.fake.text_of(p.notion['heading']), '1. 항목 1')  # 버튼 안에서는 노션에 쓰지 않고
+        ns.flush(self.host, DAY)  # 워커가 다음 바퀴에 고친다
         self.assertEqual(self.fake.text_of(p.notion['heading']), '✅ 1. 항목 1')
+
+    def test_buttons_leave_notion_to_the_worker(self):
+        b, p = self.briefing()
+        self.m().send_briefing(b, DAY)
+        Proposal.objects.filter(pk=p.pk).update(status=Proposal.ACTED)
+        self.fake.calls.clear()
+        self.m()._after_status(p)
+        self.assertEqual(self.fake.calls, [])
+        self.assertEqual(len(self.tg.sent('markup')), 1)  # 텔레그램 상황판은 바로 다시 그린다
+        b.refresh_from_db()
+        self.assertTrue(b.notion['dirty'])
+
+    def test_failed_append_after_a_rewrite_is_left_to_the_worker(self):
+        b, p = self.briefing()
+        self.m().send_briefing(b, DAY)
+        first = Draft.objects.get(proposal=p)
+        Draft.objects.filter(pk=first.pk).update(chat_id=GROUP, message_id=777)
+        self.fake.fail['append_children'] = RuntimeError('노션 오류')
+        with self.assertLogs('intake', 'WARNING'):
+            self.m({'title': '', 'body': '둘째 판', 'note': ''}).handle_reply(GROUP, 777, {'message_id': 9}, '짧게요', '대표')
+        new = Draft.objects.get(body='둘째 판')
+        self.assertEqual(new.notion, {})
+        b.refresh_from_db()
+        self.assertTrue(b.notion['dirty'])
+        ns.flush(self.host, DAY)
+        new.refresh_from_db()
+        self.assertTrue(new.notion['box'])
 
     def test_rewrite_reads_notion_first_and_appends_the_new_box(self):
         b, p = self.briefing()

@@ -35,8 +35,8 @@ class NotionClient:
     def get_page(self, page_id):
         return self._call('GET', f'/pages/{page_id}')
 
-    def update_page(self, page_id, properties):
-        self._call('PATCH', f'/pages/{page_id}', json={'properties': properties})
+    def update_page(self, page_id, properties, timeout=30):
+        self._call('PATCH', f'/pages/{page_id}', timeout=timeout, json={'properties': properties})
 
     # ---- 읽기 전용(계기 잡기: context.notion 이 쓴다) ----
     def query_pages(self, data_source_id, published_after):

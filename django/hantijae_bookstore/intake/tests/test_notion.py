@@ -145,6 +145,14 @@ class NotionWriteTest(TestCase):
         notion.NotionClient('t', session=s).children('box', timeout=5)
         self.assertEqual(s.calls[0][2]['timeout'], 5)
 
+    def test_update_page_takes_a_timeout(self):
+        s = FakeSession([{}, {}])
+        c = notion.NotionClient('t', session=s)
+        c.update_page('p', {'진행': {}})
+        c.update_page('p', {'진행': {}}, timeout=10)
+        self.assertEqual([k['timeout'] for _, _, k in s.calls], [30, 10])  # 신간 흐름은 그대로 30초
+        self.assertEqual(s.calls[1][2]['json'], {'properties': {'진행': {}}})
+
     @mock.patch('intake.notion.time.sleep')
     def test_429_waits_once_then_retries(self, sleep):
         session = mock.Mock()

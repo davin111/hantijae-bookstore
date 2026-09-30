@@ -364,18 +364,13 @@ class Marketing:
         return notion_sync.current(self._notion(), proposal, channel, host=self.host, now=timezone.now())
 
     def _after_status(self, proposal):
-        """버튼을 누른 뒤 허브 버튼(진행 상황판)을 다시 그린다. 실패해도 버튼 처리는 끝난 것으로 둔다."""
+        """버튼을 누른 뒤 허브 버튼(진행 상황판)을 다시 그린다. 실패해도 버튼 처리는 끝난 것으로 둔다.
+        노션 쪽 진행 표시는 '갱신 필요'로만 적는다 — 노션이 느리면 버튼 응답이 늦어지니 워커(notion_sync.flush)가 고친다."""
         try:
             board.refresh(self.tg, board.hub_of(Proposal.objects.select_related('briefing').get(pk=proposal.pk)))
         except Exception:
             log.warning('marketing hub refresh failed for proposal %s', proposal.pk, exc_info=True)
-        client = self._notion()
-        if client is not None:
-            try:  # 노션 쪽 진행 표시도 같이 고친다(실패해도 텔레그램은 이미 끝났다)
-                notion_sync.refresh(client, notion_sync.target_of(
-                    Proposal.objects.select_related('briefing').get(pk=proposal.pk)))
-            except Exception:
-                log.warning('marketing notion refresh failed for proposal %s', proposal.pk, exc_info=True)
+        notion_sync.mark_dirty(proposal)
 
     # ---- 버튼 ----
     def handle_callback(self, data, chat_id, cq, actor):
@@ -497,10 +492,11 @@ class Marketing:
         self._send_draft(new, chat_id, reply_to=msg['message_id'])
         client = self._notion()
         if client is not None:
-            try:
+            try:  # 고치기는 어차피 몇 분 걸려 바로 덧붙인다(버튼 응답을 붙잡지 않는다)
                 notion_sync.append_version(client, new, text)
-            except Exception:  # 다음에 이 글을 읽을 때 다시 덧붙인다(notion_sync.current)
+            except Exception:  # 워커(notion_sync.flush)가 다시 덧붙인다
                 log.warning('marketing notion append failed for draft %s', new.pk, exc_info=True)
+                notion_sync.mark_dirty(new.proposal)
         self._after_status(new.proposal)  # [다음에] 했던 글이 다시 열리면 버튼 이름도 돌아온다
 
     # ---- 관리자 명령 ----
