@@ -140,6 +140,9 @@ class FakeApify:
         return self._next(self.starts)
 
     def get_run(self, run_id):
+        if not self.polls:  # 준비한 답이 떨어지면 네트워크 오류처럼(코드는 이 경우 다음에 다시 본다)
+            from marketing.apify import ApifyError
+            raise ApifyError('no more polls')
         return self._next(self.polls)
 
     def abort_run(self, run_id):

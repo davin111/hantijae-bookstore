@@ -276,6 +276,21 @@ class RunTest(TestCase):
         self.assertEqual(len(deps.notes), 1)
         self.assertIn('SOCIAL_ACCOUNTS', deps.notes[0])
 
+    def test_cost_counts_late_per_post_charges(self):
+        """실측(2026-09-30): 끝났다는 응답은 시작 요금만, 다시 받으면 글 요금까지. 요금표로도 추정한다."""
+        self.seed_known()
+        pricing = {'pricingModel': 'PAY_PER_EVENT', 'pricingPerEvent': {'actorChargeEvents': {
+            'post': {'eventPriceUsd': 0.005, 'isPrimaryEvent': True, 'isOneTimeEvent': False},
+            'actor-start': {'eventPriceUsd': 0.001, 'isOneTimeEvent': True},
+            'filter-applied': {'eventPriceUsd': 0.002, 'isOneTimeEvent': False}}}}
+        items = both_accounts('a', NOW) + both_accounts('b', NOW - timedelta(hours=1))
+        client = FakeApify(starts=[{**done(cost=0.001), 'pricingInfo': pricing}], datasets={'d1': items})
+        social.run_due(Deps(), NOW, client=client)
+        self.assertEqual(SocialRun.objects.get().cost_usd, Decimal('0.021'))  # 4건 × 0.005 + 0.001
+        self.assertEqual(social.run_cost([{'usageTotalUsd': 0.001}, {'usageTotalUsd': 0.0068}], 4, Decimal('0.1')),
+                         Decimal('0.007'))
+        self.assertEqual(social.run_cost([{}, {}], None, Decimal('0.15')), Decimal('0.15'))
+
     def test_failed_status_keeps_cost(self):
         self.seed_known()
         client = FakeApify(starts=[done(status='TIMED-OUT', cost=0.03)])

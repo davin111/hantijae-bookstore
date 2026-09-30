@@ -240,22 +240,45 @@ def fail(run, now, error, cost=None):
     run.save(update_fields=fields)
 
 
+def run_cost(reports, items, cap):
+    """실행 비용(달러). 끝났다는 응답의 usageTotalUsd에는 글마다 붙는 요금이 늦게 반영될 때가 있어
+    (2026-09-30 실측: 페북 4건 실제 $0.021인데 응답은 $0.001) 다시 받은 값과 요금표×글 수 추정 가운데 큰 값을 쓴다.
+    아무것도 모르면 상한으로 센다(월 예산을 적게 잡지 않게)."""
+    values = [r.get('usageTotalUsd') for r in reports if r.get('usageTotalUsd') is not None]
+    for r in reports:
+        events = (((r.get('pricingInfo') or {}).get('pricingPerEvent') or {}).get('actorChargeEvents') or {})
+        if events and items is not None:
+            values.append(sum(e.get('eventPriceUsd') or 0 for e in events.values() if e.get('isOneTimeEvent'))
+                          + items * sum(e.get('eventPriceUsd') or 0 for e in events.values() if e.get('isPrimaryEvent')))
+            break
+    if not values:
+        return cap
+    return Decimal(str(max(values))).quantize(Decimal('0.001'), rounding='ROUND_UP')
+
+
 def finish_if_done(deps, client, run, data, accounts, now):
     """끝난 실행이면 청구액을 적고 결과를 저장·판정한다. 새 글 목록(끝나지 않았거나 실패면 None)."""
     status = data.get('status', '')
     if status not in FINAL:
         return None
-    usage = data.get('usageTotalUsd')
     run.apify_status = status
-    run.cost_usd = Decimal(str(usage)).quantize(Decimal('0.001')) if usage is not None else run.cap_usd
+    run.cost_usd = run_cost([data], None, run.cap_usd)
     run.save(update_fields=['apify_status', 'cost_usd'])
+    items = None
+    if status == 'SUCCEEDED':
+        try:
+            items = client.dataset_items(run.dataset_id or data.get('defaultDatasetId', ''))
+        except ApifyError as e:
+            fail(run, now, f'결과 읽기 실패: {e}')
+            return None
+    try:  # 늦게 붙은 요금까지 보려고 실행 정보를 한 번 더 받는다
+        latest = client.get_run(run.apify_run_id) if run.apify_run_id else {}
+    except ApifyError:
+        latest = {}
+    run.cost_usd = run_cost([data, latest], len(items) if items is not None else None, run.cap_usd)
+    run.save(update_fields=['cost_usd'])
     if status != 'SUCCEEDED':
         fail(run, now, f'Apify {status}')
-        return None
-    try:
-        items = client.dataset_items(run.dataset_id or data.get('defaultDatasetId', ''))
-    except ApifyError as e:
-        fail(run, now, f'결과 읽기 실패: {e}')
         return None
     new = store(run, items, accounts, now)
     if new:
