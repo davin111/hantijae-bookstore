@@ -76,6 +76,14 @@ class RunDueTest(TestCase):
         tasks.run_due(Deps('off'), datetime(2026, 9, 29, 7, 0, tzinfo=KST))
         self.assertEqual(self.social_step.call_count, 2)
 
+    def test_run_due_retries_pending_notion_pages(self, *_):
+        deps = Deps()
+        with mock.patch('marketing.tasks.notion_sync.retry_pending', return_value=0) as retry:
+            tasks.run_due(deps, datetime(2026, 9, 29, 10, 0, tzinfo=KST))
+        retry.assert_called_once()
+        self.assertIs(retry.call_args.args[0], deps.bot)
+        self.assertEqual(deps.bot.notes, [])  # 가짜 deps에 tg가 없어도 오류 알림이 나가지 않는다
+
     def test_off_mode_does_nothing(self, sales_, fund_, news_, brief_, kit_):
         tasks.run_due(Deps('off'), datetime(2026, 9, 28, 7, 0, tzinfo=KST))
         for m in (sales_, fund_, news_, brief_, kit_):

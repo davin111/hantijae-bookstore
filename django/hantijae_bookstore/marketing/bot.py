@@ -15,7 +15,7 @@ from intake.models import TelegramChat, WorkerState
 from marketing import board
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
-from marketing import grants, messages, midweek, moments, social
+from marketing import grants, messages, midweek, moments, notion_sync, social
 from marketing.hooks import add_hook, upcoming
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, GrantCall, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
@@ -32,7 +32,7 @@ KIT_SEND_MAX_FAILURES = 3  # 이 횟수에 닿으면 관리자에게 알리고 �
 BUILDING = '만들고 있어요. 몇 분 걸려요.'
 USAGE = ('사용법: /mk off|admin_only|live · /mk social on|off · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
          '/hook <MM-DD> <이름> | <책1>, <책2> · /hook list · /quiet <제목 일부> <YYYY-MM-DD> [이유] · /quiet list · '
-         '/watch <이름> [+ 좁히기 조건] · /watch list · /watch off <번호> · /moment · /grant')
+         '/watch <이름> [+ 좁히기 조건] · /watch list · /watch off <번호> · /moment · /grant · /mk notion on|off')
 MOMENT_USAGE = ('사용법: /moment off|admin_only|live · /moment midweek off|admin_only|live · /moment now (지금 한 번, 몇 분) · '
                 '/moment list')
 
@@ -116,13 +116,36 @@ class Marketing:
         except Exception:
             return None
 
+    # ---- 노션 '홍보 비서 글 모음' ----
+    def _notion(self):
+        return notion_sync.client_for(self.host)
+
+    def _is_room(self, chat):
+        """검수 방으로 실제로 보내는가. 관리자 방 미리보기·admin_only에는 노션 페이지를 만들지 않는다(운영진 모두가 보는 곳)."""
+        admin = self.host._chat(TelegramChat.ADMIN)
+        return chat is not None and chat != admin and chat == self.host._chat(TelegramChat.REVIEWERS)
+
+    def _notion_page(self, target, chat, now):
+        """검수 방으로 보낼 때만 페이지를 만든다. 실패하면 ''(텔레그램은 버튼 없이 나가고 워커가 다시 시도)."""
+        client = self._notion()
+        if client is None or not self._is_room(chat):
+            return ''
+        try:
+            return notion_sync.ensure_page(client, target, now)
+        except Exception:
+            log.warning('marketing notion page failed (%s)', target.name, exc_info=True)
+            return ''
+
     # ---- 보내기 ----
-    def send_kit(self, proposal, chat):
+    def send_kit(self, proposal, chat, now=None):
+        now = now or timezone.now()
         drafts = board.kit_drafts(proposal)
-        caption = messages.kit_caption(proposal.book, drafts, proposal.extra.get('missing_stores', []),
-                                       proposal.extra.get('blog_exists', False))
+        missing, blog = proposal.extra.get('missing_stores', []), proposal.extra.get('blog_exists', False)
+        caption = messages.kit_caption(proposal.book, drafts, missing, blog)
+        url = self._notion_page(notion_sync.kit_target(
+            proposal, messages.kit_caption(proposal.book, drafts, missing, blog, guide=False), kst_today(now)), chat, now)
         states = {c: board.channel_state(proposal, c) for c in (Draft.BLOG, Draft.INSTAGRAM)}
-        buttons = messages.kit_buttons(proposal, drafts, states, (proposal.notion or {}).get('url', ''))
+        buttons = messages.kit_buttons(proposal, drafts, states, url or (proposal.notion or {}).get('url', ''))
         photo = cover_jpeg(proposal.book)
         sent = (self.tg.send_photo(chat, photo, caption, buttons=buttons) if photo
                 else self.tg.send_message(chat, caption, buttons=buttons))
@@ -169,7 +192,7 @@ class Marketing:
         n, first_exc = 0, None
         for p in pending:
             try:
-                self._mark_sent(p, chat, self.send_kit(p, chat), now)
+                self._mark_sent(p, chat, self.send_kit(p, chat, now), now)
             except Exception as e:  # 카드 하나가 실패해도 나머지는 보낸다. 실패는 기록해 두고 다음 바퀴로 넘긴다
                 log.exception('marketing kit %s send failed', p.id)
                 self._record_kit_send_failure(p, today_iso)
@@ -199,14 +222,19 @@ class Marketing:
         to_skip = [i for i in items if is_quiet(i) and i.status != Proposal.ACTED]
         grant_lines = self._grant_briefing_lines(today)
         states = [board.item_state(p) for p in shown]  # 관리자 방 사본에서 이미 누른 결정도 버튼에 보인다
+        url = (briefing.notion or {}).get('url', '')
+        if record:  # 상황판·노션이 같은 항목을 그리게, 보낼 항목 순서를 먼저 적는다
+            briefing.shown = [i.id for i in shown]
+            briefing.save(update_fields=['shown'])
+            url = self._notion_page(notion_sync.brief_target(
+                briefing, messages.briefing_text(briefing.week_start, shown, briefing.measure, grants=grant_lines,
+                                                 guide=False)), chat, now) or url
         sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, shown, briefing.measure,
                                                                  grants=grant_lines),
-                                    buttons=messages.briefing_buttons(briefing, shown, states,
-                                                                      (briefing.notion or {}).get('url', '')))
+                                    buttons=messages.briefing_buttons(briefing, shown, states, url))
         if record:
             briefing.chat_id, briefing.message_id, briefing.sent_at, briefing.mode = chat, sent['message_id'], now, self.mode()
-            briefing.shown = [i.id for i in shown]
-            briefing.save(update_fields=['chat_id', 'message_id', 'sent_at', 'mode', 'shown'])
+            briefing.save(update_fields=['chat_id', 'message_id', 'sent_at', 'mode'])
             if to_skip:  # 보내기 전에 미리 SKIPPED로 적어 두면 보내기가 실패했을 때도 그대로 남는다 — 보낸 뒤에만 적는다
                 Proposal.objects.filter(pk__in=[i.id for i in to_skip]).update(status=Proposal.SKIPPED)
             # 운영진이 이미 관리자 방 사본에서 누른 ACTED/SKIPPED 결정은 검수 방으로 넘길 때도 덮지 않는다
@@ -276,7 +304,10 @@ class Marketing:
             items = [p for p in items if not p.candidate_key.startswith('moment:')]
         if not items:
             return False
-        sent = self.tg.send_message(chat, messages.midweek_text(items), buttons=messages.midweek_buttons(items, [board.item_state(p) for p in items]))
+        url = self._notion_page(notion_sync.now_target(items, messages.midweek_text(items, guide=False), kst_today(now)),
+                                chat, now)
+        sent = self.tg.send_message(chat, messages.midweek_text(items),
+                                    buttons=messages.midweek_buttons(items, [board.item_state(p) for p in items], url))
         Proposal.objects.filter(pk__in=[p.id for p in items]).update(chat_id=chat, message_id=sent['message_id'],
                                                                      sent_at=now, status=Proposal.SHOWN)
         self._midweek_week_notice(now)
@@ -317,8 +348,8 @@ class Marketing:
         return qs.order_by('-version', '-id').first()
 
     def _current(self, proposal, channel):
-        """(보낼·기록할·고칠 최신 판, 알림 종류). Task 9에서 노션에서 고친 글을 읽도록 바뀐다."""
-        return self._newest(proposal.id, channel), ''
+        """(보낼·기록할·고칠 최신 판, 알림). 노션이 켜져 있으면 📝 상자를 읽어 고친 글을 새 판으로 받는다."""
+        return notion_sync.current(self._notion(), proposal, channel, host=self.host, now=timezone.now())
 
     def _after_status(self, proposal):
         """버튼을 누른 뒤 허브 버튼(진행 상황판)을 다시 그린다. 실패해도 버튼 처리는 끝난 것으로 둔다."""
@@ -326,6 +357,13 @@ class Marketing:
             board.refresh(self.tg, board.hub_of(Proposal.objects.select_related('briefing').get(pk=proposal.pk)))
         except Exception:
             log.warning('marketing hub refresh failed for proposal %s', proposal.pk, exc_info=True)
+        client = self._notion()
+        if client is not None:
+            try:  # 노션 쪽 진행 표시도 같이 고친다(실패해도 텔레그램은 이미 끝났다)
+                notion_sync.refresh(client, notion_sync.target_of(
+                    Proposal.objects.select_related('briefing').get(pk=proposal.pk)))
+            except Exception:
+                log.warning('marketing notion refresh failed for proposal %s', proposal.pk, exc_info=True)
 
     # ---- 버튼 ----
     def handle_callback(self, data, chat_id, cq, actor):
@@ -424,8 +462,6 @@ class Marketing:
             return
         if not text or is_acknowledgement(text):  # 고맙다·좋다는 답뿐이면 고치지 않는다
             return
-        if not text or is_acknowledgement(text):  # 고맙다·좋다는 답뿐이면 고치지 않는다
-            return
         base, _ = self._current(draft.proposal, draft.channel)  # 옛 사본에 답장해도 최신 판(노션 포함)을 고친다
         CopyNote.objects.create(draft=base, text=text, by=actor[:100])
         working = self.tg.send_message(chat_id, messages.WORKING, reply_to=msg['message_id'])
@@ -444,6 +480,12 @@ class Marketing:
         # '고치고 있어요'를 '고쳤어요: …'로 고쳐 써 방에 메시지가 하나만 늘게 하고, 새 글은 본문만
         self.tg.edit_text(chat_id, working['message_id'], messages.rewrite_done(str(out.get('note') or '').strip()))
         self._send_draft(new, chat_id, reply_to=msg['message_id'])
+        client = self._notion()
+        if client is not None:
+            try:
+                notion_sync.append_version(client, new, text)
+            except Exception:  # 다음에 이 글을 읽을 때 다시 덧붙인다(notion_sync.current)
+                log.warning('marketing notion append failed for draft %s', new.pk, exc_info=True)
         self._after_status(new.proposal)  # [다음에] 했던 글이 다시 열리면 버튼 이름도 돌아온다
 
     # ---- 관리자 명령 ----
@@ -455,6 +497,8 @@ class Marketing:
         self.tg.send_message(chat_id, handler(chat_id, (arg or '').strip(), now, kst_today(now)) or '완료')
 
     def _mk(self, chat_id, arg, now, today):
+        if arg.split()[:1] == ['notion']:
+            return notion_sync.switch(arg[len('notion'):].strip())
         if arg.split()[:1] == ['social']:
             return social.switch(arg[len('social'):].strip(), now)
         if arg in MODES:
@@ -466,7 +510,7 @@ class Marketing:
                 'marketing_last_kit_check')
         week = '없음' if not b else ('보냄' if b.sent_at else f'미발송 {b.items.count()}건')
         return '\n'.join([f'mode={self.mode()}', *[f'{k}={WorkerState.get(k)}' for k in keys],
-                          f'pending_kits={pending}', f'this_week_briefing={week}', *social.status_lines(now), USAGE])
+                          f'pending_kits={pending}', f'this_week_briefing={week}', notion_sync.status_line(), *social.status_lines(now), USAGE])
 
     def _moment(self, chat_id, arg, now, today):
         parts = arg.split()
@@ -535,7 +579,7 @@ class Marketing:
                                                  sent_at__gte=self._day_start(now)).count()
             if sent_today >= KIT_DAILY_CAP:
                 return f'오늘은 검수 방에 묶음 카드를 이미 {KIT_DAILY_CAP}장 보냈어요. 내일 다시 보내 주세요'
-            self._mark_sent(p, review, self.send_kit(p, review), now)
+            self._mark_sent(p, review, self.send_kit(p, review, now), now)
             return '검수 방에 보냈어요'
         books = find_books(arg)
         if len(books) != 1:
