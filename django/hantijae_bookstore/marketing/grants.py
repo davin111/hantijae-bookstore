@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import List
 
+from django.db.models import F, Q
+
 from intake.llm import complete_json
 from intake.models import WorkerState
 from marketing.doctext import document_text
@@ -16,6 +18,7 @@ from marketing.models import GrantCall
 from marketing.prompts import GRANT_SYSTEM, build_grant_user
 from marketing.selection_sources import SPACING, kpipa_files
 from marketing.text import foreign_numbers
+from marketing.timeutil import kst_today
 
 log = logging.getLogger('intake')
 MODES = ('off', 'admin_only', 'live')
@@ -128,3 +131,60 @@ def digest(report):
         parts.append('⚠️ 지원사업 공고를 3번 읽지 못해 건너뛰었어요\n'
                      + '\n'.join(f'· {c.title} {c.url}' for c in report.gave_up))
     return '\n\n'.join(parts)
+
+
+PER_MESSAGE = 3     # 검수 방 카드 한 메시지에 싣는 공고 수
+RECENT_DAYS = 21    # 마감을 모르는 공고를 브리핑에 붙이는 기간(게시일부터)
+REMIND_DAYS = 2
+CARD_ORDER = (F('apply_until').asc(nulls_last=True), 'posted_on', 'id')
+STATE_LABEL = {GrantCall.IGNORED: '제목 제외', GrantCall.OLD: '지난 글', GrantCall.PENDING: '판단 전',
+               GrantCall.SKIPPED_LLM: '해당 없음', GrantCall.READY: '보낼 차례', GrantCall.ANNOUNCED: '알림',
+               GrantCall.APPLYING: '신청', GrantCall.PASSED: '넘김'}
+USAGE = '사용법: /grant off|admin_only|live · /grant now (지금 한 번 읽기, 몇 분)'
+
+
+def to_send(today):
+    """아직 방에 안 간 알릴 공고. 그사이 마감이 지난 것은 old로 돌리고 뺀다."""
+    GrantCall.objects.filter(state=GrantCall.READY, apply_until__lt=today).update(state=GrantCall.OLD)
+    return list(GrantCall.objects.filter(state=GrantCall.READY).order_by(*CARD_ORDER))
+
+
+def card_calls(chat_id, message_id):
+    return list(GrantCall.objects.filter(chat_id=chat_id, message_id=message_id).order_by(*CARD_ORDER))
+
+
+def open_calls(today, limit=PER_MESSAGE):
+    """월요 브리핑에 붙일 열린 공고: 알렸거나 신청하기로 한 것 가운데 마감 전(마감 모름은 게시 21일 안)."""
+    unknown = Q(apply_until__isnull=True, posted_on__gte=today - timedelta(days=RECENT_DAYS))
+    return list(GrantCall.objects.filter(Q(apply_until__gte=today) | unknown, state__in=GrantCall.OPEN)
+                .order_by(*CARD_ORDER)[:limit])
+
+
+def due_reminders(today):
+    return list(GrantCall.objects.filter(state=GrantCall.APPLYING, apply_until=today + timedelta(days=REMIND_DAYS),
+                                         reminded_at__isnull=True, message_id__isnull=False))
+
+
+def decide(call_id, applying, actor, now):
+    """카드 버튼. (바뀐 공고 또는 None, 누른 사람에게 보일 짧은 답)."""
+    call = GrantCall.objects.filter(pk=call_id, state__in=GrantCall.OPEN + (GrantCall.PASSED,)).first()
+    if call is None:
+        return None, '이미 정리된 공고예요'
+    today = kst_today(now)
+    if call.apply_until and call.apply_until < today:
+        return None, '신청 마감이 지났어요'
+    call.state = GrantCall.APPLYING if applying else GrantCall.PASSED
+    call.decided_by, call.decided_at = actor[:100], now
+    call.save(update_fields=['state', 'decided_by', 'decided_at'])
+    if not applying:
+        return call, '이번엔 넘길게요'
+    if call.apply_until and (call.apply_until - today).days > REMIND_DAYS:
+        return call, '마감 이틀 전에 한 번 더 알려 드릴게요'
+    return call, '신청하기로 적어 뒀어요'
+
+
+def status_text(today):
+    rows = [f'grant_mode={mode()}', f'grant_last_scan={WorkerState.get("grant_last_scan")}']
+    rows += [f'{STATE_LABEL.get(c.state, c.state)} · {c.title[:40]} · {c.apply_until or "-"}'
+             for c in GrantCall.objects.order_by('-posted_on', '-id')[:8]]
+    return '\n'.join(rows)

@@ -1,5 +1,5 @@
 """마케팅 비서 텔레그램 문구·버튼 (순수 함수). 콜백은 'mk:<동작>:<번호>' (64바이트 제한 안)."""
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.utils import timezone
 
@@ -77,7 +77,7 @@ def draft_buttons(draft):
     return keyboard([[('올렸어요', cb('p', draft.id)), ('고치기', cb('e', draft.id)), ('다음에', cb('l', draft.id))]])
 
 
-def briefing_text(week_start, proposals, measure=''):
+def briefing_text(week_start, proposals, measure='', grants=()):
     end = week_start + timedelta(days=6)
     lines = [f'이번 주 홍보 제안 ({week_start.month}월 {week_start.day}일 ~ {end.month}월 {end.day}일)']
     for i, p in enumerate(proposals, 1):
@@ -85,6 +85,8 @@ def briefing_text(week_start, proposals, measure=''):
         extra = getattr(p, 'extra', None) or {}
         if extra.get('link'):  # 무슨 기사·펀딩인지 운영진이 바로 열어 보게
             lines.append(f"{extra.get('link_label') or '링크'}: {extra['link']}")
+    if grants:  # 열린 지원사업 공고(grants.open_calls) — 보내는 때 계산해 넘긴다
+        lines += ['', '📌 지원사업 신청', *grants]
     if measure:
         lines += ['', measure]
     return clip('\n'.join(lines), TEXT_LIMIT)
@@ -107,3 +109,87 @@ def midweek_buttons(proposals):
     btns = [(f'{i}번 글 보기', cb('b', p.id)) for i, p in enumerate(proposals, 1)]
     btns.append(('넘기기', cb('sn', proposals[0].id)))
     return keyboard([btns[i:i + 2] for i in range(0, len(btns), 2)])
+
+
+# ---- 지원사업 공고(marketing.grants) ----
+WEEKDAYS = '월화수목금토일'
+DECISION = {'applying': '✍️ {who}: 신청하기로 했어요', 'passed': '👌 {who}: 이번엔 넘겨요'}
+
+
+def _day(d):
+    return f'{d.month}월 {d.day}일({WEEKDAYS[d.weekday()]})'
+
+
+def _clock(hhmm):
+    """'16:00' → '16시', '09:30' → '9시 30분', 빈 값 → ''."""
+    if not hhmm:
+        return ''
+    hour, minute = (int(x) for x in hhmm.split(':'))
+    return f'{hour}시' + (f' {minute}분' if minute else '')
+
+
+def grant_deadline(call):
+    """'10월 12일(월) 16시'. 확인한 마감일이 없으면 ''."""
+    if not call.apply_until:
+        return ''
+    clock = _clock((call.verdict or {}).get('until_time', ''))
+    return _day(call.apply_until) + (f' {clock}' if clock else '')
+
+
+def _grant_lines(call):
+    v = call.verdict or {}
+    until = grant_deadline(call)
+    if not until:
+        lines = ['신청 기간은 공고에서 확인해 주세요']
+    elif v.get('apply_from'):
+        lines = [f'신청 {_day(date.fromisoformat(v["apply_from"]))} ~ {until}']
+    else:
+        lines = [f'신청 마감 {until}']
+    if v.get('support'):
+        lines.append(f'지원: {v["support"]}')
+    if v.get('prep'):
+        lines.append(f'준비: {v["prep"]}')
+    lines.append(f'공고: {call.url}')
+    if call.state in DECISION and call.decided_by:
+        lines.append(DECISION[call.state].format(who=call.decided_by))
+    return lines
+
+
+def grant_card_text(calls):
+    if len(calls) == 1:
+        return clip('\n'.join([f'📌 지원사업 공고 — {calls[0].title}', *_grant_lines(calls[0])]), TEXT_LIMIT)
+    lines = [f'📌 새 지원사업 공고 {len(calls)}건']
+    for i, c in enumerate(calls, 1):
+        lines += ['', f'{i}. {c.title}', *_grant_lines(c)]
+    return clip('\n'.join(lines), TEXT_LIMIT)
+
+
+def grant_buttons(calls):
+    if len(calls) == 1:
+        return keyboard([[('신청할게요', cb('ga', calls[0].id)), ('이번엔 넘기기', cb('gp', calls[0].id))]])
+    return keyboard([[(f'{i}번 신청할게요', cb('ga', c.id)), (f'{i}번 넘기기', cb('gp', c.id))]
+                     for i, c in enumerate(calls, 1)])
+
+
+def grant_preview_text(calls):
+    """admin_only 미리보기(관리자 1:1, 버튼 없음). LLM이 왜 골랐는지도 보인다."""
+    notes = []
+    for i, c in enumerate(calls, 1):
+        v = c.verdict or {}
+        head = f'{i}번 판단' if len(calls) > 1 else '판단'
+        notes.append(f'{head}: {v.get("reason", "")}' + ('' if v.get('date_checked') else ' (마감일 확인 못 함)'))
+    return clip('🔎 미리보기 — 검수 방에는 /grant live 뒤에 가요\n\n' + grant_card_text(calls) + '\n\n' + '\n'.join(notes),
+                TEXT_LIMIT)
+
+
+def grant_reminder_text(call):
+    return f'⏰ 모레 {grant_deadline(call)}에 신청이 마감돼요 — {call.title}\n공고: {call.url}'
+
+
+def grant_briefing_lines(calls):
+    out = []
+    for c in calls:
+        until = grant_deadline(c)
+        out.append(f'· {c.title} — ' + (f'{until} 마감' if until else '마감은 공고에서 확인')
+                   + (' (신청하기로 함)' if c.state == 'applying' else ''))
+    return out
