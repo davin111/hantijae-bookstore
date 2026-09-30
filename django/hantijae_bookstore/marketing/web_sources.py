@@ -56,15 +56,15 @@ def youtube_search(query, key, published_after, get_json):
     utc_time = published_after.astimezone(timezone.utc)   # 'Z'는 UTC — KST 시각을 그대로 쓰면 9시간 어긋난다
     params = {'part': 'snippet', 'type': 'video', 'order': 'date', 'maxResults': 25, 'q': query, 'key': key,
               'publishedAfter': utc_time.strftime('%Y-%m-%dT%H:%M:%SZ')}
-    try:
+    try:   # 모양이 이상한 응답도 SourceError로 — 부르는 쪽이 한 번의 실패로 세고 다음 책으로 넘어간다
         data = get_json(YOUTUBE_URL + urllib.parse.urlencode(params))
+        out = []
+        for it in (data or {}).get('items') or []:
+            vid = (it.get('id') or {}).get('videoId')
+            sn = it.get('snippet') or {}
+            if vid:
+                out.append(Post('youtube', f'https://www.youtube.com/watch?v={vid}', html.unescape(sn.get('title') or ''),
+                                html.unescape(sn.get('description') or '')[:200], _day(sn.get('publishedAt'))))
     except Exception as e:
         raise SourceError(type(e).__name__) from None
-    out = []
-    for it in (data or {}).get('items') or []:
-        vid = (it.get('id') or {}).get('videoId')
-        sn = it.get('snippet') or {}
-        if vid:
-            out.append(Post('youtube', f'https://www.youtube.com/watch?v={vid}', html.unescape(sn.get('title') or ''),
-                            html.unescape(sn.get('description') or '')[:200], _day(sn.get('publishedAt'))))
     return out

@@ -72,5 +72,10 @@ class YoutubeTest(SimpleTestCase):
             W.youtube_search('"x"', 'SECRETKEY', datetime(2026, 9, 16, tzinfo=timezone.utc), boom)
         self.assertNotIn('SECRETKEY', str(ctx.exception))
 
+    def test_odd_youtube_body_is_a_source_error(self):
+        for body in ([{'items': []}], {'items': ['x']}, {'items': [{'id': 'v'}]}):
+            with self.assertRaises(W.SourceError):
+                W.youtube_search('"x"', 'k', datetime(2026, 9, 16, tzinfo=timezone.utc), lambda url, headers=None: body)
+
     def test_labels(self):
         self.assertEqual((SOURCE_LABEL['web'], SOURCE_LABEL['youtube']), ('웹 언급', '유튜브'))
