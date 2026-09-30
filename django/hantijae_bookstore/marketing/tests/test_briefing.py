@@ -178,6 +178,21 @@ class BuildWeeklyTest(TestCase):
         s.refresh_from_db()
         self.assertIsNotNone(s.used_at)
 
+    def test_build_weekly_turns_google_news_links_into_publisher_links(self):
+        book = make_book(title='무지개를 변호하다', published=date(2026, 6, 1), isbn='979-11-00000-14-1')
+        s = Signal.objects.create(kind=Signal.NEWS, key='k', book=book, title='강연', relevant=True, happens_on=TODAY,
+                                  detail={'source': '여성신문', 'summary': '강연'},
+                                  url='https://news.google.com/rss/articles/CBMiABC?oc=5')
+        llm = FakeLLM({'items': [item(f'news:{s.id}', headline='『무지개를 변호하다』 ― 강연')]})
+        seen = []
+
+        def resolve(url):
+            seen.append(url)
+            return 'https://www.womennews.co.kr/news/articleView.html?idxno=1'
+        b, _ = build_weekly(llm, TODAY, datetime(2026, 9, 28, 7, 0, tzinfo=KST), posts=[], resolve=resolve)
+        self.assertEqual(b.items.get().extra['link'], 'https://www.womennews.co.kr/news/articleView.html?idxno=1')
+        self.assertEqual(seen, ['https://news.google.com/rss/articles/CBMiABC?oc=5'])  # 고른 항목의 링크만 바꾼다
+
     def test_rebuilding_same_week_keeps_the_same_items(self):
         blog_book = make_book(title='시월, 곡비의 노래', published=date(2026, 9, 1), isbn='979-11-00000-15-1', author=None)
         news_book = make_book(title='무지개를 변호하다', published=date(2026, 6, 1), isbn='979-11-00000-14-1', author=None)

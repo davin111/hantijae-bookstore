@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from intake.llm import complete_json
-from marketing import candidates
+from marketing import candidates, gnews
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM, build_briefing_user
 from marketing.sales import latest
@@ -119,8 +119,11 @@ def measure_line(today):
     return ''
 
 
-def build_weekly(llm, today, now, posts):
+def build_weekly(llm, today, now, posts, resolve=gnews.original_url):
     items, dropped = compose(llm, candidates.gather(today, now, posts), today, candidates.social_context(now))
+    for cand, *_ in items:  # 방에 보일 링크만(최대 3개): 구글 뉴스 주소는 언론사 원래 주소로, 실패하면 그대로
+        if cand.link:
+            cand.link = resolve(cand.link)
     briefing = save_briefing(items, today)
     briefing.measure = measure_line(today)[:300]
     briefing.save(update_fields=['measure'])
