@@ -1,5 +1,6 @@
 """주간 브리핑 후보. 규칙만으로 만들고(LLM 없음), 고르기는 briefing.py가 LLM에 맡긴다."""
 import json
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
@@ -14,6 +15,7 @@ from marketing.hooks import upcoming
 from marketing.kit import blog_has
 from marketing.models import BookProfile, Proposal, SalesSnapshot, Signal
 from marketing.moments import TYPE_LABEL, find_book, seen_on
+from marketing.review_search import SOURCE_LABEL
 from marketing.sales import latest
 from marketing.social_judge import mentions_day
 from marketing.social_parse import share_key
@@ -24,8 +26,8 @@ from web.models import Notice
 KIND_LABEL = {'hook': '기념일', 'fund': '진행 중 펀딩', 'news': '저자 소식', 'surge': '판매 지수 급등',
               'blog': '블로그 글 없음', 'noreview': '리뷰 없음', 'selection': '공공 선정',
               'sns_event': '다가오는 행사', 'sns_after': '행사 후기', 'sns_repost': '공식 채널로 옮겨 싣기',
-              'sns_press': '서평·기사 모음', 'moment': '대화 속 계기'}
-LINK_LABEL = {'news': '기사 원문', 'fund': '펀딩 페이지'}  # 브리핑 메시지에서 링크 앞에 붙는 말
+              'sns_press': '서평·기사 모음', 'moment': '대화 속 계기', 'review': '새 독자 서평'}
+LINK_LABEL = {'news': '기사 원문', 'fund': '펀딩 페이지', 'review': '서평 글'}  # 브리핑 메시지에서 링크 앞에 붙는 말
 # 판매 지수 급등의 원인 가설로 붙일 만한 대화 속 계기
 ROOM_TALK_TYPES = ('group', 'stock', 'author', 'media', 'issue', 'selection')
 # 새 계기가 없는 후보는 같은 책을 3주 안에 다시 제안하지 않는다
@@ -139,6 +141,53 @@ def selection_candidates(now, days=14):
                              summary=f'{s.title} 선정 ― 첫 화면 알림이 떠 있음',
                              facts={'url': s.url, 'date': s.happens_on.isoformat() if s.happens_on else ''},
                              urgency=3, signal=s))
+    return out
+
+
+REVIEW_DAYS, REVIEW_LINKS = 14, 3
+
+
+def _review_signals(today, now):
+    """아직 안 쓴(이번 주 브리핑이 쓴 것은 다시 후보) 최근 2주의 독자 서평. 묶음 후보의 나머지 신호는 Proposal.extra에 있다."""
+    ws = week_start(today)
+    this_week = [i for extra in Proposal.objects.filter(briefing__week_start=ws).values_list('extra', flat=True)
+                 for i in (extra or {}).get('signals', [])]
+    unused = Q(used_at__isnull=True) | Q(proposal__briefing__week_start=ws) | Q(pk__in=this_week)
+    return list(Signal.objects.filter(unused, kind=Signal.REVIEW, relevant=True, book__isnull=False,
+                                      found_at__gte=now - timedelta(days=REVIEW_DAYS))
+                .select_related('book').distinct())
+
+
+def _review_where(s):
+    label = SOURCE_LABEL.get(s.detail.get('source'), '블로그')
+    return f'{label} 「{s.detail["where"]}」' if s.detail.get('where') else label
+
+
+def review_candidates(today, now):
+    """책마다 새 독자 서평을 하나의 후보로 묶는다. 글 주소는 운영진이 볼 링크로만 붙인다(LLM에는 제목·출처만)."""
+    by_book = {}
+    for s in _review_signals(today, now):
+        by_book.setdefault(s.book_id, []).append(s)
+    out = []
+    for signals in by_book.values():
+        signals.sort(key=lambda s: (s.happens_on or s.found_at.date(), s.id), reverse=True)
+        book = signals[0].book
+        if not _live([book]):
+            continue
+        counts = Counter(s.detail.get('source', '') for s in signals)
+        where = ', '.join(f'{label} {counts[k]}' for k, label in SOURCE_LABEL.items() if counts[k])
+        summary = f'새 독자 서평 {len(signals)}건({where})'
+        facts = {'count': len(signals),
+                 'items': [{'where': _review_where(s), 'date': s.happens_on.isoformat() if s.happens_on else '',
+                            'title': s.title[:80]} for s in signals[:REVIEW_LINKS]]}
+        snap = latest(book, today)
+        if snap is not None:
+            facts['aladin_reviews'] = snap.short_reviews + snap.reviews
+            if facts['aladin_reviews'] == 0:
+                summary += ' ― 알라딘 리뷰·100자평은 아직 없음'
+        out.append(Candidate(id=f'review:{book.id}:{week_start(today).isoformat()}', kind='review', books=[book],
+                             summary=summary, facts=facts, urgency=2, signal=signals[0], more_signals=signals[1:],
+                             link='\n'.join(s.url for s in signals[:REVIEW_LINKS])))
     return out
 
 
@@ -437,8 +486,11 @@ def social_context(now, days=SNS_FOUND_DAYS, limit=15):
 def gather(today, now, posts):
     funds = funding_candidates(today, now)
     sns = merge_fund_posts(funds, social_candidates(today, now, posts))
-    cands = (hook_candidates(today) + funds + news_candidates(now) + selection_candidates(now) + sns
-             + surge_candidates(today) + blog_gap_candidates(today, posts) + noreview_candidates(today))
+    reviews = review_candidates(today, now)
+    reviewed = {b.id for c in reviews for b in c.books}   # 새 서평이 있는 책의 '리뷰 없음'은 서평 후보 하나로 합친다
+    cands = (hook_candidates(today) + funds + news_candidates(now) + selection_candidates(now) + reviews + sns
+             + surge_candidates(today) + blog_gap_candidates(today, posts)
+             + [c for c in noreview_candidates(today) if not {b.id for b in c.books} & reviewed])
     if WorkerState.get('moment_mode', 'off') == 'live':
         cands = with_moments(cands, moment_candidates(today, now), now)
     return select(cands, today, now)

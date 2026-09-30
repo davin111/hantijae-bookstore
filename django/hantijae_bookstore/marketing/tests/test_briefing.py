@@ -5,6 +5,7 @@ from django.test import TestCase
 from marketing.briefing import build_weekly, compose, measure_line, save_briefing
 from marketing.candidates import Candidate
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
+from marketing.prompts import BRIEFING_SYSTEM
 from marketing.tests.fakes import FakeLLM, make_book
 from marketing.timeutil import KST
 from web.models import Notice, StoreClick
@@ -241,6 +242,30 @@ class BuildWeeklyTest(TestCase):
         self.assertEqual(keys, [[f'selection:{s.id}']] * 3)
         s.refresh_from_db()
         self.assertIsNotNone(s.used_at)
+
+    def test_rebuilding_same_week_keeps_the_review_item_and_uses_all_its_signals(self):
+        book = make_book(title='무궁화호를 위하여', published=date(2026, 3, 16), isbn='979-11-00000-16-1', author=None)
+        a = Signal.objects.create(kind=Signal.REVIEW, key='review:1', book=book, title='읽고',
+                                  url='https://blog.naver.com/a/1', happens_on=date(2026, 9, 25), relevant=True,
+                                  detail={'source': 'naver_blog', 'where': ''})
+        b = Signal.objects.create(kind=Signal.REVIEW, key='review:2', book=book, title='모임 후기',
+                                  url='https://cafe.naver.com/c/2', happens_on=date(2026, 9, 26), relevant=True,
+                                  detail={'source': 'naver_cafe', 'where': '독서모임'})
+        now = datetime(2026, 9, 28, 7, 0, tzinfo=KST)
+        cid = f'review:{book.id}:2026-09-28'
+        llm = FakeLLM({'items': [item(cid, headline='『무궁화호를 위하여』 ― 독자 서평 두 편')]})
+        keys = []
+        for _ in range(3):
+            briefing, _ = build_weekly(llm, TODAY, now, posts=[])
+            keys.append(list(briefing.items.values_list('candidate_key', flat=True)))
+        self.assertEqual(keys, [[cid]] * 3)
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertTrue(a.used_at and b.used_at)
+        p = Proposal.objects.get(candidate_key=cid)
+        self.assertEqual((p.extra['link_label'], p.extra['link']),
+                         ('서평 글', 'https://cafe.naver.com/c/2\nhttps://blog.naver.com/a/1'))
+        self.assertIn("kind가 '새 독자 서평'", BRIEFING_SYSTEM)
 
     def test_overlong_llm_headline_and_title_are_saved_clipped(self):
         book = make_book(title='무지개를 변호하다', published=date(2026, 6, 1), isbn='979-11-00000-14-1', author=None)

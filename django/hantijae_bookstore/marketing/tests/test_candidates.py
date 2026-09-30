@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
@@ -13,6 +14,12 @@ from web.models import Notice
 
 TODAY = date(2026, 9, 28)
 NOW = datetime(2026, 9, 28, 7, 0, tzinfo=KST)
+
+
+def review(book, n, source='naver_blog', where='', day=date(2026, 9, 25), used_at=None):
+    return Signal.objects.create(kind=Signal.REVIEW, key=f'review:{book.id}:{n}', book=book, title=f'서평 {n}',
+                                 url=f'https://blog.naver.com/r/{n}', happens_on=day, relevant=True, used_at=used_at,
+                                 detail={'source': source, 'where': where, 'verdict': 'review'})
 
 
 class CandidateTest(TestCase):
@@ -143,6 +150,50 @@ class CandidateTest(TestCase):
         Proposal.objects.create(kind=Proposal.BRIEF_ITEM, briefing=this_week, signal=s, headline='h')
         self.assertEqual([c.id for c in C.selection_candidates(NOW)], [f'selection:{s.id}'])
 
+    def test_review_candidate_groups_a_books_new_reviews(self):
+        rs = [review(self.sibwol, 1, day=date(2026, 9, 20)), review(self.sibwol, 2, day=date(2026, 9, 26)),
+              review(self.sibwol, 3, day=date(2026, 9, 22)),
+              review(self.sibwol, 4, source='daum_cafe', where='시읽는모임', day=date(2026, 9, 24))]
+        [c] = C.review_candidates(TODAY, NOW)
+        self.assertEqual((c.id, c.kind, c.urgency, c.books), (f'review:{self.sibwol.id}:2026-09-28', 'review', 2, [self.sibwol]))
+        self.assertEqual(c.summary, '새 독자 서평 4건(네이버 블로그 3, 다음 카페 1)')
+        self.assertEqual(c.link, '\n'.join(r.url for r in (rs[1], rs[3], rs[2])))   # 최근 것부터 3개
+        self.assertEqual((c.signal, set(c.more_signals)), (rs[1], {rs[0], rs[2], rs[3]}))
+        self.assertEqual(c.facts['items'][1], {'where': '다음 카페 「시읽는모임」', 'date': '2026-09-24', 'title': '서평 4'})
+        self.assertNotIn('http', json.dumps(c.as_prompt(), ensure_ascii=False))   # 주소는 LLM에 보내지 않는다
+        self.assertEqual((C.KIND_LABEL['review'], C.LINK_LABEL['review']), ('새 독자 서평', '서평 글'))
+
+    def test_review_candidate_notes_missing_aladin_reviews(self):
+        SalesSnapshot.objects.create(book=self.sibwol, date=TODAY, sales_point=50, short_reviews=0, reviews=0)
+        review(self.sibwol, 1)
+        [c] = C.review_candidates(TODAY, NOW)
+        self.assertTrue(c.summary.endswith(' ― 알라딘 리뷰·100자평은 아직 없음'))
+        self.assertEqual(c.facts['aladin_reviews'], 0)
+
+    def test_old_used_or_irrelevant_reviews_are_not_candidates(self):
+        review(self.sibwol, 1, used_at=NOW - timedelta(days=7))   # 지난주 브리핑에 씀
+        old = review(self.naeran, 2)
+        Signal.objects.filter(pk=old.pk).update(found_at=NOW - timedelta(days=15))
+        Signal.objects.create(kind=Signal.REVIEW, key='review:x', book=self.naeran, title='홍보', relevant=False,
+                              detail={'source': 'naver_blog', 'verdict': 'promo'})
+        self.assertEqual(C.review_candidates(TODAY, NOW), [])
+
+    def test_reviews_used_by_this_weeks_briefing_stay_candidates(self):
+        a, b = review(self.sibwol, 1, used_at=NOW), review(self.sibwol, 2, used_at=NOW)
+        this_week = Briefing.objects.create(week_start=date(2026, 9, 28))
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, briefing=this_week, signal=a, headline='h',
+                                extra={'signals': [b.id]})
+        [c] = C.review_candidates(TODAY, NOW)
+        self.assertEqual({c.signal} | set(c.more_signals), {a, b})
+
+    def test_gather_drops_noreview_for_a_book_with_new_reviews(self):
+        SalesSnapshot.objects.create(book=self.sibwol, date=TODAY, sales_point=50, short_reviews=0, reviews=0)
+        SalesSnapshot.objects.create(book=self.naeran, date=TODAY, sales_point=50, short_reviews=0, reviews=0)
+        review(self.sibwol, 1)
+        ids = [c.id for c in C.gather(TODAY, NOW, posts=None)]
+        self.assertIn(f'review:{self.sibwol.id}:2026-09-28', ids)
+        self.assertNotIn(f'noreview:{self.sibwol.id}', ids)
+        self.assertIn(f'noreview:{self.naeran.id}', ids)
 
 
 class MomentCandidateTest(TestCase):
