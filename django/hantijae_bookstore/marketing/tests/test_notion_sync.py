@@ -126,6 +126,31 @@ class NotionSyncTest(TestCase):
             self.assertEqual(ns.current(self.fake, ps[0], Draft.INSTAGRAM, host=self.host, now=NOW)[1], '')
         self.assertEqual(len(self.host.notes), 1)
 
+    def test_read_notice_failure_never_reaches_the_caller(self):
+        b, ps = briefing(self.book)
+        self.page(b)
+
+        class BadHost(Host):
+            def notify_admin(self, text):
+                raise RuntimeError('텔레그램 오류')
+
+        self.fake.fail['children'] = http_error(502)
+        d, note = ns.current(self.fake, ps[0], Draft.INSTAGRAM, host=BadHost(self.fake), now=NOW)
+        self.assertEqual((d.version, note), (1, ''))
+
+    def test_refresh_keeps_going_past_a_missing_heading_then_raises(self):
+        b, ps = briefing(self.book)
+        self.page(b)
+        Proposal.objects.filter(pk__in=[p.pk for p in ps]).update(status=Proposal.ACTED)
+        self.fake.fail['update_block'] = RuntimeError('지워진 제목')
+        with self.assertRaises(RuntimeError):
+            ns.refresh(self.fake, ns.target_of(Proposal.objects.get(pk=ps[0].pk)))
+        ps[1].refresh_from_db()
+        self.assertEqual(self.fake.text_of(ps[1].notion['heading']), '✅ 2. 항목 2')
+        b.refresh_from_db()
+        props = self.fake.pages[b.notion['page']]['properties']
+        self.assertEqual(props['진행']['rich_text'][0]['text']['content'], '✅ 2')
+
     def test_no_box_means_no_read(self):
         b, ps = briefing(self.book)
         d, note = ns.current(self.fake, ps[0], Draft.INSTAGRAM)

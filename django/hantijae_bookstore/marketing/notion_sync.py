@@ -151,12 +151,12 @@ def ensure_page(client, t, now):
         page = client.create_page(WorkerState.get(DS), nb.page_properties(t.name, KIND_LABEL[t.kind], t.day, states),
                                   nb.page_blocks(t.hub_text, sections, t.caution))
         page_id = page['id']
-        headings = [b for b in client.children(page_id) if b.get('type') == 'heading_3']
+        headings = [b for b in client.children(page_id, timeout=READ_TIMEOUT) if b.get('type') == 'heading_3']
         if len(headings) != len(t.sections):
             raise RuntimeError(f'노션 페이지 제목 수가 달라요: {len(headings)} != {len(t.sections)}')
         for (p, ch, _), h in zip(t.sections, headings):
             _set_heading(p, ch, h['id'])
-            _fill_box(client, newest(p, ch), client.children(h['id'])[-1]['id'])
+            _fill_box(client, newest(p, ch), client.children(h['id'], timeout=READ_TIMEOUT)[-1]['id'])
         t.put(page=page_id, url=page['url'], state='done', hub_text=t.hub_text)
         return page['url']
     except Exception:
@@ -175,14 +175,23 @@ def refresh(client, t):
     """항목 제목 앞 상태와 '진행' 칸을 DB 기준으로 다시 적는다(멱등). 봇이 노션에서 고치는 곳은 이 둘뿐이다."""
     if t is None or t.info().get('state') != 'done':
         return
-    states = []
+    states, first_exc = [], None
     for p, ch, label in t.sections:
         p.refresh_from_db()
         s = _state(p, ch)
         states.append(s)
         if _heading_id(p, ch):
-            client.update_block(_heading_id(p, ch), nb.heading_update(nb.heading_text(label, s)))
-    client.update_page(t.info()['page'], nb.progress_property(states))
+            try:  # 제목 하나가 지워졌어도 나머지 제목과 '진행'은 계속 고친다
+                client.update_block(_heading_id(p, ch), nb.heading_update(nb.heading_text(label, s)))
+            except Exception as e:
+                log.warning('notion heading update failed', exc_info=True)
+                first_exc = first_exc or e
+    try:
+        client.update_page(t.info()['page'], nb.progress_property(states))
+    except Exception as e:
+        first_exc = first_exc or e
+    if first_exc is not None:
+        raise first_exc
 
 
 def append_version(client, draft, request=''):
@@ -208,7 +217,10 @@ def _notice(host, now, e):
     day = kst_today(now or timezone.now()).isoformat()
     if host is not None and WorkerState.get('marketing_error_notion_read') != day:
         WorkerState.put('marketing_error_notion_read', day)
-        host.notify_admin(f'⚠️ 노션 글 읽기 실패(저장된 글로 보냈어요): {type(e).__name__}: {e}')
+        try:  # 알림이 실패해도 읽기는 저장된 글로 계속한다(텔레그램을 막지 않는다)
+            host.notify_admin(f'⚠️ 노션 글 읽기 실패(저장된 글로 보냈어요): {type(e).__name__}: {e}')
+        except Exception:
+            log.warning('notion read notice failed', exc_info=True)
 
 
 def current(client, proposal, channel, host=None, now=None):

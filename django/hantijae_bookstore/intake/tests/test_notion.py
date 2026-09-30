@@ -135,6 +135,7 @@ class NotionWriteTest(TestCase):
         self.assertEqual((m1, u1.split('/v1')[1], k1['json']['parent']), ('POST', '/databases', {'type': 'page_id', 'page_id': 'parent'}))
         self.assertIn('initial_data_source', k1['json'])
         self.assertEqual((m2, k2['json']['parent']), ('POST', {'type': 'data_source_id', 'data_source_id': 'ds'}))
+        self.assertEqual(k2['timeout'], 10)
         self.assertEqual((m3, u3.split('/v1')[1], k3['timeout']), ('PATCH', '/blocks/box/children', 10))
         self.assertEqual((m4, u4.split('/v1')[1]), ('PATCH', '/blocks/b1'))
         self.assertEqual((m5, u5.split('/v1')[1], k5['json']), ('PATCH', '/pages/p', {'in_trash': True}))

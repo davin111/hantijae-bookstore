@@ -70,10 +70,10 @@ class NotionClient:
                 'initial_data_source': {'properties': properties}}
         return self._call('POST', '/databases', json=body)
 
-    def create_page(self, data_source_id, properties, children=()):
+    def create_page(self, data_source_id, properties, children=(), timeout=10):
         body = {'parent': {'type': 'data_source_id', 'data_source_id': data_source_id},
                 'properties': properties, 'children': list(children)}
-        return self._call('POST', '/pages', json=body)
+        return self._call('POST', '/pages', timeout=timeout, json=body)
 
     def append_children(self, block_id, children, timeout=10):
         return self._call('PATCH', f'/blocks/{block_id}/children', timeout=timeout,
