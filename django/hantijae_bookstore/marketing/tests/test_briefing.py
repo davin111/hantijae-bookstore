@@ -372,6 +372,17 @@ class FitMeasureTest(TestCase):
         self.assertEqual(text.split('\n'), [first, '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 글 없음',
                                            '지난 7일 구글 검색: 노출 120·클릭 8'])
 
+    def test_no_leading_blank_when_first_is_empty(self):
+        self.assertEqual(_fit_measure('', '지난주 공식 채널: 페북 2건', ''), '지난주 공식 채널: 페북 2건')
+        self.assertEqual(_fit_measure('', '', '지난 7일 구글 검색: 노출 3·클릭 1'), '지난 7일 구글 검색: 노출 3·클릭 1')
+
+    def test_channel_line_outranks_search_line(self):
+        first = 'ㄱ' * 545
+        channel = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 글 없음. 반응이 가장 큰 글: 페북 「' + 'ㄴ' * 100 + '」(반응 합계 22)'
+        found = '지난 7일 구글 검색: 노출 120·클릭 8. 많이 찾은 말: ' + 'ㄷ' * 100
+        result = _fit_measure(first, channel, found)
+        self.assertEqual(result.split('\n'), [first, '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 글 없음'])
+
 
 class PromptRulesTest(TestCase):
     """운영진이 고쳐 준 것(2026-09-30, 박강수 영상 초안)과 관리자 결정이 프롬프트에 남아 있는지."""

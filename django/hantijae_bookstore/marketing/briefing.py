@@ -1,6 +1,7 @@
 """주간 브리핑: 후보를 LLM에 한 번 보내 최대 4개를 고르게 하고, 코드로 다시 검증한다."""
 import re
 from datetime import datetime, timedelta
+from itertools import combinations
 
 from django.db import transaction
 from django.db.models import Q
@@ -134,38 +135,20 @@ MEASURE_MAX = 600   # Briefing.measure 칸 길이
 
 
 def _fit_measure(first, *lines):
-    """성과 줄 다음에 공식 채널·검색 줄을 measure 칸에 넣는다. 넘치면 그 줄의 첫 '. ' 뒤(가장 큰 글·많이 찾은 말)를 빼고,
-    그래도 넘치면 그 줄을 뺀다 — 반쯤 잘린 줄을 운영진에게 보이지 않게. 성과 줄만으로 넘치면 그 줄을 자른다."""
-    text_base = first[:MEASURE_MAX]
-    lines_to_add = [l for l in lines if l]
-
-    # Try to add all lines; truncate from the end if needed
-    all_lines = [text_base] + lines_to_add
-    text = '\n'.join(all_lines)
-
-    # If it fits, return
-    if len(text) <= MEASURE_MAX:
-        return text
-
-    # Try truncating lines from the end backward
-    for i in range(len(all_lines) - 1, 0, -1):  # don't truncate first line
-        line = all_lines[i]
-        truncated = line.split('. ', 1)[0]
-        if truncated and len(truncated) < len(line):
-            all_lines[i] = truncated
-            text = '\n'.join(all_lines)
-            if len(text) <= MEASURE_MAX:
-                return text
-
-    # Try dropping lines from the end
-    for i in range(len(all_lines) - 1, 0, -1):
-        all_lines_without = all_lines[:i] + all_lines[i+1:]
-        text = '\n'.join(all_lines_without)
-        if len(text) <= MEASURE_MAX:
-            return text
-
-    # Worst case: just first line
-    return text_base
+    """성과 줄 다음에 공식 채널·검색 줄을 measure 칸에 넣는다(앞 줄일수록 중요). 넘치면 뒤 줄부터 첫 '. ' 뒤(가장 큰 글·많이
+    찾은 말)를 빼고, 그래도 넘치면 뒤 줄부터 뺀다 — 앞 줄을 빼고 뒤 줄을 남기는 일은 없다. 반쯤 잘린 줄·빈 줄은 없다.
+    성과 줄만으로 넘치면 그 줄을 자른다."""
+    first = first[:MEASURE_MAX]
+    lines = [x for x in lines if x]
+    forms = [(x, x.split('. ', 1)[0]) for x in lines]
+    for keep in range(len(lines), -1, -1):                 # 앞에서부터 keep줄만 남긴다
+        for n_short in range(keep + 1):                    # 그중 몇 줄을 짧게
+            for short in combinations(range(keep - 1, -1, -1), n_short):   # 뒤 줄부터 짧게
+                parts = [first] + [forms[i][1] if i in short else forms[i][0] for i in range(keep)]
+                text = '\n'.join(p for p in parts if p)
+                if len(text) <= MEASURE_MAX:
+                    return text
+    return first
 
 
 def measure_line(today, counts=meta.post_counts):
