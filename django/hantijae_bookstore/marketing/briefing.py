@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from intake.llm import complete_json
-from marketing import bnk_sales, candidates, gnews, meta
+from marketing import bnk_sales, candidates, channels, gnews, meta
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM, build_briefing_user
 from marketing.sales import latest
@@ -161,12 +161,14 @@ def measure_line(today, counts=meta.post_counts):
     return ''
 
 
-def build_weekly(llm, today, now, posts, resolve=gnews.original_url):
-    items, dropped = compose(llm, candidates.gather(today, now, posts), today, candidates.social_context(now))
+def build_weekly(llm, today, now, posts, resolve=gnews.original_url, channel_line=channels.week_line):
+    line = channel_line(today)   # 지난주 공식 채널 한 줄: 브리핑 끝(measure)과 LLM '참고' 블록에
+    items, dropped = compose(llm, candidates.gather(today, now, posts), today,
+                             candidates.social_context(now) + ([line] if line else []))
     for cand, *_ in items:  # 방에 보일 링크만(최대 4개): 구글 뉴스 주소는 언론사 원래 주소로, 실패하면 그대로
         if cand.link:
             cand.link = resolve(cand.link)
     briefing = save_briefing(items, today)
-    briefing.measure = measure_line(today)[:300]
+    briefing.measure = '\n'.join(x for x in (measure_line(today), line) if x)[:300]
     briefing.save(update_fields=['measure'])
     return briefing, dropped

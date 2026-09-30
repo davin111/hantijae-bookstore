@@ -169,7 +169,7 @@ def build_briefing_user(candidates, today, context=(), midweek=False):
         '<후보>', json.dumps([c.as_prompt() for c in candidates], ensure_ascii=False, indent=1), '</후보>',
     ]
     if context:
-        lines += ['<참고: 운영진이 최근 개인 SNS에 올린 한티재 소식(후보 아님)>', *context, '</참고>']
+        lines += ['<참고: 운영진 개인 SNS 소식·지난주 공식 채널 현황(후보 아님)>', *context, '</참고>']
     return '\n'.join(lines)
 
 

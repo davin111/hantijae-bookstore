@@ -124,7 +124,7 @@ class SocialCandidateTest(TestCase):
         llm = FakeLLM({'items': []})
         build_weekly(llm, TODAY, NOW, posts=[])
         user = llm.calls[0][1]
-        self.assertIn('<참고: 운영진이 최근 개인 SNS에 올린 한티재 소식(후보 아님)>', user)
+        self.assertIn('<참고: 운영진 개인 SNS 소식·지난주 공식 채널 현황(후보 아님)>', user)
         self.assertIn('2026-09-25 대표님 개인 페이스북: 『농부, 짠한 형』 출간', user)
 
     def test_dated_event_wins_over_press_category(self):

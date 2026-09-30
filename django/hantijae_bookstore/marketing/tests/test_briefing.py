@@ -304,6 +304,17 @@ class BuildWeeklyTest(TestCase):
         p = b.items.get()
         self.assertEqual((len(p.headline), len(p.drafts.get().title)), (300, 300))
 
+    def test_channel_line_goes_to_measure_and_llm_context(self):
+        book = make_book(title='무지개를 변호하다', published=date(2026, 6, 1), isbn='979-11-00000-14-1', author=None)
+        Signal.objects.create(kind=Signal.REVIEW, key='review:c1', book=book, title='읽고', url='https://blog.naver.com/a/1',
+                              happens_on=date(2026, 9, 25), relevant=True, detail={'source': 'naver_blog', 'where': ''})
+        llm = FakeLLM({'items': []})
+        now = datetime(2026, 9, 28, 7, 0, tzinfo=KST)
+        briefing, _ = build_weekly(llm, TODAY, now, posts=[], channel_line=lambda today: '지난주 공식 채널: 페북 2건')
+        self.assertIn('지난주 공식 채널: 페북 2건', briefing.measure)
+        self.assertIn('지난주 공식 채널: 페북 2건', llm.calls[0][1])
+        self.assertIn('<참고: 운영진 개인 SNS 소식·지난주 공식 채널 현황(후보 아님)>', llm.calls[0][1])
+
 
 class PromptRulesTest(TestCase):
     """운영진이 고쳐 준 것(2026-09-30, 박강수 영상 초안)과 관리자 결정이 프롬프트에 남아 있는지."""
