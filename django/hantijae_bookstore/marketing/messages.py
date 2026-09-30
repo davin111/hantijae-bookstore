@@ -6,7 +6,7 @@ from html import escape
 from django.utils import timezone
 
 from intake.messages import CAPTION_LIMIT
-from intake.telegram_api import keyboard
+from intake.telegram_api import keyboard, plain_text
 from marketing.models import Draft
 from marketing.text import clip, tg_len
 from marketing.timeutil import kst_today
@@ -19,6 +19,11 @@ KIT_BULLET = {Draft.BLOG: '네이버 블로그 글', Draft.INSTAGRAM: '인스타
 def h(value):
     """HTML 서식 메시지(텔레그램 parse_mode=HTML)에 넣는 바깥 글자. 책 제목의 <지역서점 …> 같은 글자가 태그로 읽히지 않게."""
     return escape(str(value), quote=False)
+
+
+def plain(html_text):
+    """HTML 허브 글 → 사람이 읽는 글(태그를 벗기고 &lt; 같은 글자를 되돌림). 노션 파란 상자처럼 서식 없이 옮길 때."""
+    return plain_text(html_text)
 
 
 def cb(action, pk):

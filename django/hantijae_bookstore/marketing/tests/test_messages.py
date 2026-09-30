@@ -153,6 +153,12 @@ class MessagesTest(SimpleTestCase):
         self.assertEqual(messages.quote_for({}, '1. 항목 1'), (None, None))
         self.assertEqual(messages.quote_for(msg, '1. 항목'), (None, None))  # 줄 일부는 줄이 아니다
 
+    def test_plain_turns_an_html_hub_into_what_people_read(self):
+        """노션 파란 상자에는 <b>·&lt; 없이 보이는 글 그대로(2026-09-30)."""
+        ps = [SimpleNamespace(id=1, headline='『<지역서점>』 ― 소식 & 이야기', reason='a<b', extra={})]
+        text = messages.plain(messages.briefing_text(date(2026, 9, 28), ps, guide=False))
+        self.assertEqual(text, '이번 주 홍보 제안 (9월 28일 ~ 10월 4일)\n\n1. 『<지역서점>』 ― 소식 & 이야기\na<b')
+
     def test_toasts_pick_the_right_particle(self):
         self.assertEqual(messages.sent_toast(2, draft(1, Draft.INSTAGRAM)), '2번 인스타 글을 보냈어요')
         self.assertEqual(messages.sent_toast(None, draft(1, Draft.LINKS)), '서점 링크 공지를 보냈어요')

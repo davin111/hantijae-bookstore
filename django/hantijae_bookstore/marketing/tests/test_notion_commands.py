@@ -46,3 +46,16 @@ class NotionCommandsTest(TestCase):
         self.assertEqual((b.shown, b.notion['state']), ([ps[0].id, ps[1].id], 'done'))
         markup = self.tg.sent('markup')[0]
         self.assertEqual((markup['message_id'], markup['buttons']['inline_keyboard'][-1][0]['url']), (211, b.notion['url']))
+
+    def test_backfill_page_shows_the_hub_as_people_read_it(self):
+        WorkerState.put(ns.DS, 'ds1')
+        b = Briefing.objects.create(week_start=date(2026, 9, 28), chat_id=-200, message_id=211,
+                                    sent_at=datetime(2026, 9, 30, 11, 9, tzinfo=KST))
+        p = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=make_book(), briefing=b, rank=1, status=Proposal.SHOWN,
+                                    headline='『나는 산속으로 더 깊이 들어간다』 ― 시인 & 독자', reason='이유 <짧게>')
+        Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='글')
+        call_command('marketing_notion_backfill', '--week', '2026-09-28', stdout=StringIO())
+        page = next(iter(self.fake.pages))
+        blue = ''.join(r['text']['content'] for r in self.fake.blocks[self.fake.kids[page][0]]['callout']['rich_text'])
+        self.assertNotIn('<b>', blue)
+        self.assertIn('1. 『나는 산속으로 더 깊이 들어간다』 ― 시인 & 독자\n이유 <짧게>', blue)

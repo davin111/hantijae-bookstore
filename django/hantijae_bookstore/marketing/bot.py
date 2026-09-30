@@ -227,9 +227,9 @@ class Marketing:
         if record:  # 상황판·노션이 같은 항목을 그리게, 보낼 항목 순서를 먼저 적는다
             briefing.shown = [i.id for i in shown]
             briefing.save(update_fields=['shown'])
-            url = self._notion_page(notion_sync.brief_target(
-                briefing, messages.briefing_text(briefing.week_start, shown, briefing.measure, grants=grant_lines,
-                                                 sales=sales_line, guide=False)), chat, now) or url
+            hub = messages.briefing_text(briefing.week_start, shown, briefing.measure, grants=grant_lines,
+                                         sales=sales_line, guide=False)
+            url = self._notion_page(notion_sync.brief_target(briefing, messages.plain(hub)), chat, now) or url
         sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, shown, briefing.measure,
                                                                  grants=grant_lines, sales=sales_line),
                                     buttons=messages.briefing_buttons(briefing, shown, states, url), html=True)
@@ -316,8 +316,8 @@ class Marketing:
             items = [p for p in items if not p.candidate_key.startswith('moment:')]
         if not items:
             return False
-        url = self._notion_page(notion_sync.now_target(items, messages.midweek_text(items, guide=False), kst_today(now)),
-                                chat, now)
+        url = self._notion_page(notion_sync.now_target(items, messages.plain(messages.midweek_text(items, guide=False)),
+                                                       kst_today(now)), chat, now)
         sent = self.tg.send_message(chat, messages.midweek_text(items), html=True,
                                     buttons=messages.midweek_buttons(items, [board.item_state(p) for p in items], url))
         Proposal.objects.filter(pk__in=[p.id for p in items]).update(chat_id=chat, message_id=sent['message_id'],

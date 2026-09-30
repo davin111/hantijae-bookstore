@@ -57,6 +57,35 @@ class BotNotionTest(TestCase):
         blue = next(iter(self.fake.blocks.values()))
         self.assertNotIn(messages.BRIEF_GUIDE, blue['callout']['rich_text'][0]['text']['content'])  # 노션엔 안내 줄 없이
 
+    def blue(self):
+        """페이지 맨 위 파란 상자(검수 방에 보낸 허브 글)의 글."""
+        page = next(iter(self.fake.pages))
+        block = self.fake.blocks[self.fake.kids[page][0]]
+        return ''.join(r['text']['content'] for r in block['callout']['rich_text'])
+
+    def test_room_briefing_page_shows_the_hub_as_people_read_it(self):
+        b, p = self.briefing()
+        Proposal.objects.filter(pk=p.pk).update(headline='『<지역서점>』 ― 소식 & 이야기', reason='이유 <짧게>')
+        self.m().send_briefing(b, DAY)
+        b.refresh_from_db()
+        blue = self.blue()
+        for tag in ('<b>', '</b>', '&lt;', '&gt;', '&amp;'):
+            self.assertNotIn(tag, blue)
+        self.assertTrue(blue.startswith('이번 주 홍보 제안 (10월 5일 ~ 10월 11일)'))
+        self.assertIn('\n\n1. 『<지역서점>』 ― 소식 & 이야기\n이유 <짧게>', blue)
+        self.assertEqual(b.notion['hub_text'], blue)  # 다시 시도할 때도 같은 글
+        self.assertIn('<b>', self.tg.sent('send')[0]['text'])  # 텔레그램은 그대로 서식 글
+
+    def test_room_midweek_page_shows_the_hub_as_people_read_it(self):
+        WorkerState.put('midweek_mode', 'live')
+        p = Proposal.objects.create(kind=Proposal.NOW, book=self.book, headline='『책』 ― 오늘 & 내일', reason='이유', rank=1)
+        Proposal.objects.filter(pk=p.pk).update(created_at=DAY)
+        Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='글')
+        self.assertTrue(self.m().send_midweek(DAY))
+        blue = self.blue()
+        self.assertNotIn('<b>', blue)
+        self.assertEqual(blue, '이번 주에 앞둔 일이 있어 글을 준비해 뒀어요\n\n1. 『책』 ― 오늘 & 내일\n이유')
+
     def test_notion_failure_never_blocks_the_briefing(self):
         b, p = self.briefing()
         self.fake.fail['create_page'] = RuntimeError('노션 오류')

@@ -33,7 +33,8 @@ class Command(BaseCommand):
             if not dry_run:
                 b.save(update_fields=['shown'])
         items = board.shown_items(b)
-        target = notion_sync.brief_target(b, messages.briefing_text(b.week_start, items, b.measure, guide=False))
+        hub = messages.briefing_text(b.week_start, items, b.measure, guide=False)
+        target = notion_sync.brief_target(b, messages.plain(hub))  # 노션 파란 상자는 서식 없이 보이는 글 그대로
         if dry_run:
             self.stdout.write(target.name)
             for _, _, label in target.sections:
