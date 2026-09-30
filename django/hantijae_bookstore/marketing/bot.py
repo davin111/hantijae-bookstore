@@ -13,23 +13,24 @@ from intake.llm import LLMError, complete_json
 from intake.models import TelegramChat, WorkerState
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
-from marketing import messages, midweek, moments, social
+from marketing import grants, messages, midweek, moments, social
 from marketing.hooks import add_hook, upcoming
-from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, Proposal, WatchQuery
+from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, GrantCall, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
 from marketing.text import fix_title_marks, is_acknowledgement, title_key
-from marketing.timeutil import KST, in_quiet_hours, kst_today, week_start
+from marketing.timeutil import KST, in_quiet_hours, kst_now, kst_today, week_start
 from web.blog import fetch_rss, parse_rss
 
 log = logging.getLogger('intake')
-COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch', '/moment')
+COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch', '/moment', '/grant')
 MODES = ('off', 'admin_only', 'live')
 KIT_DAILY_CAP = 2
+REMIND_AT = (9, 30)   # 지원사업 마감 이틀 전 알림을 보내기 시작하는 시각(KST)
 KIT_SEND_MAX_FAILURES = 3  # 이 횟수에 닿으면 관리자에게 알리고 더는 자동으로 시도하지 않는다
 BUILDING = '만들고 있어요. 몇 분 걸려요.'
 USAGE = ('사용법: /mk off|admin_only|live · /mk social on|off · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
          '/hook <MM-DD> <이름> | <책1>, <책2> · /hook list · /quiet <제목 일부> <YYYY-MM-DD> [이유] · /quiet list · '
-         '/watch <이름> · /watch list · /watch off <번호> · /moment')
+         '/watch <이름> · /watch list · /watch off <번호> · /moment · /grant')
 MOMENT_USAGE = ('사용법: /moment off|admin_only|live · /moment midweek off|admin_only|live · /moment now (지금 한 번, 몇 분) · '
                 '/moment list')
 
@@ -102,7 +103,7 @@ class Marketing:
 
     def owns_message(self, chat_id, message_id):
         return any(model.objects.filter(chat_id=chat_id, message_id=message_id).exists()
-                   for model in (DraftMessage, Draft, Proposal, Briefing))
+                   for model in (DraftMessage, Draft, Proposal, Briefing, GrantCall))
 
     @staticmethod
     def blog_posts():
@@ -192,7 +193,9 @@ class Marketing:
             return False
         # 이미 ACTED로 확정된 항목은 메시지에서는 빠지지만(위) 상태는 그대로 둔다(운영진 결정 보존)
         to_skip = [i for i in items if is_quiet(i) and i.status != Proposal.ACTED]
-        sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, shown, briefing.measure),
+        grant_lines = messages.grant_briefing_lines(grants.open_calls(today))
+        sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, shown, briefing.measure,
+                                                                 grants=grant_lines),
                                     buttons=messages.briefing_buttons(briefing, shown))
         if record:
             briefing.chat_id, briefing.message_id, briefing.sent_at, briefing.mode = chat, sent['message_id'], now, self.mode()
@@ -203,6 +206,45 @@ class Marketing:
             Proposal.objects.filter(briefing=briefing, status__in=(Proposal.PROPOSED, Proposal.SHOWN)).update(status=Proposal.SHOWN)
             Proposal.objects.filter(briefing=briefing).update(chat_id=chat)
         return True
+
+    # ---- 지원사업 공고 ----
+    def grant_target(self):
+        """(받는 곳, 검수 방인가). grant_mode live이고 마케팅도 live면 검수 방, off면 없음, 그 밖에는 관리자 1:1 미리보기."""
+        gm = grants.mode()
+        if gm == 'off':
+            return None, False
+        if gm == 'live' and self.mode() == 'live':
+            return self.host.review_chat_id(), True
+        return self.host._chat(TelegramChat.ADMIN), False
+
+    def send_grants(self, now):
+        """매 바퀴. 알릴 공고(검수 방은 하루 한 메시지·최대 3건) + 신청하기로 한 공고의 마감 이틀 전 알림(09:30 뒤).
+        보낸 메시지 수를 돌려준다."""
+        chat, room = self.grant_target()
+        if chat is None or in_quiet_hours(now):
+            return 0
+        today, sent = kst_today(now), 0
+        calls = grants.to_send(today)
+        if not room:
+            fresh = [c for c in calls if c.preview_at is None][:grants.PER_MESSAGE]
+            if fresh:
+                self.tg.send_message(chat, messages.grant_preview_text(fresh))
+                GrantCall.objects.filter(pk__in=[c.pk for c in fresh]).update(preview_at=now)
+                sent += 1
+            return sent
+        if calls and not GrantCall.objects.filter(chat_id=chat, sent_at__gte=self._day_start(now)).exists():
+            calls = calls[:grants.PER_MESSAGE]
+            msg = self.tg.send_message(chat, messages.grant_card_text(calls), buttons=messages.grant_buttons(calls))
+            GrantCall.objects.filter(pk__in=[c.pk for c in calls]).update(
+                state=GrantCall.ANNOUNCED, chat_id=chat, message_id=msg['message_id'], sent_at=now)
+            sent += 1
+        local = kst_now(now)
+        if (local.hour, local.minute) >= REMIND_AT:
+            for call in grants.due_reminders(today):
+                self.tg.send_message(call.chat_id, messages.grant_reminder_text(call), reply_to=call.message_id)
+                GrantCall.objects.filter(pk=call.pk).update(reminded_at=now)
+                sent += 1
+        return sent
 
     def send_midweek(self, now):
         """오늘 만든 주중 제안을 한 메시지로. 보낼 게 없거나 받는 곳이 없거나 조용한 시간이면 False."""
@@ -296,10 +338,23 @@ class Marketing:
         if action == 'sw':
             Proposal.objects.filter(briefing_id=pk).update(status=Proposal.SKIPPED)
             return '이번 주는 넘길게요'
+        if action in ('ga', 'gp'):
+            call, answer = grants.decide(pk, action == 'ga', actor, timezone.now())
+            if call and call.message_id:
+                calls = grants.card_calls(call.chat_id, call.message_id)
+                self.tg.edit_text(call.chat_id, call.message_id, messages.grant_card_text(calls),
+                                  buttons=messages.grant_buttons(calls))
+            return answer
         return ''
 
     # ---- 답장으로 고치기 ----
     def handle_reply(self, chat_id, reply_id, msg, text, actor):
+        call = GrantCall.objects.filter(chat_id=chat_id, message_id=reply_id).first()
+        if call is not None:  # 지원사업 카드에 단 답장: 관리자에게 전하고 짧게만 답한다
+            if text and not is_acknowledgement(text):
+                self.host.notify_admin(f'📝 지원사업 카드 답장 — {call.title}\n{actor}: {text}')
+                self.tg.send_message(chat_id, '메모 남겼어요.', reply_to=msg['message_id'])
+            return
         draft = self._draft_for_message(chat_id, reply_id)
         if draft is None:  # 카드·브리핑에 단 답장: 어느 글을 고칠지 모른다
             if not (text and is_acknowledgement(text)):  # 인사 답장이면 안내도 안 보낸다 — 운영진끼리 맞장구에 끼어들지 않는다
@@ -327,7 +382,8 @@ class Marketing:
     def admin_command(self, chat_id, cmd, arg, now=None):
         now = now or timezone.now()
         handler = {'/mk': self._mk, '/brief': self._brief, '/kit': self._kit, '/hook': self._hook,
-                   '/quiet': self._quiet, '/watch': self._watch, '/moment': self._moment}[cmd]
+                   '/quiet': self._quiet, '/watch': self._watch, '/moment': self._moment,
+                   '/grant': self._grant}[cmd]
         self.tg.send_message(chat_id, handler(chat_id, (arg or '').strip(), now, kst_today(now)) or '완료')
 
     def _mk(self, chat_id, arg, now, today):
@@ -361,6 +417,18 @@ class Marketing:
             opens = moments.open_moments(today, now)[:15]
             return '\n'.join(moments.open_line(s) for s in opens) or '열린 계기가 없어요'
         return moments.status_text(today, now) + '\n' + MOMENT_USAGE
+
+    def _grant(self, chat_id, arg, now, today):
+        if arg in grants.MODES:
+            WorkerState.put('grant_mode', arg)
+            return f'grant_mode={arg}'
+        if arg == 'now':
+            self.tg.send_message(chat_id, BUILDING)
+            report = grants.scan(self.llm, today)
+            WorkerState.put('grant_last_scan', today.isoformat())
+            sent = self.send_grants(now)
+            return '\n'.join(x for x in (f'새 글 {report.new}건', grants.digest(report), f'보낸 메시지 {sent}개') if x)
+        return grants.status_text(today) + '\n' + grants.USAGE
 
     def _brief(self, chat_id, arg, now, today):
         b = Briefing.objects.filter(week_start=week_start(today)).first()
