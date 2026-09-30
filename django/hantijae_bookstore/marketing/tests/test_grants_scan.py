@@ -115,6 +115,11 @@ class ScanTest(TestCase):
         grants.scan(llm, TODAY, get_text=get, get_bytes=no_bytes, sleep=no_sleep)
         self.assertEqual((len(llm.calls), GrantCall.objects.filter(state=GrantCall.PENDING).count()), (3, 2))
 
+    def test_duplicate_row_in_list_is_recorded_once(self):
+        dup = LIST.replace('</ul>', row('2167', '2026년 제3차 전자책 제작 지원 사업 공고', '26.09.29.') + '</ul>')
+        report = self.scan(FakeLLM(VERDICT), p=pages(**{GRANT_LIST: dup}))
+        self.assertEqual((report.new, GrantCall.objects.filter(key='kpipa:2167').count()), (3, 1))
+
     def test_empty_list_raises(self):
         with self.assertRaises(RuntimeError):
             grants.scan(FakeLLM(VERDICT), TODAY, get_text=lambda url: '<ul></ul>', get_bytes=no_bytes, sleep=no_sleep)

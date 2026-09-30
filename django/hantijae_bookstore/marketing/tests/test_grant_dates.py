@@ -49,6 +49,16 @@ class VerifyTest(SimpleTestCase):
     def test_more_than_120_days_after_posting_is_rejected(self):
         self.assertIsNone(verify(raw('2026-10-12'), THIRD_EBOOK, date(2026, 5, 1))['apply_until'])
 
+    def test_program_period_end_is_rejected(self):
+        # 사업 기간 끝(게시일 뒤)을 마감으로 잘못 뽑으면 실제 마감 뒤에 알림이 간다(최종 검토 지적)
+        text = '신청 기간 2026. 10. 2. ~ 10. 12. 16시 / 사업 기간 협약일 ~ 2026. 11. 30.'
+        got = verify(raw('2026-11-30', '2026-10-02'), text, date(2026, 9, 29))
+        self.assertEqual((got['apply_until'], got['date_checked']), (None, False))
+
+    def test_long_window_is_rejected_even_without_start(self):
+        text = '사업 기간 ~ 2026. 12. 20. 까지'
+        self.assertIsNone(verify(raw('2026-12-20'), text, date(2026, 10, 1))['apply_until'])
+
     def test_bad_values(self):
         for value in ('', 'garbage', '2026-13-01', '2026-02-30', None):
             with self.subTest(value=value):

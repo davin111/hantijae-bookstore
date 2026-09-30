@@ -99,6 +99,7 @@ class GrantSendTest(Base):
         sends = self.tg.sent('send')
         self.assertEqual([(s['chat'], s['reply_to']) for s in sends], [(GROUP, 777)])
         self.assertTrue(sends[0]['text'].startswith('⏰ 모레 10월 12일(월) 16시에 신청이 마감돼요'))
+        self.assertEqual(GrantCall.objects.get().reminder_message_id, 1001)
 
 
 @mock.patch('marketing.bot.timezone.now', return_value=NOW)
@@ -138,6 +139,18 @@ class GrantButtonTest(Base):
         self.assertEqual(len(self.host.notes), 1)
 
 
+class GrantReminderReplyTest(Base):
+    def test_reply_to_reminder_goes_to_admin_and_thanks_stay_quiet(self):
+        make_call(state=GrantCall.APPLYING, chat_id=GROUP, message_id=777, reminder_message_id=888, sent_at=NOW)
+        m = self.m()
+        self.assertTrue(m.owns_message(GROUP, 888))
+        m.handle_reply(GROUP, 888, {'message_id': 11}, '오늘 신청서 냈어요', '운영진A')
+        self.assertEqual(self.host.notes, ['📝 지원사업 카드 답장 — 2026년 제3차 전자책 제작 지원 사업 공고\n'
+                                           '운영진A: 오늘 신청서 냈어요'])
+        m.handle_reply(GROUP, 888, {'message_id': 12}, '고마워요', '운영진A')
+        self.assertEqual([s['reply_to'] for s in self.tg.sent('send')], [11])
+
+
 class GrantCommandTest(Base):
     def test_mode_switch_and_status(self):
         m = self.m()
@@ -163,7 +176,23 @@ class GrantCommandTest(Base):
 
 @override_settings(SITE_URL='https://hantijae-bookstore.com')
 class GrantBriefingTest(Base):
+    def briefing(self, week=date(2026, 10, 5)):
+        b = Briefing.objects.create(week_start=week)
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, briefing=b, headline='항목', reason='이유', rank=1)
+        return b
+
+    def test_grant_block_is_left_out_when_off_or_failing(self):
+        make_call(state=GrantCall.APPLYING, chat_id=GROUP, message_id=555, sent_at=NOW)
+        when = datetime(2026, 10, 5, 9, 30, tzinfo=KST)
+        self.assertTrue(self.m().send_briefing(self.briefing(), when))   # grant_mode off
+        WorkerState.put('grant_mode', 'live')
+        with mock.patch('marketing.bot.grants.open_calls', side_effect=RuntimeError('db')), \
+                self.assertLogs('intake', 'WARNING'):
+            self.assertTrue(self.m().send_briefing(self.briefing(date(2026, 10, 12)), when))
+        self.assertTrue(all('지원사업' not in s['text'] for s in self.tg.sent('send')))
+
     def test_briefing_message_lists_open_calls(self):
+        WorkerState.put('grant_mode', 'live')
         make_call(state=GrantCall.APPLYING, chat_id=GROUP, message_id=555, sent_at=NOW)
         b = Briefing.objects.create(week_start=date(2026, 10, 5))
         Proposal.objects.create(kind=Proposal.BRIEF_ITEM, briefing=b, headline='항목', reason='이유', rank=1)

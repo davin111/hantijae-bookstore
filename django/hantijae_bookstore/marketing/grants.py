@@ -53,6 +53,7 @@ def _record_new(posts, today):
         else:
             state = GrantCall.PENDING
         GrantCall.objects.create(key=p.key, title=p.title[:300], url=p.url, posted_on=p.posted_on, state=state)
+        known.add(p.key)   # 목록에 같은 글이 두 번 보여도(고정 글 등) 한 번만 적는다
         new += 1
     return new, lines
 

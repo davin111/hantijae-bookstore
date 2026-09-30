@@ -15,8 +15,9 @@ CATEGORY = '[사업공고]'
 EXCLUDE = ('보급 신청', '웹소설', '웹툰', '서점', '지자체', '교육생', '수강생', '교육 참가자', '인력', '코디네이터',
            '실태조사', '간담회', '선정위원', '심사위원', '독서경영', '그림책', '아동', '기술개발', '취업', 'Call for')
 MAX_TEXT = 12000   # LLM에 보낼 본문 + 공고문 글자 수
-_ROW = re.compile(r"href='https://www\.kpipa\.or\.kr/p/g1_2/(\d+)[^']*' class='list-subject'>(.*?)</a>"
-                  r".*?<div class=\"fz-date\">(\d{2})\.(\d{2})\.(\d{2})\.</div>", re.S)
+# 날짜 칸은 같은 줄 안에서만 찾는다: 오늘 글처럼 날짜 대신 시각이 보이는 줄이 다음 줄의 날짜를 가져가지 않게
+_ROW = re.compile(r"href='https://www\.kpipa\.or\.kr/p/g1_2/(\d+)[^']*' class='list-subject'>((?:(?!</a>).)*)</a>"
+                  r"(?:(?!class='list-subject').)*?<div class=\"fz-date\">(\d{2})\.(\d{2})\.(\d{2})\.</div>", re.S)
 _TITLE = re.compile(r'<title>(.*?)</title>', re.S)
 _BODY = re.compile(r'<div id="bo_v_con">(.*?)<!-- } 본문 내용 끝 -->', re.S)
 

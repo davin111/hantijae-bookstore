@@ -132,6 +132,11 @@ class ListTest(SimpleTestCase):
                           ('2119', '<지역서점 확인 절차> 안내', date(2026, 7, 13))])
         self.assertEqual((posts[0].key, posts[0].url), ('kpipa:2167', 'https://www.kpipa.or.kr/p/g1_2/2167'))
 
+    def test_row_without_date_is_skipped_not_merged_with_next_row(self):
+        # 오늘 올린 글은 날짜 대신 시각이 보일 수 있다 → 그 줄은 건너뛰고(다음 날 다시 읽힘) 다음 줄은 제 날짜로
+        page = row('2170', '2026년 제4차 전자책 제작 지원 사업 공고', '14:32') + row('2167', '제3차 공고', '26.07.29.')
+        self.assertEqual([(p.no, p.posted_on) for p in grant_posts(page)], [('2167', date(2026, 7, 29))])
+
     def test_exclusion_rules_keep_publisher_programs(self):
         self.assertEqual([t for t in RECENT_TITLES if not is_excluded(t)], KEPT)
 

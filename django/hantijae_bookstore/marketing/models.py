@@ -255,4 +255,5 @@ class GrantCall(models.Model):
     decided_by = models.CharField(max_length=100, blank=True)
     decided_at = models.DateTimeField(null=True, blank=True)
     reminded_at = models.DateTimeField(null=True, blank=True, help_text='마감 이틀 전 알림을 보낸 시각')
+    reminder_message_id = models.BigIntegerField(null=True, blank=True, help_text='그 알림 메시지(답장을 받으려고)')
     created_at = models.DateTimeField(auto_now_add=True)

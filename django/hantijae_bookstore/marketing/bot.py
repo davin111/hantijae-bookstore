@@ -5,6 +5,7 @@ import re
 from datetime import date, datetime
 from types import SimpleNamespace
 
+from django.db.models import Q
 from django.utils import timezone
 from PIL import Image
 
@@ -102,8 +103,9 @@ class Marketing:
         return None
 
     def owns_message(self, chat_id, message_id):
-        return any(model.objects.filter(chat_id=chat_id, message_id=message_id).exists()
-                   for model in (DraftMessage, Draft, Proposal, Briefing, GrantCall))
+        return (any(model.objects.filter(chat_id=chat_id, message_id=message_id).exists()
+                    for model in (DraftMessage, Draft, Proposal, Briefing, GrantCall))
+                or GrantCall.objects.filter(chat_id=chat_id, reminder_message_id=message_id).exists())
 
     @staticmethod
     def blog_posts():
@@ -193,7 +195,7 @@ class Marketing:
             return False
         # 이미 ACTED로 확정된 항목은 메시지에서는 빠지지만(위) 상태는 그대로 둔다(운영진 결정 보존)
         to_skip = [i for i in items if is_quiet(i) and i.status != Proposal.ACTED]
-        grant_lines = messages.grant_briefing_lines(grants.open_calls(today))
+        grant_lines = self._grant_briefing_lines(today)
         sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, shown, briefing.measure,
                                                                  grants=grant_lines),
                                     buttons=messages.briefing_buttons(briefing, shown))
@@ -208,6 +210,17 @@ class Marketing:
         return True
 
     # ---- 지원사업 공고 ----
+    @staticmethod
+    def _grant_briefing_lines(today):
+        """월요 브리핑에 붙일 열린 공고 줄. 꺼져 있으면 없고, 실패해도 브리핑은 나가게 비운다."""
+        if grants.mode() == 'off':
+            return []
+        try:
+            return messages.grant_briefing_lines(grants.open_calls(today))
+        except Exception:
+            log.warning('grant briefing lines failed', exc_info=True)
+            return []
+
     def grant_target(self):
         """(받는 곳, 검수 방인가). grant_mode live이고 마케팅도 live면 검수 방, off면 없음, 그 밖에는 관리자 1:1 미리보기."""
         gm = grants.mode()
@@ -241,8 +254,8 @@ class Marketing:
         local = kst_now(now)
         if (local.hour, local.minute) >= REMIND_AT:
             for call in grants.due_reminders(today):
-                self.tg.send_message(call.chat_id, messages.grant_reminder_text(call), reply_to=call.message_id)
-                GrantCall.objects.filter(pk=call.pk).update(reminded_at=now)
+                msg = self.tg.send_message(call.chat_id, messages.grant_reminder_text(call), reply_to=call.message_id)
+                GrantCall.objects.filter(pk=call.pk).update(reminded_at=now, reminder_message_id=msg['message_id'])
                 sent += 1
         return sent
 
@@ -349,8 +362,8 @@ class Marketing:
 
     # ---- 답장으로 고치기 ----
     def handle_reply(self, chat_id, reply_id, msg, text, actor):
-        call = GrantCall.objects.filter(chat_id=chat_id, message_id=reply_id).first()
-        if call is not None:  # 지원사업 카드에 단 답장: 관리자에게 전하고 짧게만 답한다
+        call = GrantCall.objects.filter(Q(message_id=reply_id) | Q(reminder_message_id=reply_id), chat_id=chat_id).first()
+        if call is not None:  # 지원사업 카드·마감 알림에 단 답장: 관리자에게 전하고 짧게만 답한다
             if text and not is_acknowledgement(text):
                 self.host.notify_admin(f'📝 지원사업 카드 답장 — {call.title}\n{actor}: {text}')
                 self.tg.send_message(chat_id, '메모 남겼어요.', reply_to=msg['message_id'])

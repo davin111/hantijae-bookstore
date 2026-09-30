@@ -3,7 +3,8 @@
 import re
 from datetime import date, timedelta
 
-MAX_DAYS = 120      # 게시일에서 마감까지 이보다 길면 신청 기간이 아닌 날짜(사업·발행 기간)로 본다
+MAX_DAYS = 60       # 게시일에서 마감까지 이보다 길면 신청 기간이 아닌 날짜(사업·발행 기간)로 본다(실제 7~18일)
+MAX_SPAN = 45       # 신청 시작~마감이 이보다 길면 사업·제작 기간 끝을 마감으로 잘못 읽은 것으로 본다
 TIME_WINDOW = 30    # 마감 날짜 뒤 이 글자 수 안에 시각 숫자가 있어야 시각을 믿는다
 _ISO = re.compile(r'\s*\d{4}-(\d{1,2})-(\d{1,2})\s*')
 _CLOCK = re.compile(r'\s*(\d{1,2})(?::(\d{2}))?\s*')
@@ -55,5 +56,7 @@ def verify(raw, text, posted_on):
     start = _checked(raw.get('apply_from'), text, posted_on)
     if start and until and start > until:
         start = None
+    if start and until and (until - start).days > MAX_SPAN:
+        until = None
     return {'apply_from': start, 'apply_until': until,
             'until_time': _clock(raw.get('until_time'), until, text) if until else '', 'date_checked': until is not None}
