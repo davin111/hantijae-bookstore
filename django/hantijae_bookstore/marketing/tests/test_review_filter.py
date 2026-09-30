@@ -4,7 +4,7 @@ from django.test import TestCase
 
 from books.models import Author, BookAuthor
 from marketing.review_filter import excluded, mentions_book, queries, terms
-from marketing.review_search import Post
+from marketing.review_search import Post, parse_naver
 from marketing.tests.fakes import make_book
 
 
@@ -56,3 +56,10 @@ class FilterTest(TestCase):
         self.assertEqual(queries(terms(book)), ['"퀴어 디플로머시"', '"퀴어 디플로머시" 더글러스 재노프'])
         lonely = make_book(title='지은이 없는 책', published=date(2020, 1, 1), isbn='979-11-00000-05-9', author=None)
         self.assertEqual(queries(terms(lonely)), ['"지은이 없는 책"'])
+
+    def test_escaped_brackets_from_the_api_survive_cleaning(self):
+        """실제 API는 글 속 꺾쇠를 &lt;…&gt;로 보낸다 — clean()이 태그를 먼저 지우고 나중에 풀어서 살아남는다."""
+        [p] = parse_naver('naver_cafe', {'items': [{'title': '2023년 10월 모임 후기', 'link': 'https://cafe.naver.com/c/1',
+                                                    'description': '부모모임 &lt;커밍아웃 스토리&gt; 읽기', 'cafename': 'x'}]})
+        self.assertEqual(p.snippet, '부모모임 <커밍아웃 스토리> 읽기')
+        self.assertTrue(mentions_book(p, self.coming))
