@@ -1,6 +1,9 @@
 from datetime import date
+from io import StringIO
 from types import SimpleNamespace
+from unittest import mock
 
+from django.core.management import call_command
 from django.test import TestCase
 
 from marketing import mentions
@@ -113,3 +116,27 @@ class MentionsTest(TestCase):
         report = mentions.run(deps, TODAY, self.notes.append, books=[self.mu], cfg={},
                               get_bytes=lambda url: 1 / 0, get_json=lambda url, headers=None: 1 / 0, sleep=no_sleep)
         self.assertEqual((report.found, report.failed, self.notes), (0, [], []))
+
+
+class CommandTest(TestCase):
+    def test_dry_run_rolls_back_and_prints(self):
+        from marketing import reviews
+        from marketing.review_filter import terms
+        from marketing.review_search import Post
+        book = make_book(title='무궁화호를 위하여', subtitle='', published=date(2026, 3, 16), isbn='979-11-00000-16-1',
+                         author='하승우')
+
+        def fake_scan(today, books=None, **kw):
+            Signal.objects.create(kind='review', key='review:x', book=book, title='기준선')
+            post = Post('youtube', 'https://www.youtube.com/watch?v=V1', '[북토크] 무궁화호를 위하여', '하승우', date(2026, 9, 25))
+            return reviews.Report(books=1, found=1, baseline=1), [(terms(book), post, 'review:y')]
+
+        out = StringIO()
+        with mock.patch('marketing.mentions.scan', side_effect=fake_scan), \
+                mock.patch('intake.deps.build_deps', return_value=SimpleNamespace(llm=FakeLLM(REVIEW))):
+            call_command('marketing_scan_web', '--dry-run', stdout=out)
+        text = out.getvalue()
+        self.assertIn('새 글 1건(서평 1건), 기준선 1건, 읽지 못한 곳 없음', text)
+        self.assertIn('『무궁화호를 위하여』 [유튜브] [북토크] 무궁화호를 위하여 | 2026-09-25 | review 책 이야기', text)
+        self.assertIn('(dry-run: 기록하지 않았어요)', text)
+        self.assertEqual(Signal.objects.count(), 0)
