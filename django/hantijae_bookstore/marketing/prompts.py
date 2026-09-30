@@ -68,6 +68,14 @@ NARROW_SYSTEM = f"""당신은 구글 뉴스에서 한티재 저자의 소식을 
 JSON 객체 하나만 출력하세요:
 {{"items": [{{"id": 번호, "words": ["가수", "노래"]}}]}}"""
 
+REVIEW_JUDGE_SYSTEM = f"""당신은 블로그·카페 글 목록을 보고 한티재 책의 독자 서평인지 판정하는 도우미입니다. {NO_WEB} 글은 쓰지 않습니다.
+글마다 판정합니다(글의 제목과 앞부분만 보입니다):
+- verdict: review(그 책을 읽은 사람의 감상·서평·독서 모임 후기·북토크 후기) | promo(서점·출판사·펀딩의 판매·이벤트 안내, 책 소개를 옮겨 붙인 글, 신간·추천 목록) | unrelated(같은 말이 들어 있을 뿐 그 책 이야기가 아닌 글)
+- reason: 판단 근거 한 줄(쉬운 말). 글쓴이의 이름·아이디는 옮기지 않습니다.
+애매하면 unrelated로 둡니다.
+JSON 객체 하나만 출력하세요:
+{{"items": [{{"id": 글 번호, "verdict": "review", "reason": "한 줄"}}]}}"""
+
 SOCIAL_JUDGE_SYSTEM = f"""당신은 도서출판 한티재 운영진(편집장·대표)이 개인 SNS에 올린 글을 보고, 한티재의 책·저자·행사·펀딩과 직접 관련 있는지 판정하는 도우미입니다. {NO_WEB} 글은 쓰지 않습니다.
 글마다 판정합니다:
 - relevant: 한티재 책(아래 목록에 있거나 한티재에서 곧 나올 책), 한티재 저자, 한티재가 열거나 함께하는 행사, 펀딩, 한티재 책의 서평·기사와 직접 닿으면 true. 저자의 일상 글을 공유했더라도 한티재 책이나 활동 이야기가 없으면 false.
@@ -186,6 +194,15 @@ def build_narrow_user(rows):
         if intro:
             lines.append(f'    책 소개: {intro}')
     lines.append('</사람>')
+    return '\n'.join(lines)
+
+
+def build_review_user(rows):
+    """rows: (번호, 책 줄, 출처 이름, 글 제목, 앞부분, 날짜 또는 None)"""
+    lines = ['<글>']
+    for i, book_line, where, title, snippet, day in rows:
+        lines.append(f'{i}. 한티재 책: {book_line} / [{where}] {title} ― {snippet[:200]} ({day or "날짜 모름"})')
+    lines.append('</글>')
     return '\n'.join(lines)
 
 
