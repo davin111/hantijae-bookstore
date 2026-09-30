@@ -75,7 +75,7 @@ class TelegramAPI:
         try:
             return self._send_text(chat_id, text, reply_to, buttons, html, quote, quote_entities)
         except TelegramError as e:
-            if not (quote and 'QUOTE' in str(e)):
+            if not (quote and 'quote' in str(e).lower()):  # 오류 글의 대소문자는 믿지 않는다
                 raise
             log.warning('telegram quote rejected, sending without quote: %s', e)
         return self._send_text(chat_id, text, reply_to, buttons, html)

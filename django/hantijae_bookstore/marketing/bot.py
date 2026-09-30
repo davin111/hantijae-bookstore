@@ -432,6 +432,8 @@ class Marketing:
             p = Proposal.objects.filter(pk=pk, kind=Proposal.KIT).first()
             if p:
                 Proposal.objects.filter(pk=pk).exclude(status=Proposal.ACTED).update(status=Proposal.SKIPPED)
+                # 한 채널을 이미 올린 묶음(ACTED)도 손대지 않은 채널은 '넘김'으로 보이게 — 올린 판은 그대로
+                Draft.objects.filter(proposal_id=pk, status=Draft.DRAFT).update(status=Draft.SKIPPED)
                 self._after_status(p)
             return '이번엔 넘길게요'
         if action == 'sn':
@@ -487,9 +489,12 @@ class Marketing:
                                    title=fix_title_marks(str(out.get('title') or '').strip())[:300],
                                    body=fix_title_marks(str(out.get('body') or '').strip()) or base.body,
                                    version=base.version + 1, parent=base, origin=Draft.REWRITE, extra=base.extra)
-        # '고치고 있어요'를 '고쳤어요: …'로 고쳐 써 방에 메시지가 하나만 늘게 하고, 새 글은 본문만
-        self.tg.edit_text(chat_id, working['message_id'], messages.rewrite_done(str(out.get('note') or '').strip()))
+        # 새 글(본문만)을 먼저 보내고, '고치고 있어요'를 '고쳤어요: …'로 고쳐 써 방에 메시지가 하나만 늘게 한다
         self._send_draft(new, chat_id, reply_to=msg['message_id'])
+        try:  # 고쳐 쓰기가 안 돼도(메시지가 지워짐 등) 새 글은 이미 갔다
+            self.tg.edit_text(chat_id, working['message_id'], messages.rewrite_done(str(out.get('note') or '').strip()))
+        except Exception:
+            log.warning('marketing rewrite notice edit failed', exc_info=True)
         client = self._notion()
         if client is not None:
             try:  # 고치기는 어차피 몇 분 걸려 바로 덧붙인다(버튼 응답을 붙잡지 않는다)

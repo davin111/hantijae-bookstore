@@ -721,6 +721,18 @@ class HubFlowTest(TestCase):
         self.assertEqual(list(Proposal.objects.filter(kind=Proposal.NOW).order_by('rank').values_list('status', flat=True)),
                          [Proposal.ACTED, Proposal.SKIPPED])
 
+    def test_skip_kit_after_one_channel_was_posted_shows_the_other_as_skipped(self):
+        p = kit(self.book)
+        Proposal.objects.filter(pk=p.pk).update(status=Proposal.ACTED, chat_id=GROUP, message_id=555)
+        p.drafts.filter(channel=Draft.INSTAGRAM).update(status=Draft.POSTED)
+        blog = Draft.objects.create(proposal=p, channel=Draft.BLOG, title='제목', body='블로그 본문')
+        self.m().handle_callback(f'mk:sk:{p.id}', GROUP, hub_cb(555), 'x')
+        p.refresh_from_db()
+        blog.refresh_from_db()
+        self.assertEqual((p.status, blog.status), (Proposal.ACTED, Draft.SKIPPED))  # 올린 제안은 그대로
+        self.assertEqual(p.drafts.get(channel=Draft.INSTAGRAM).status, Draft.POSTED)
+        self.assertEqual(self.labels(self.tg.sent('markup')[0])[:2], ['네이버 블로그 넘김', '인스타 ✅ 올림'])
+
     def test_later_skips_every_open_version_of_that_writing(self):
         p = kit(self.book)
         first = p.drafts.get(channel=Draft.INSTAGRAM)
@@ -755,6 +767,17 @@ class HubFlowTest(TestCase):
         self.assertEqual((working['text'], new['text'], new['reply_to']), (messages.WORKING, '짧아진 인스타 글', 9))
         edit = self.tg.sent('edit')[0]
         self.assertEqual((edit['message_id'], edit['text']), (1001, '고쳤어요: 첫 줄을 줄였어요'))
+        self.assertEqual([c['kind'] for c in self.tg.calls][:3], ['send', 'send', 'edit'])  # 새 글을 먼저 보낸다
+
+    def test_rewrite_sends_the_new_text_even_when_the_working_message_cannot_be_edited(self):
+        d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)
+        Draft.objects.filter(pk=d.pk).update(chat_id=GROUP, message_id=777)
+        self.tg.edit_text = mock.Mock(side_effect=RuntimeError('message to edit not found'))
+        with self.assertLogs('intake', 'WARNING'):
+            self.m({'title': '', 'body': '짧아진 인스타 글', 'note': ''}).handle_reply(
+                GROUP, 777, {'message_id': 9}, '짧게요', 'x')
+        self.assertEqual(self.tg.sent('send')[-1]['text'], '짧아진 인스타 글')
+        self.tg.edit_text.assert_called_once()
 
     def test_rewrite_failure_edits_the_working_message(self):
         d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)

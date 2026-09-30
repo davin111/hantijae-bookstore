@@ -91,10 +91,18 @@ class TelegramAPIQuoteTest(SimpleTestCase):
     def test_rejected_quote_is_sent_again_without_quote(self):
         s = _answers({'ok': False, 'description': 'Bad Request: QUOTE_TEXT_INVALID'},
                      {'ok': True, 'result': {'message_id': 8}})
-        sent = TelegramAPI('T', session=s).send_message(1, '글', reply_to=5, quote='9. 없는 줄')
+        with self.assertLogs('intake', 'WARNING'):
+            sent = TelegramAPI('T', session=s).send_message(1, '글', reply_to=5, quote='9. 없는 줄')
         self.assertEqual(sent['message_id'], 8)
         self.assertEqual(s.post.call_args.kwargs['json']['reply_parameters'],
                          {'message_id': 5, 'allow_sending_without_reply': True})
+
+    def test_quote_rejection_is_recognized_in_any_case(self):
+        s = _answers({'ok': False, 'description': 'Bad Request: quote_text_invalid'},
+                     {'ok': True, 'result': {'message_id': 8}})
+        with self.assertLogs('intake', 'WARNING'):
+            sent = TelegramAPI('T', session=s).send_message(1, '글', reply_to=5, quote='9. 없는 줄')
+        self.assertEqual((sent['message_id'], s.post.call_count), (8, 2))
 
     def test_other_errors_are_not_retried(self):
         s = _answers({'ok': False, 'description': 'Forbidden: bot was kicked from the group chat'})

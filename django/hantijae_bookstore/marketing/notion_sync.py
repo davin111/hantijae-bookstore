@@ -151,7 +151,8 @@ def ensure_page(client, t, now):
     try:
         states = [_state(p, ch) for p, ch, _ in t.sections]
         sections = [(nb.heading_text(label, s), _memo(t.kind, p, ch)) for (p, ch, label), s in zip(t.sections, states)]
-        page = client.create_page(WorkerState.get(DS), nb.page_properties(t.name, KIND_LABEL[t.kind], t.day, states),
+        page = client.create_page(WorkerState.get(DS),
+                                  nb.page_properties(t.name, KIND_LABEL[t.kind], t.day, _progress_states(t, states)),
                                   nb.page_blocks(t.hub_text, sections, t.caution))
         page_id = page['id']
         headings = [b for b in client.children(page_id, timeout=READ_TIMEOUT) if b.get('type') == 'heading_3']
@@ -172,6 +173,11 @@ def ensure_page(client, t, now):
         t.put(page='', url='', state='pending', tries=info.get('tries', 0) + 1, last_try=now.isoformat(),
               since=info.get('since') or now.isoformat(), hub_text=t.hub_text)
         raise
+
+
+def _progress_states(t, states):
+    """'진행' 칸에 셀 상태: [올렸어요]가 있는 글만(신간 묶음의 서점 링크 공지·짧은 소개는 올림이 될 수 없다)."""
+    return [s for (_, ch, _), s in zip(t.sections, states) if ch not in messages.NO_POST_BUTTON]
 
 
 def refresh(client, t):
@@ -195,7 +201,8 @@ def refresh(client, t):
             log.warning('notion heading update failed', exc_info=True)
             first_exc = first_exc or e
     try:
-        client.update_page(t.info()['page'], nb.progress_property(states), timeout=WRITE_TIMEOUT)
+        client.update_page(t.info()['page'], nb.progress_property(_progress_states(t, states)),
+                           timeout=WRITE_TIMEOUT)
     except Exception as e:
         log.warning('notion progress update failed (%s)', t.name, exc_info=True)
         first_exc = first_exc or e
@@ -255,8 +262,9 @@ def mark_dirty(proposal):
 
 def _needs_append(d):
     """최신 판에 📝 상자가 없고 이전 판에는 있다 = 텔레그램 고치기 뒤 노션 덧붙이기가 빠졌다."""
-    return (d is not None and not (d.notion or {}).get('box')
-            and any((x.notion or {}).get('box') for x in Draft.objects.filter(proposal_id=d.proposal_id, channel=d.channel)))
+    if d is None or (d.notion or {}).get('box'):
+        return False
+    return any((x.notion or {}).get('box') for x in Draft.objects.filter(proposal_id=d.proposal_id, channel=d.channel))
 
 
 def current(client, proposal, channel, host=None, now=None):
@@ -308,11 +316,20 @@ def retry_pending(host, tg, now):
     done, first_exc = 0, None
     for t in pending_targets():
         info = t.info()
-        if info.get('last_try') and now - datetime.fromisoformat(info['last_try']) < RETRY_EVERY:
+        try:  # 날짜가 망가진 기록 하나 때문에 다른 허브를 못 하는 일이 없게
+            waited = now - datetime.fromisoformat(info.get('since') or now.isoformat())
+            too_soon = bool(info.get('last_try')) and now - datetime.fromisoformat(info['last_try']) < RETRY_EVERY
+        except (TypeError, ValueError):
+            log.warning('notion pending %s: broken date', t.name, exc_info=True)
             continue
-        if now - datetime.fromisoformat(info.get('since') or now.isoformat()) > GIVE_UP:
+        if too_soon:
+            continue
+        if waited > GIVE_UP:
             t.put(state='failed')
-            host.notify_admin(f'⚠️ 노션 페이지를 7일 동안 만들지 못해 멈췄어요: {t.name}')
+            try:
+                host.notify_admin(f'⚠️ 노션 페이지를 7일 동안 만들지 못해 멈췄어요: {t.name}')
+            except Exception:
+                log.warning('notion give-up notice failed (%s)', t.name, exc_info=True)
             continue
         try:
             ensure_page(client, t, now)
@@ -320,7 +337,10 @@ def retry_pending(host, tg, now):
             first_exc = first_exc or e
             continue
         done += 1
-        board.refresh(tg, t.hub())
+        try:  # 텔레그램 허브 하나를 못 고쳐도 다른 허브는 계속한다(노션 버튼은 다음 상황판 갱신 때 붙는다)
+            board.refresh(tg, t.hub())
+        except Exception:
+            log.warning('notion hub button refresh failed (%s)', t.name, exc_info=True)
     if first_exc is not None:
         raise first_exc
     return done

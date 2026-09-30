@@ -107,8 +107,11 @@ def places_text(draft):
     return clip('\n'.join(lines), TEXT_LIMIT)
 
 
+NO_POST_BUTTON = (Draft.LINKS, Draft.SHORT)  # [올렸어요]가 없는 글(서점 링크 공지·짧은 소개) — 노션 '진행'에도 세지 않는다
+
+
 def draft_buttons(draft):
-    if draft.channel in (Draft.LINKS, Draft.SHORT):
+    if draft.channel in NO_POST_BUTTON:
         return keyboard([[('고치기', cb('e', draft.id)), ('다음에', cb('l', draft.id))]])
     return keyboard([[('올렸어요', cb('p', draft.id)), ('고치기', cb('e', draft.id)), ('다음에', cb('l', draft.id))]])
 

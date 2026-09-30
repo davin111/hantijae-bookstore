@@ -188,7 +188,8 @@ class NotionSyncTest(TestCase):
         self.assertEqual(self.fake.kids[heading][-1], new.notion['box'])
 
     def kit(self, message_id=800):
-        p = Proposal.objects.create(kind=Proposal.KIT, book=self.book, headline='h', chat_id=-200, message_id=message_id)
+        p = Proposal.objects.create(kind=Proposal.KIT, book=self.book, headline='h', chat_id=-200,
+                                    message_id=message_id)
         for ch in (Draft.BLOG, Draft.INSTAGRAM):
             Draft.objects.create(proposal=p, channel=ch, body=f'{ch} 글')
         ns.ensure_page(self.fake, ns.kit_target(p, '카드 글', date(2026, 10, 5)), NOW)
@@ -331,3 +332,73 @@ class NotionSyncTest(TestCase):
         self.assertEqual(ns.retry_pending(self.host, FakeTG(), datetime(2026, 10, 5, 22, 0, tzinfo=KST)), 0)
         WorkerState.put(ns.SWITCH, 'off')
         self.assertEqual(ns.retry_pending(self.host, FakeTG(), NOW + timedelta(hours=1)), 0)
+
+    def test_kit_progress_counts_only_writings_with_a_posted_button(self):
+        p = Proposal.objects.create(kind=Proposal.KIT, book=self.book, headline='h', chat_id=-200, message_id=800,
+                                    status=Proposal.ACTED)
+        for ch in (Draft.BLOG, Draft.INSTAGRAM, Draft.LINKS, Draft.SHORT):
+            Draft.objects.create(proposal=p, channel=ch, body=f'{ch} 글',
+                                 status=Draft.POSTED if ch == Draft.BLOG else Draft.DRAFT)
+        ns.ensure_page(self.fake, ns.kit_target(p, '카드 글', date(2026, 10, 5)), NOW)
+        p.refresh_from_db()
+
+        def progress():
+            return self.fake.pages[p.notion['page']]['properties']['진행']['rich_text'][0]['text']['content']
+
+        self.assertEqual(progress(), '✅ 1 · 남음 1')  # 서점 링크 공지·짧은 소개는 [올렸어요]가 없어 세지 않는다
+        p.drafts.filter(channel=Draft.INSTAGRAM).update(status=Draft.POSTED)
+        ns.refresh(self.fake, ns.target_of(p))
+        self.assertEqual(progress(), '✅ 2')
+        self.assertEqual(self.fake.text_of(p.notion['headings'][Draft.INSTAGRAM]), '✅ 인스타 글')
+        self.assertEqual(self.fake.text_of(p.notion['headings'][Draft.LINKS]), '서점 링크 공지')  # 제목은 모두 그대로 적는다
+
+    def pending(self, b):
+        self.fake.fail['create_page'] = RuntimeError('잠깐 오류')
+        with self.assertRaises(RuntimeError):
+            self.page(b)
+        p = Proposal.objects.create(kind=Proposal.KIT, book=self.book, headline='h', chat_id=-200, message_id=800,
+                                    sent_at=NOW)
+        Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='글')
+        self.fake.fail['create_page'] = RuntimeError('잠깐 오류')
+        with self.assertRaises(RuntimeError):
+            ns.ensure_page(self.fake, ns.kit_target(p, '카드 글', date(2026, 10, 5)), NOW)
+        return p
+
+    def test_retry_pending_keeps_going_when_a_telegram_redraw_fails(self):
+        b, ps = briefing(self.book)
+        p = self.pending(b)
+
+        class BadTG(FakeTG):
+            def edit_markup(self, chat_id, message_id, buttons):
+                raise RuntimeError('텔레그램 오류')
+
+        with self.assertLogs('intake', 'WARNING'):
+            self.assertEqual(ns.retry_pending(self.host, BadTG(), NOW + timedelta(minutes=11)), 2)
+        b.refresh_from_db()
+        p.refresh_from_db()
+        self.assertEqual((b.notion['state'], p.notion['state']), ('done', 'done'))
+
+    def test_retry_pending_gives_up_on_every_hub_even_when_the_notice_fails(self):
+        b, ps = briefing(self.book)
+        p = self.pending(b)
+
+        class BadHost(Host):
+            def notify_admin(self, text):
+                raise RuntimeError('텔레그램 오류')
+
+        with self.assertLogs('intake', 'WARNING'):
+            ns.retry_pending(BadHost(self.fake), FakeTG(), NOW + timedelta(days=8))
+        b.refresh_from_db()
+        p.refresh_from_db()
+        self.assertEqual((b.notion['state'], p.notion['state']), ('failed', 'failed'))
+
+    def test_retry_pending_skips_a_hub_with_a_broken_date(self):
+        b, ps = briefing(self.book)
+        p = self.pending(b)
+        b.refresh_from_db()
+        Briefing.objects.filter(pk=b.pk).update(notion={**b.notion, 'last_try': '어제'})
+        with self.assertLogs('intake', 'WARNING'):
+            self.assertEqual(ns.retry_pending(self.host, FakeTG(), NOW + timedelta(minutes=11)), 1)
+        b.refresh_from_db()
+        p.refresh_from_db()
+        self.assertEqual((b.notion['state'], p.notion['state']), ('pending', 'done'))
