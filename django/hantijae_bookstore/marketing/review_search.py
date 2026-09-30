@@ -11,7 +11,7 @@ NAVER_URL = 'https://naverapihub.apigw.ntruss.com/search/v1/{kind}?'
 KAKAO_URL = 'https://dapi.kakao.com/v2/search/{kind}?'
 PER_CALL = 50
 SOURCE_LABEL = {'naver_blog': '네이버 블로그', 'naver_cafe': '네이버 카페', 'daum_blog': '다음 블로그', 'daum_cafe': '다음 카페',
-                'ig_tag': '인스타 태그', 'ig_partner': '인스타 협력 계정'}   # 앞 넷은 검색 출처, 뒤 둘은 instagram.py
+                'ig_tag': '인스타 태그', 'ig_partner': '인스타 협력 계정', 'web': '웹 언급', 'youtube': '유튜브'}   # 앞 넷은 검색 출처, 다음 둘은 instagram.py, 마지막 둘은 web_sources.py
 
 
 @dataclass
