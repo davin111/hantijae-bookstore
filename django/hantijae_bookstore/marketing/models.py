@@ -263,3 +263,21 @@ class GrantCall(models.Model):
     reminded_at = models.DateTimeField(null=True, blank=True, help_text='마감 이틀 전 알림을 보낸 시각')
     reminder_message_id = models.BigIntegerField(null=True, blank=True, help_text='그 알림 메시지(답장을 받으려고)')
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class BnkSale(models.Model):
+    """출판유통통합전산망 판매: 책 하나 × 하루 하나. 약 2일 늦게 들어와서 매일 최근 7일을 날짜째 바꿔 넣는다(bnk_sales)."""
+    day = models.DateField(db_index=True)
+    isbn = models.CharField(max_length=13)
+    book = models.ForeignKey(Book, null=True, blank=True, related_name='bnk_sales', on_delete=models.SET_NULL)
+    title = models.CharField(max_length=300)
+    kyobo = models.PositiveIntegerField(default=0)
+    yes24 = models.PositiveIntegerField(default=0)
+    aladin = models.PositiveIntegerField(default=0)
+    ypbooks = models.PositiveIntegerField(default=0, help_text='영풍문고')
+    local = models.PositiveIntegerField(default=0, help_text='지역서점')
+    total = models.PositiveIntegerField(default=0)
+    fetched_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('day', 'isbn')
