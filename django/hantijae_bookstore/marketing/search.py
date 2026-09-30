@@ -44,7 +44,8 @@ def week_line(today, session=None):
             return ''
         top = _rows(session, start, end, ('query',))
     except Exception as e:   # 권한·네트워크 문제는 줄만 빼고 브리핑은 그대로
-        log.warning('search console: %s', type(e).__name__)
+        status = getattr(getattr(e, 'response', None), 'status_code', None)
+        log.warning('search console: %s%s', type(e).__name__, f' {status}' if status else '')
         return ''
     t = total[0]
     line = f'지난 7일 구글 검색: 노출 {int(t["impressions"])}·클릭 {int(t.get("clicks") or 0)}'

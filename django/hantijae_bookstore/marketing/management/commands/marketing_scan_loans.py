@@ -19,7 +19,8 @@ class Command(BaseCommand):
     help = '도서관 대출 수집·후보·검색 줄 확인 (--dry-run이면 기록하지 않음)'
 
     def add_arguments(self, parser):
-        parser.add_argument('--dry-run', action='store_true')
+        parser.add_argument('--dry-run', action='store_true',
+                            help='기록하지 않음(정보나루는 실제로 부른다 — --book 없이 쓰면 170권 넘게, 하루 한도 500번)')
         parser.add_argument('--book', type=int, action='append', default=[])
 
     def handle(self, *args, dry_run=False, book=(), **options):

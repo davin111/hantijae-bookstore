@@ -1,5 +1,7 @@
 from datetime import date
+from types import SimpleNamespace
 
+import requests
 from django.test import SimpleTestCase
 
 from marketing import search
@@ -48,3 +50,13 @@ class WeekLineTest(SimpleTestCase):
 
     def test_without_service_account_gives_no_line(self):
         self.assertEqual(search.week_line(date(2026, 10, 5)), '')   # MODE=test에는 서비스 계정이 없다
+
+    def test_logs_the_status_code_on_http_error(self):
+        class RaisingSession:
+            def post(self, url, json=None, timeout=None):
+                raise requests.HTTPError(response=SimpleNamespace(status_code=403))
+
+        with self.assertLogs('intake', level='WARNING') as cm:
+            line = search.week_line(date(2026, 10, 5), session=RaisingSession())
+        self.assertEqual(line, '')
+        self.assertTrue(any('403' in m for m in cm.output))
