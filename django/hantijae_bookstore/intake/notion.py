@@ -1,4 +1,6 @@
 """노션 '전체 도서 데이터베이스'의 빈 칸만 채운다. 값이 있는 칸은 절대 덮어쓰지 않는다."""
+import time
+
 import requests
 
 from intake.mapping import normalize_key
@@ -13,10 +15,14 @@ class NotionClient:
         self.headers = {'Authorization': f'Bearer {token}', 'Notion-Version': NOTION_VERSION,
                         'Content-Type': 'application/json'}
 
-    def _call(self, method, path, **kw):
-        res = self.session.request(method, f'{API}{path}', headers=self.headers, timeout=30, **kw)
-        res.raise_for_status()
-        return res.json()
+    def _call(self, method, path, timeout=30, **kw):
+        for attempt in range(2):
+            res = self.session.request(method, f'{API}{path}', headers=self.headers, timeout=timeout, **kw)
+            if getattr(res, 'status_code', 200) == 429 and attempt == 0:  # 요청이 몰리면 노션이 잠깐 기다리라고 한다
+                time.sleep(min(float(res.headers.get('Retry-After') or 1), 5))
+                continue
+            res.raise_for_status()
+            return res.json()
 
     def query_by_title(self, data_source_id, text):
         body = {'filter': {'property': '제목', 'title': {'contains': text}}, 'page_size': 50}
@@ -46,16 +52,38 @@ class NotionClient:
                 return out
             body['start_cursor'] = res['next_cursor']
 
-    def children(self, block_id):
+    def children(self, block_id, timeout=30):
         """블록의 바로 아래 블록들(페이지 넘김 포함)."""
         out, cursor = [], None
         while True:
             params = {'page_size': 100, **({'start_cursor': cursor} if cursor else {})}
-            res = self._call('GET', f'/blocks/{block_id}/children', params=params)
+            res = self._call('GET', f'/blocks/{block_id}/children', timeout=timeout, params=params)
             out += res.get('results', [])
             if not res.get('has_more'):
                 return out
             cursor = res['next_cursor']
+
+    # ---- 쓰기(마케팅 '홍보 비서 글 모음': marketing.notion_sync 가 쓴다) ----
+    def create_database(self, parent_page_id, title, properties):
+        body = {'parent': {'type': 'page_id', 'page_id': parent_page_id},
+                'title': [{'type': 'text', 'text': {'content': title}}],
+                'initial_data_source': {'properties': properties}}
+        return self._call('POST', '/databases', json=body)
+
+    def create_page(self, data_source_id, properties, children=()):
+        body = {'parent': {'type': 'data_source_id', 'data_source_id': data_source_id},
+                'properties': properties, 'children': list(children)}
+        return self._call('POST', '/pages', json=body)
+
+    def append_children(self, block_id, children, timeout=10):
+        return self._call('PATCH', f'/blocks/{block_id}/children', timeout=timeout,
+                          json={'children': list(children)}).get('results', [])
+
+    def update_block(self, block_id, payload):
+        return self._call('PATCH', f'/blocks/{block_id}', timeout=10, json=payload)
+
+    def trash_page(self, page_id):
+        return self._call('PATCH', f'/pages/{page_id}', timeout=10, json={'in_trash': True})
 
 
 def _title(page):

@@ -1,5 +1,7 @@
 from datetime import date
+from unittest import mock
 
+import requests
 from django.test import TestCase
 
 from books.models import Book, Category
@@ -76,7 +78,7 @@ class FakeSession:
         self.pages, self.calls = list(pages), []
 
     def request(self, method, url, headers=None, timeout=None, **kw):
-        self.calls.append((method, url, kw))
+        self.calls.append((method, url, {**kw, 'timeout': timeout}))
         body = self.pages.pop(0)
 
         class Res:
@@ -105,3 +107,46 @@ class NotionReadTest(TestCase):
         self.assertEqual([b['id'] for b in c.children('page')], ['x', 'y'])
         self.assertTrue(s.calls[0][1].endswith('/blocks/page/children'))
         self.assertEqual(s.calls[1][2]['params']['start_cursor'], 'n')
+
+
+class _Res:
+    def __init__(self, status, body, headers=None):
+        self.status_code, self._body, self.headers = status, body, headers or {}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(str(self.status_code), response=self)
+
+    def json(self):
+        return self._body
+
+
+class NotionWriteTest(TestCase):
+    def test_write_methods_hit_the_right_endpoints(self):
+        s = FakeSession([{'id': 'db', 'data_sources': [{'id': 'ds'}]}, {'id': 'p', 'url': 'u'},
+                         {'results': [{'id': 'b1'}]}, {}, {}])
+        c = notion.NotionClient('t', session=s)
+        c.create_database('parent', '홍보 비서 글 모음', {'이름': {'title': {}}})
+        c.create_page('ds', {'이름': {}}, [{'type': 'divider', 'divider': {}}])
+        self.assertEqual(c.append_children('box', [{'type': 'divider', 'divider': {}}]), [{'id': 'b1'}])
+        c.update_block('b1', {'callout': {}})
+        c.trash_page('p')
+        (m1, u1, k1), (m2, u2, k2), (m3, u3, k3), (m4, u4, _), (m5, u5, k5) = s.calls
+        self.assertEqual((m1, u1.split('/v1')[1], k1['json']['parent']), ('POST', '/databases', {'type': 'page_id', 'page_id': 'parent'}))
+        self.assertIn('initial_data_source', k1['json'])
+        self.assertEqual((m2, k2['json']['parent']), ('POST', {'type': 'data_source_id', 'data_source_id': 'ds'}))
+        self.assertEqual((m3, u3.split('/v1')[1], k3['timeout']), ('PATCH', '/blocks/box/children', 10))
+        self.assertEqual((m4, u4.split('/v1')[1]), ('PATCH', '/blocks/b1'))
+        self.assertEqual((m5, u5.split('/v1')[1], k5['json']), ('PATCH', '/pages/p', {'in_trash': True}))
+
+    def test_children_takes_a_timeout(self):
+        s = FakeSession([{'results': [], 'has_more': False}])
+        notion.NotionClient('t', session=s).children('box', timeout=5)
+        self.assertEqual(s.calls[0][2]['timeout'], 5)
+
+    @mock.patch('intake.notion.time.sleep')
+    def test_429_waits_once_then_retries(self, sleep):
+        session = mock.Mock()
+        session.request.side_effect = [_Res(429, {}, {'Retry-After': '2'}), _Res(200, {'ok': 1})]
+        self.assertEqual(notion.NotionClient('t', session=session).get_page('p'), {'ok': 1})
+        sleep.assert_called_once_with(2.0)
