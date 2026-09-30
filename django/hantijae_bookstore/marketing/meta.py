@@ -4,8 +4,10 @@
 import hashlib
 import hmac
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
+from typing import List, Optional
 
 import requests
 from django.conf import settings
@@ -30,10 +32,24 @@ def proof(token, secret):
 
 
 class MetaError(Exception):
-    """주소(토큰이 들어 있음)를 담지 않은 오류. requests의 오류 문구는 주소를 그대로 담으므로 쓰지 않는다."""
+    """주소(토큰이 들어 있음)를 담지 않은 오류. requests의 오류 문구는 주소를 그대로 담으므로 쓰지 않는다.
+    code는 Graph API의 error.code(있을 때)."""
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
 
 
-def _rows(get, path, params, cfg):
+class MetaAuthError(MetaError):
+    """토큰 만료·권한 문제. 다시 발급해야 풀린다(런북 .claude/docs/meta-api/2026-09-29/00-overview.md)."""
+
+
+AUTH_CODES = {190, 102, 10, 200}
+NOT_BUSINESS = 110   # business_discovery: 개인 계정이거나 없는 아이디(subcode 2207013)
+_USERNAME = re.compile(r'^[A-Za-z0-9._]{1,30}$')
+
+
+def _call(get, path, params, cfg):
     token = cfg['META_PAGE_TOKEN']
     try:
         res = get(f'{GRAPH}/{path}', params={**params, 'access_token': token,
@@ -41,8 +57,17 @@ def _rows(get, path, params, cfg):
     except requests.RequestException as e:
         raise MetaError(type(e).__name__) from None
     if res.status_code >= 400:
-        raise MetaError(f'HTTP {res.status_code}')
-    return res.json().get('data', [])
+        try:
+            code = ((res.json() or {}).get('error') or {}).get('code')
+        except ValueError:
+            code = None
+        cls = MetaAuthError if code in AUTH_CODES else MetaError
+        raise cls(f'HTTP {res.status_code}' + (f' code {code}' if code else ''), code)
+    return res.json()
+
+
+def _rows(get, path, params, cfg):
+    return _call(get, path, params, cfg).get('data', [])
 
 
 def official_posts(since, get=requests.get):
@@ -96,3 +121,114 @@ def post_counts(channel, post_id, get=requests.get):
     except Exception as e:  # 주소(토큰)는 로그에 남기지 않는다
         log.warning('meta %s counts: %s', channel, e if isinstance(e, MetaError) else type(e).__name__)
         return None
+
+
+@dataclass(frozen=True)
+class Media:
+    """인스타 글 하나(한티재를 태그한 글·다른 계정의 글). username은 태그 글에만 채운다(글쓴 계정)."""
+    id: str
+    caption: str
+    url: str
+    posted_at: datetime
+    username: str = ''
+    likes: int = 0
+    comments: int = 0
+
+
+def _ig_config():
+    cfg = getattr(settings, 'MARKETING', {})
+    return cfg if cfg.get('META_PAGE_TOKEN') and cfg.get('META_APP_SECRET') and cfg.get('META_IG_USER_ID') else None
+
+
+def ig_configured():
+    return _ig_config() is not None
+
+
+def _media(rows, with_username=False):
+    out = []
+    for r in rows:
+        at = parse_time(r.get('timestamp'))
+        if at and r.get('permalink'):
+            out.append(Media(str(r.get('id') or ''), r.get('caption') or '', r['permalink'], at,
+                             (r.get('username') or '') if with_username else '',
+                             int(r.get('like_count') or 0), int(r.get('comments_count') or 0)))
+    return out
+
+
+def tagged_media(limit=50, get=requests.get):
+    """한티재 인스타를 태그한 공개 글(최근 것부터). 설정이 없으면 []. 오류는 올린다."""
+    cfg = _ig_config()
+    if not cfg:
+        return []
+    return _media(_rows(get, f'{cfg["META_IG_USER_ID"]}/tags',
+                        {'fields': 'id,caption,permalink,timestamp,username,like_count,comments_count', 'limit': limit},
+                        cfg), with_username=True)
+
+
+def business_media(username, limit=25, get=requests.get) -> Optional[List[Media]]:
+    """프로페셔널 계정의 최근 글. 개인 계정·없는 아이디·아이디 모양이 아니면 None. 그 밖의 오류는 올린다."""
+    cfg = _ig_config()
+    if not cfg or not _USERNAME.match(username or ''):
+        return None
+    fields = (f'business_discovery.username({username})'
+              f'{{media.limit({limit}){{id,caption,permalink,timestamp,like_count,comments_count}}}}')
+    try:
+        data = _call(get, cfg['META_IG_USER_ID'], {'fields': fields}, cfg)
+    except MetaError as e:
+        if e.code == NOT_BUSINESS:
+            return None
+        raise
+    return _media(((data.get('business_discovery') or {}).get('media') or {}).get('data', []))
+
+
+@dataclass(frozen=True)
+class ChannelPost:
+    channel: str
+    posted_at: datetime
+    text: str
+    url: str
+    reactions: int   # 페북 반응(좋아요 포함) · 인스타 좋아요
+    comments: int
+    shares: int = 0
+
+
+def _count(d, name):
+    return int(((d.get(name) or {}).get('summary') or {}).get('total_count') or 0)
+
+
+def channel_posts(since, until, get=requests.get):
+    """[since, until) 사이 공식 페북·인스타 글과 반응 수. 채널마다 한 번 부른다. 못 읽은 채널은 None."""
+    cfg = getattr(settings, 'MARKETING', {})
+    out = {'facebook': None, 'instagram': None}
+    if not (cfg.get('META_PAGE_TOKEN') and cfg.get('META_APP_SECRET')):
+        return out
+    if cfg.get('META_PAGE_ID'):
+        try:
+            rows = _rows(get, f'{cfg["META_PAGE_ID"]}/posts',
+                         {'fields': 'message,created_time,permalink_url,shares,reactions.summary(total_count).limit(0),'
+                                    'comments.summary(total_count).limit(0)',
+                          'since': int(since.timestamp()), 'until': int(until.timestamp()), 'limit': 50}, cfg)
+            posts = []
+            for r in rows:
+                at = parse_time(r.get('created_time'))
+                if at and since <= at < until:
+                    posts.append(ChannelPost('facebook', at, r.get('message') or '', r.get('permalink_url') or '',
+                                             _count(r, 'reactions'), _count(r, 'comments'),
+                                             int((r.get('shares') or {}).get('count') or 0)))
+            out['facebook'] = posts
+        except Exception as e:  # 한 채널 실패는 '못 읽음'으로 두고 넘어간다(로그에는 종류·상태 코드만)
+            log.warning('meta facebook week: %s', e if isinstance(e, MetaError) else type(e).__name__)
+    if cfg.get('META_IG_USER_ID'):
+        try:
+            rows = _rows(get, f'{cfg["META_IG_USER_ID"]}/media',
+                         {'fields': 'caption,timestamp,permalink,like_count,comments_count', 'limit': 50}, cfg)
+            posts = []
+            for r in rows:
+                at = parse_time(r.get('timestamp'))
+                if at and since <= at < until:
+                    posts.append(ChannelPost('instagram', at, r.get('caption') or '', r.get('permalink') or '',
+                                             int(r.get('like_count') or 0), int(r.get('comments_count') or 0)))
+            out['instagram'] = posts
+        except Exception as e:
+            log.warning('meta instagram week: %s', e if isinstance(e, MetaError) else type(e).__name__)
+    return out
