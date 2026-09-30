@@ -25,7 +25,8 @@ class MessagesTest(SimpleTestCase):
               draft(5, Draft.LETTER)]
         text = messages.kit_caption(book, ds, ['교보문고', '예스24'], blog_exists=False, today=date(2026, 9, 28))
         self.assertTrue(text.startswith('『나는 산속으로 더 깊이 들어간다』 홍보 자료를 만들어 두었어요.'))
-        self.assertIn('\n8월 21일에 나온 책이에요. 아직 블로그 글이 없어요.', text)
+        self.assertIn('\n8월 21일에 나온 책이에요. 아직 네이버 블로그 글이 없어요.', text)
+        self.assertIn('· 네이버 블로그 글\n', text)
         self.assertIn('· 짧은 소개 (한 줄 3가지, 200자)', text)
         self.assertIn('사이트에 교보문고·예스24 상품 링크가 비어 있어요.', text)
         self.assertLessEqual(tg_len(text), 1024)
@@ -73,12 +74,20 @@ class MessagesTest(SimpleTestCase):
     def test_briefing_text_has_at_most_three_items_and_measure(self):
         ps = [SimpleNamespace(id=i, headline=f'항목 {i}', reason='이유') for i in range(1, 4)]
         text = messages.briefing_text(date(2026, 9, 28), ps, measure='지난번 올린 글 ― 판매 지수 455 → 520 (2주 뒤)')
-        self.assertTrue(text.startswith('이번 주 홍보 제안 (9월 28일 ~ 10월 4일)'))
-        self.assertIn('\n\n3. 항목 3\n이유', text)
+        self.assertTrue(text.startswith('<b>이번 주 홍보 제안</b> (9월 28일 ~ 10월 4일)'))
+        self.assertIn('\n\n<b>3. 항목 3</b>\n이유', text)
         self.assertTrue(text.endswith('(2주 뒤)'))
         linked = [SimpleNamespace(id=1, headline='항목', reason='이유',
                                   extra={'link': 'https://news.example/a', 'link_label': '기사 원문'})]
-        self.assertIn('\n\n1. 항목\n이유\n기사 원문: https://news.example/a', messages.briefing_text(date(2026, 9, 28), linked))
+        self.assertIn('\n\n<b>1. 항목</b>\n이유\n기사 원문: https://news.example/a', messages.briefing_text(date(2026, 9, 28), linked))
+        odd = [SimpleNamespace(id=1, headline='『<지역서점>』 & 소식', reason='a<b', extra={})]
+        self.assertIn('<b>1. 『&lt;지역서점&gt;』 &amp; 소식</b>\na&lt;b', messages.briefing_text(date(2026, 9, 28), odd))
         kb = messages.briefing_buttons(SimpleNamespace(id=5), ps)
         texts = [b['text'] for row in kb['inline_keyboard'] for b in row]
         self.assertEqual(texts, ['1번 글 보기', '2번 글 보기', '3번 글 보기', '이번 주는 넘기기'])
+
+
+class NaverBlogWordingTest(SimpleTestCase):
+    def test_blog_draft_is_called_naver_blog(self):
+        self.assertTrue(messages.draft_text(draft(1, Draft.BLOG, body='본문')).startswith('네이버 블로그 글이에요.'))
+        self.assertEqual(Draft(channel=Draft.BLOG).label, '네이버 블로그 글')

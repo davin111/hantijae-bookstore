@@ -1,11 +1,24 @@
 """Telegram Bot API 얇은 클라이언트 (requests)."""
+import html
 import json
+import logging
+import re
 
 import requests
 
 
 class TelegramError(Exception):
     pass
+
+
+log = logging.getLogger('intake')
+TEXT_LIMIT = 4096
+HTML_OPTIONS = {'parse_mode': 'HTML', 'link_preview_options': {'is_disabled': True}}
+
+
+def plain_text(html_text):
+    """HTML 서식 글에서 태그를 벗기고 &amp; 같은 글자를 되돌린다(서식이 거부됐을 때 일반 글로 다시 보내려고)."""
+    return html.unescape(re.sub(r'<[^>]+>', '', html_text))
 
 
 def keyboard(rows):
@@ -46,9 +59,17 @@ class TelegramAPI:
         return self.call('getUpdates', _http_timeout=timeout + 15, offset=offset, timeout=timeout,
                          allowed_updates=['message', 'edited_message', 'callback_query'])
 
-    def send_message(self, chat_id, text, reply_to=None, buttons=None):
-        return self.call('sendMessage', chat_id=chat_id, text=text[:4096],
-                         reply_parameters=self._reply(reply_to), reply_markup=buttons)
+    def send_message(self, chat_id, text, reply_to=None, buttons=None, html=False):
+        """html=True: 굵게·접기 같은 HTML 서식. 너무 길거나 텔레그램이 서식을 거부하면 태그를 벗긴 일반 글로 보낸다."""
+        common = {'chat_id': chat_id, 'reply_parameters': self._reply(reply_to), 'reply_markup': buttons}
+        if html and len(text) <= TEXT_LIMIT:
+            try:
+                return self.call('sendMessage', text=text, **HTML_OPTIONS, **common)
+            except TelegramError as e:
+                if "can't parse entities" not in str(e):
+                    raise
+                log.warning('telegram html rejected, sending plain text: %s', e)
+        return self.call('sendMessage', text=(plain_text(text) if html else text)[:TEXT_LIMIT], **common)
 
     def send_photo(self, chat_id, photo, caption, buttons=None, reply_to=None):
         return self.call('sendPhoto', _files={'photo': ('cover.jpg', photo, 'image/jpeg')}, chat_id=chat_id,
@@ -61,9 +82,17 @@ class TelegramAPI:
             if 'message is not modified' not in str(e):
                 raise
 
-    def edit_text(self, chat_id, message_id, text, buttons=None):
+    def edit_text(self, chat_id, message_id, text, buttons=None, html=False):
+        common = {'chat_id': chat_id, 'message_id': message_id, 'reply_markup': buttons}
         try:
-            self.call('editMessageText', chat_id=chat_id, message_id=message_id, text=text[:4096], reply_markup=buttons)
+            if html and len(text) <= TEXT_LIMIT:
+                try:
+                    return self.call('editMessageText', text=text, **HTML_OPTIONS, **common)
+                except TelegramError as e:
+                    if "can't parse entities" not in str(e):
+                        raise
+                    log.warning('telegram html rejected, editing as plain text: %s', e)
+            self.call('editMessageText', text=(plain_text(text) if html else text)[:TEXT_LIMIT], **common)
         except TelegramError as e:
             if 'message is not modified' not in str(e):
                 raise

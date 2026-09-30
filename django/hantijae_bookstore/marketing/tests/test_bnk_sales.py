@@ -138,7 +138,7 @@ class SalesLineTest(Books, TestCase):
     def test_briefing_text_puts_sales_line_under_the_header(self):
         p = type('P', (), {'headline': '항목', 'reason': '이유', 'extra': {}})()
         text = messages.briefing_text(date(2026, 10, 5), [p], sales='📈 줄')
-        self.assertTrue(text.startswith('이번 주 홍보 제안 (10월 5일 ~ 10월 11일)\n\n📈 줄\n\n1. 항목'))
+        self.assertTrue(text.startswith('<b>이번 주 홍보 제안</b> (10월 5일 ~ 10월 11일)\n\n📈 줄\n\n<b>1. 항목</b>'))
         self.assertNotIn('📈', messages.briefing_text(date(2026, 10, 5), [p]))
 
 
@@ -201,7 +201,18 @@ class MonthlyTest(Books, TestCase):
                          '📊 9월 판매 요약(전산망)\n'
                          '합계 44권 · 교보 4 · 예스24 31 · 알라딘 3 · 영풍 1 · 지역서점 5\n'
                          '많이 팔린 책: 『밥은 먹고 다니냐는 말』 36권, 『다른 책』 5권, 『무지개를 변호하다』 3권\n'
-                         '온라인 구매자: 50대 36% · 40대 16% · 60대 이상 16% / 여성 61% / 경기 54 · 서울 31 · 충북 14')
+                         '구매자 정보가 있는 온라인 판매 188부: 50대 36% · 40대 16% · 60대 이상 16% / 여성 61% / '
+                         '경기 54부 · 서울 31부 · 충북 14부\n'
+                         '출처: 출판유통통합전산망 판매통계(종이책만, 교보·예스24(제휴사 제외)·알라딘·영풍·지역서점). '
+                         '구매자 정보는 교보·알라딘·예스24 온라인 판매 기준, 단위는 부')
+
+    def test_monthly_html_bolds_numbers_and_folds_the_source(self):
+        c = FakeBnkClient(readers=parse_readers(READERS_JSON))
+        text = bnk_sales.monthly_text(c, date(2026, 9, 1), html=True)
+        self.assertTrue(text.startswith('<b>📊 9월 판매 요약</b>(전산망)\n<b>합계 44권</b> · 교보 4 · '))
+        self.assertTrue(text.endswith('<blockquote expandable>출처: 출판유통통합전산망 판매통계(종이책만, '
+                                      '교보·예스24(제휴사 제외)·알라딘·영풍·지역서점). 구매자 정보는 교보·알라딘·예스24 '
+                                      '온라인 판매 기준, 단위는 부</blockquote>'))
         self.assertEqual(c.asked, [(date(2026, 9, 1), date(2026, 9, 30))])
 
     def test_monthly_text_needs_the_whole_month(self):

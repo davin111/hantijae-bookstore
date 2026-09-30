@@ -168,12 +168,12 @@ def _bnk_collect(deps, today, now, started):
 def _bnk_month(deps, today, now, started):
     try:
         with bnk.client_from_settings() as client:
-            text = bnk_sales.monthly_text(client, bnk_sales.last_month_start(today))
+            text = bnk_sales.monthly_text(client, bnk_sales.last_month_start(today), html=True)
     except bnk.BnkLoginError as e:
         _bnk_login_rejected(deps, today, now, started, e)
         return
     if text:
-        deps.bot.notify_admin(text)
+        deps.bot.notify_admin(text, html=True)
 
 
 def _build_midweek(deps, m, today, now, started):

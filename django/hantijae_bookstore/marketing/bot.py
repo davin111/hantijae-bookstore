@@ -199,7 +199,7 @@ class Marketing:
         sales_line = self._bnk_sales_line(today)
         sent = self.tg.send_message(chat, messages.briefing_text(briefing.week_start, shown, briefing.measure,
                                                                  grants=grant_lines, sales=sales_line),
-                                    buttons=messages.briefing_buttons(briefing, shown))
+                                    buttons=messages.briefing_buttons(briefing, shown), html=True)
         if record:
             briefing.chat_id, briefing.message_id, briefing.sent_at, briefing.mode = chat, sent['message_id'], now, self.mode()
             briefing.save(update_fields=['chat_id', 'message_id', 'sent_at', 'mode'])
@@ -251,20 +251,22 @@ class Marketing:
         if not room:
             fresh = [c for c in calls if c.preview_at is None][:grants.PER_MESSAGE]
             if fresh:
-                self.tg.send_message(chat, messages.grant_preview_text(fresh))
+                self.tg.send_message(chat, messages.grant_preview_text(fresh), html=True)
                 GrantCall.objects.filter(pk__in=[c.pk for c in fresh]).update(preview_at=now)
                 sent += 1
             return sent
         if calls and not GrantCall.objects.filter(chat_id=chat, sent_at__gte=self._day_start(now)).exists():
             calls = calls[:grants.PER_MESSAGE]
-            msg = self.tg.send_message(chat, messages.grant_card_text(calls), buttons=messages.grant_buttons(calls))
+            msg = self.tg.send_message(chat, messages.grant_card_text(calls), buttons=messages.grant_buttons(calls),
+                                       html=True)
             GrantCall.objects.filter(pk__in=[c.pk for c in calls]).update(
                 state=GrantCall.ANNOUNCED, chat_id=chat, message_id=msg['message_id'], sent_at=now)
             sent += 1
         local = kst_now(now)
         if (local.hour, local.minute) >= REMIND_AT:
             for call in grants.due_reminders(today):
-                msg = self.tg.send_message(call.chat_id, messages.grant_reminder_text(call), reply_to=call.message_id)
+                msg = self.tg.send_message(call.chat_id, messages.grant_reminder_text(call), reply_to=call.message_id,
+                                           html=True)
                 GrantCall.objects.filter(pk=call.pk).update(reminded_at=now, reminder_message_id=msg['message_id'])
                 sent += 1
         return sent
@@ -281,7 +283,7 @@ class Marketing:
             items = [p for p in items if not p.candidate_key.startswith('moment:')]
         if not items:
             return False
-        sent = self.tg.send_message(chat, messages.midweek_text(items), buttons=messages.midweek_buttons(items))
+        sent = self.tg.send_message(chat, messages.midweek_text(items), buttons=messages.midweek_buttons(items), html=True)
         Proposal.objects.filter(pk__in=[p.id for p in items]).update(chat_id=chat, message_id=sent['message_id'],
                                                                      sent_at=now, status=Proposal.SHOWN)
         self._midweek_week_notice(now)
@@ -367,7 +369,7 @@ class Marketing:
             if call and call.message_id:
                 calls = grants.card_calls(call.chat_id, call.message_id)
                 self.tg.edit_text(call.chat_id, call.message_id, messages.grant_card_text(calls),
-                                  buttons=messages.grant_buttons(calls))
+                                  buttons=messages.grant_buttons(calls), html=True)
             return answer
         return ''
 

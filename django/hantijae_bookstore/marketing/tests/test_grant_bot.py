@@ -48,7 +48,8 @@ class GrantSendTest(Base):
         self.assertEqual(m.send_grants(NOW), 1)
         card = self.tg.sent('send')[0]
         self.assertEqual(card['chat'], GROUP)
-        self.assertTrue(card['text'].startswith('📌 지원사업 공고 — 2026년 제3차 전자책 제작 지원 사업 공고'))
+        self.assertTrue(card['text'].startswith('📌 <b>지원사업 공고 — 2026년 제3차 전자책 제작 지원 사업 공고</b>'))
+        self.assertTrue(card['html'])
         self.assertIn(f'mk:ga:{c.id}', json.dumps(card['buttons']))
         c.refresh_from_db()
         self.assertEqual((c.state, c.chat_id, c.message_id, c.sent_at), (GrantCall.ANNOUNCED, GROUP, 1001, NOW))
@@ -83,7 +84,7 @@ class GrantSendTest(Base):
             make_call(no=no, title=f'공고 {no}', until=date(2026, 10, 12 + i))
         self.m().send_grants(NOW)
         card = self.tg.sent('send')[0]
-        self.assertTrue(card['text'].startswith('📌 새 지원사업 공고 3건'))
+        self.assertTrue(card['text'].startswith('📌 <b>새 지원사업 공고 3건</b>'))
         self.assertNotIn('공고 2204', card['text'])
         self.assertEqual(len(card['buttons']['inline_keyboard']), 3)
         self.assertEqual(GrantCall.objects.filter(state=GrantCall.READY).count(), 1)
@@ -98,7 +99,7 @@ class GrantSendTest(Base):
         m.send_grants(datetime(2026, 10, 10, 11, 0, tzinfo=KST))
         sends = self.tg.sent('send')
         self.assertEqual([(s['chat'], s['reply_to']) for s in sends], [(GROUP, 777)])
-        self.assertTrue(sends[0]['text'].startswith('⏰ 모레 10월 12일(월) 16시에 신청이 마감돼요'))
+        self.assertTrue(sends[0]['text'].startswith('⏰ 모레 <b>10월 12일(월) 16시</b>에 신청이 마감돼요'))
         self.assertEqual(GrantCall.objects.get().reminder_message_id, 1001)
 
 
@@ -112,6 +113,7 @@ class GrantButtonTest(Base):
         self.assertEqual((c.state, c.decided_by), (GrantCall.APPLYING, '운영진A'))
         edit = self.tg.sent('edit')[0]
         self.assertTrue(edit['text'].endswith('✍️ 운영진A: 신청하기로 했어요'))
+        self.assertTrue(edit['html'])
         self.assertIn(f'mk:gp:{c.id}', json.dumps(edit['buttons']))
 
     def test_pass_then_change_mind(self, _now):
@@ -197,5 +199,5 @@ class GrantBriefingTest(Base):
         b = Briefing.objects.create(week_start=date(2026, 10, 5))
         Proposal.objects.create(kind=Proposal.BRIEF_ITEM, briefing=b, headline='항목', reason='이유', rank=1)
         self.assertTrue(self.m().send_briefing(b, datetime(2026, 10, 5, 9, 30, tzinfo=KST)))
-        self.assertIn('\n\n📌 지원사업 신청\n· 2026년 제3차 전자책 제작 지원 사업 공고 — 10월 12일(월) 16시 마감 (신청하기로 함)',
+        self.assertIn('\n\n<b>📌 지원사업 신청</b>\n· 2026년 제3차 전자책 제작 지원 사업 공고 — 10월 12일(월) 16시 마감 (신청하기로 함)',
                       self.tg.sent('send')[0]['text'])

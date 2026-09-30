@@ -1,6 +1,7 @@
 """전산망 판매(marketing.bnk)를 매일 DB에 쌓고, 브리핑 첫 줄·판매 급증·올린 글 효과·월간 요약에 쓸 값을 계산한다.
 스펙 .claude/docs/specs/2026-09-30-bnk-sales-design.md (로컬)."""
 import logging
+from html import escape
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import List, Optional
@@ -239,24 +240,32 @@ def last_month_start(today):
     return (today.replace(day=1) - timedelta(days=1)).replace(day=1)
 
 
-def monthly_text(client, month_start):
-    """지난달 요약(관리자 1:1). 그 달을 다 읽지 못했으면(처음 켠 달·빈틈·말일 미반영) 틀린 합계를 보내지 않게 ''."""
+SOURCE = ('출처: 출판유통통합전산망 판매통계(종이책만, 교보·예스24(제휴사 제외)·알라딘·영풍·지역서점). '
+          '구매자 정보는 교보·알라딘·예스24 온라인 판매 기준, 단위는 부')
+
+
+def monthly_text(client, month_start, html=False):
+    """지난달 요약(관리자 1:1). 그 달을 다 읽지 못했으면(처음 켠 달·빈틈·말일 미반영) 틀린 합계를 보내지 않게 ''.
+    html=True: 제목·합계 굵게, 출처는 접기(feedback-telegram-formatting). 책 제목은 바꿔 넣는다."""
+    esc = (lambda s: escape(str(s), quote=False)) if html else str
+    bold = (lambda s: f'<b>{s}</b>') if html else (lambda s: s)
     month_end = _month_end(month_start)
     if not month_ready(month_start):
         return ''
     qs = BnkSale.objects.filter(day__range=(month_start, month_end))
     s = _sums(qs)
-    lines = [f'📊 {month_start.month}월 판매 요약(전산망)',
-             f'합계 {s["total"]}권 · ' + ' · '.join(f'{STORE_LABEL[k]} {s[k]}' for k in STORE_KEYS)]
+    lines = [bold(f'📊 {month_start.month}월 판매 요약') + '(전산망)',
+             bold(f'합계 {s["total"]}권') + ' · ' + ' · '.join(f'{STORE_LABEL[k]} {s[k]}' for k in STORE_KEYS)]
     top = [t for t in qs.values('isbn').annotate(n=Sum('total'), name=Max('title')).order_by('-n', 'name')[:3]
            if t['n'] > 0]
     if top:
-        lines.append('많이 팔린 책: ' + ', '.join(f'『{t["name"]}』 {t["n"]}권' for t in top))
+        lines.append('많이 팔린 책: ' + ', '.join(f'『{esc(t["name"])}』 {t["n"]}권' for t in top))
     r = client.readers(month_start, month_end)
     if r['buyers']:
         ages = ' · '.join(f'{name} {round(v)}%' for name, v in r['age'][:3])
-        regions = ' · '.join(f'{name} {n}' for name, n in r['region'][:3] if n)
-        lines.append(f'온라인 구매자: {ages} / 여성 {round(r["female"])}% / {regions}')
+        regions = ' · '.join(f'{name} {n}부' for name, n in r['region'][:3] if n)
+        lines.append(f'구매자 정보가 있는 온라인 판매 {r["buyers"]}부: {ages} / 여성 {round(r["female"])}% / {regions}')
+    lines.append(f'<blockquote expandable>{SOURCE}</blockquote>' if html else SOURCE)
     return '\n'.join(lines)
 
 

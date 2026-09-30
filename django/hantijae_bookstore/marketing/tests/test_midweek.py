@@ -140,7 +140,8 @@ class MidweekSendTest(TestCase):
         self.assertTrue(self.m.send_midweek(SEND))
         [msg] = self.tg.sent('send')
         self.assertEqual(msg['chat'], GROUP)
-        self.assertIn('이번 주에 앞둔 일이 있어 글을 준비해 뒀어요\n\n1. 『책』 ― 계기 1\n이유', msg['text'])
+        self.assertIn('<b>이번 주에 앞둔 일이 있어 글을 준비해 뒀어요</b>\n\n<b>1. 『책』 ― 계기 1</b>\n이유', msg['text'])
+        self.assertTrue(msg['html'])
         labels = [b['text'] for row in msg['buttons']['inline_keyboard'] for b in row]
         self.assertEqual(labels, ['1번 글 보기', '2번 글 보기', '넘기기'])
         self.assertEqual(set(Proposal.objects.values_list('status', flat=True)), {Proposal.SHOWN})

@@ -42,7 +42,7 @@ class FakeBot:
     def __init__(self, mode):
         self.marketing, self.notes = FakeMarketing(mode), []
 
-    def notify_admin(self, text):
+    def notify_admin(self, text, html=False):
         self.notes.append(text)
 
 

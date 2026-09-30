@@ -131,9 +131,12 @@ class Draft(BaseModel):
     placements = models.JSONField(default=list, blank=True,
                                   help_text='[올렸어요] 뒤 봇이 찾은 실제 게시 위치: kind·label·url·id·at (placements.py)')
 
+    # 운영진에게 보이는 이름. 선택지(CHANNEL_CHOICES)를 바꾸면 마이그레이션이 생겨서 표시만 따로 둔다
+    DISPLAY = {BLOG: '네이버 블로그 글'}
+
     @property
     def label(self):
-        return dict(self.CHANNEL_CHOICES)[self.channel]
+        return self.DISPLAY.get(self.channel) or dict(self.CHANNEL_CHOICES)[self.channel]
 
 
 class DraftMessage(models.Model):

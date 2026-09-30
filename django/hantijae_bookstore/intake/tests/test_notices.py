@@ -17,7 +17,7 @@ DATA = {'message': ' 『무궁화호를 위하여』 알라딘 북펀드 진행 
 
 
 class TG(FakeTG):
-    def edit_text(self, chat_id, message_id, text, buttons=None):
+    def edit_text(self, chat_id, message_id, text, buttons=None, html=False):
         self.calls.append(('edit_text', chat_id, text, buttons))
 
 

@@ -187,7 +187,8 @@ class MarketingBotTest(TestCase):
         self.assertFalse(m.send_briefing(b, DAY))
         p.refresh_from_db()
         self.assertEqual((p.status, p.chat_id), (Proposal.SHOWN, GROUP))
-        self.assertTrue(self.tg.sent('send')[0]['text'].startswith('이번 주 홍보 제안'))
+        self.assertTrue(self.tg.sent('send')[0]['text'].startswith('<b>이번 주 홍보 제안</b>'))
+        self.assertTrue(self.tg.sent('send')[0]['html'])
 
     def test_quiet_book_briefing_item_dropped_at_send_time_and_renumbered(self):
         WorkerState.put('marketing_mode', 'live')
