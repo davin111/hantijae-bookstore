@@ -16,7 +16,10 @@ def split_letter(title, body):
     m = _SEP.search(body)
     if not m:
         return None
-    places = [line[2:].strip() for line in body[:m.start()].split('\n')[1:] if line.startswith('· ')]
+    lines = body[:m.start()].split('\n')[1:]
+    if not all(line.startswith('· ') for line in lines):
+        return None  # 머리에 목록 말고 다른 문단이 있으면 잃지 않도록 건드리지 않는다
+    places = [line[2:].strip() for line in lines]
     inner = (m.group('title') or '').strip()
     moved = bool(not title and inner)
     extra = {'places': places, 'to': (m.group('to') or '').strip(),

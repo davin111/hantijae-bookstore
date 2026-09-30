@@ -28,6 +28,8 @@ class SplitLetterTest(SimpleTestCase):
     def test_places_only_and_other_shapes_are_left_alone(self):
         self.assertIsNone(mig.split_letter('', '알리면 좋을 곳\n· 청송 지역 신문 ― 지역 시인'))
         self.assertIsNone(mig.split_letter('', '안녕하세요.'))
+        # 머리에 목록 말고 다른 문단이 끼어 있으면 글을 잃지 않게 그대로 둔다
+        self.assertIsNone(mig.split_letter('', '알리면 좋을 곳\n· A\n\n메모 문단\n\n보낼 글\n본문'))
 
     def test_join_restores_both_shapes(self):
         for title, body in (('부탁드립니다', BRIEF), ('', KIT)):
