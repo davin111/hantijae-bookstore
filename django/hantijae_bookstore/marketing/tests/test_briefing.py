@@ -275,3 +275,16 @@ class BuildWeeklyTest(TestCase):
         b, _ = build_weekly(llm, TODAY, datetime(2026, 9, 28, 7, 0, tzinfo=KST), posts=[])
         p = b.items.get()
         self.assertEqual((len(p.headline), len(p.drafts.get().title)), (300, 300))
+
+
+class PromptRulesTest(TestCase):
+    """운영진이 고쳐 준 것(2026-09-30, 박강수 영상 초안)과 관리자 결정이 프롬프트에 남아 있는지."""
+
+    def test_voice_keeps_editor_corrections(self):
+        from marketing.prompts import VOICE
+        self.assertIn('방송·기사·영상 설명은 남이 쓴 글이라 틀릴 수 있습니다', VOICE)
+        self.assertIn("'농사일을 돕는다'", VOICE)
+
+    def test_briefing_suggests_small_actions_even_if_already_done(self):
+        from marketing.prompts import BRIEFING_SYSTEM
+        self.assertIn('댓글 달기·공유 같은 작은 일도 함께 권합니다', BRIEFING_SYSTEM)
