@@ -177,7 +177,7 @@ def _run_due(deps, now):
 
     if _hm(local) >= REVIEW_AT and WorkerState.get('marketing_last_review_scan') != day:
         WorkerState.put('marketing_last_review_scan', day)
-        _guard(deps, 'review', now, lambda: reviews.run(deps, today))
+        _guard(deps, 'review', now, lambda: reviews.run(deps, today, notify=lambda text: _notify_awake(deps, now, text)))
 
     if _hm(local) >= SALES_AT and WorkerState.get('marketing_last_sales_scan') != day:
         WorkerState.put('marketing_last_sales_scan', day)

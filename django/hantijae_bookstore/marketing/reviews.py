@@ -170,7 +170,7 @@ def save_judged(llm, fresh, report):
 FAIL_ALERT_DAYS = 3
 
 
-def _track_failures(deps, failed, active):
+def _track_failures(notify, failed, active):
     """같은 출처가 사흘 연속 모두 실패하면(키 만료·사용 한도) 관리자에게 한 번 알린다."""
     for source in active:
         key = f'review_fail_{source}'
@@ -180,13 +180,14 @@ def _track_failures(deps, failed, active):
         streak = (WorkerState.get(key) or 0) + 1
         WorkerState.put(key, streak)
         if streak == FAIL_ALERT_DAYS:
-            deps.bot.notify_admin(f'⚠️ 서평 수집: {SOURCE_LABEL[source]} 검색이 {streak}일째 실패했어요. '
-                                  f'API 키·사용 한도를 확인해 주세요')
+            notify(f'⚠️ 서평 수집: {SOURCE_LABEL[source]} 검색이 {streak}일째 실패했어요. '
+                  f'API 키·사용 한도를 확인해 주세요')
 
 
-def run(deps, today, **scan_kwargs):
-    """워커가 하루 한 번(04:30 KST) 부른다. 판별 LLM이 모두 실패하면 예외를 올린다(tasks._guard가 하루 한 번 알림)."""
+def run(deps, today, notify=None, **scan_kwargs):
+    """워커가 하루 한 번(04:30 KST) 부른다. 판별 LLM이 모두 실패하면 예외를 올린다(tasks._guard가 하루 한 번 알림).
+    실패 알림은 notify로 보낸다 — 새벽엔 바로 울리지 않게 tasks.py가 조용한 시간 큐를 도는 함수를 건네준다."""
     cfg = getattr(settings, 'MARKETING', {})
     report, fresh = scan(today, cfg=cfg, **scan_kwargs)
-    _track_failures(deps, report.failed, [s for s, _, _ in sources(cfg)])
+    _track_failures(notify or deps.bot.notify_admin, report.failed, [s for s, _, _ in sources(cfg)])
     return save_judged(deps.llm, fresh, report)

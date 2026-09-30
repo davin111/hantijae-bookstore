@@ -240,6 +240,15 @@ class RunDueTest(TestCase):
         tasks.run_due(Deps('off'), datetime(2026, 9, 29, 5, 0, tzinfo=KST))
         self.review_scan.assert_not_called()
 
+    def test_review_scan_notify_waits_for_the_morning(self, *_):
+        """04:30은 조용한 시간(21~08시) 안 — 서평 수집이 직접 부르는 notify는 바로 보내지 않고 아침까지 모아 둔다."""
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 29, 4, 30, tzinfo=KST))
+        notify = self.review_scan.call_args.kwargs['notify']
+        notify('x')
+        self.assertEqual(WorkerState.get('moment_admin_queue'), ['x'])
+        self.assertEqual(deps.bot.notes, [])
+
     def test_review_failure_is_reported_once_and_loop_goes_on(self, sales_, *_):
         self.review_scan.side_effect = RuntimeError('판별 실패')
         deps = Deps()
