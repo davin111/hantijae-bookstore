@@ -45,6 +45,7 @@ class MetaAuthError(MetaError):
 
 
 AUTH_CODES = {190, 102, 10, 200}
+TOKEN_CODES = {190, 102}   # 토큰 만료·세션 문제 — 계정별 호출에서도 이때만 그대로 올린다(10·200은 그 계정만의 문제로 본다)
 NOT_BUSINESS = 110   # business_discovery: 개인 계정이거나 없는 아이디(subcode 2207013)
 TAGS_PAGE, TAGS_PAGES = 10, 5   # /tags는 한 번에 10개 넘게 물으면 code 1로 거절한다
 _USERNAME = re.compile(r'^[A-Za-z0-9._]{1,30}$')
@@ -64,7 +65,13 @@ def _call(get, path, params, cfg):
             code = None
         cls = MetaAuthError if code in AUTH_CODES else MetaError
         raise cls(f'HTTP {res.status_code}' + (f' code {code}' if code else ''), code)
-    return res.json()
+    try:
+        data = res.json()
+    except ValueError:
+        raise MetaError(f'HTTP {res.status_code} not JSON') from None
+    if not isinstance(data, dict):
+        raise MetaError(f'HTTP {res.status_code} unexpected body')
+    return data
 
 
 def _rows(get, path, params, cfg):

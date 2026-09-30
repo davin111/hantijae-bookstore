@@ -70,8 +70,11 @@ def scan(today, partners=False, books=None, get=requests.get):
         if m.username and m.username not in pro:
             try:
                 pro[m.username] = meta.business_media(m.username, limit=1, get=get) is not None
-            except meta.MetaAuthError:
-                raise
+            except meta.MetaAuthError as e:
+                if e.code in meta.TOKEN_CODES:
+                    raise
+                log.warning('instagram tagger check failed: %s', e)
+                pro[m.username] = False
             except meta.MetaError as e:
                 log.warning('instagram tagger check failed: %s', e)
                 pro[m.username] = False
@@ -91,8 +94,11 @@ def scan(today, partners=False, books=None, get=requests.get):
         for handle in PARTNERS:
             try:
                 medias = meta.business_media(handle, get=get)
-            except meta.MetaAuthError:
-                raise
+            except meta.MetaAuthError as e:
+                if e.code in meta.TOKEN_CODES:
+                    raise
+                log.warning('instagram partner %s: %s', handle, e)
+                continue
             except meta.MetaError as e:   # 한 계정의 오류는 그 계정만 건너뛴다
                 log.warning('instagram partner %s: %s', handle, e)
                 continue
@@ -109,7 +115,12 @@ def scan(today, partners=False, books=None, get=requests.get):
 
 def _remind_expiry(today, notify):
     cfg = getattr(settings, 'MARKETING', {})
-    expires = date.fromisoformat(cfg.get('META_ACCESS_EXPIRES') or EXPIRES_DEFAULT)
+    value = cfg.get('META_ACCESS_EXPIRES') or EXPIRES_DEFAULT
+    try:
+        expires = date.fromisoformat(value)
+    except ValueError:
+        log.warning('META_ACCESS_EXPIRES is not YYYY-MM-DD: %s', value)
+        expires = date.fromisoformat(EXPIRES_DEFAULT)
     if today >= expires - timedelta(days=REMIND_BEFORE) and WorkerState.get('meta_expiry_reminded') != expires.isoformat():
         WorkerState.put('meta_expiry_reminded', expires.isoformat())
         notify(f'⏰ Meta 인스타 데이터 접근이 {expires.month}월 {expires.day}일에 끝나요. 런북 '

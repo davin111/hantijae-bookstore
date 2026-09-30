@@ -22,10 +22,13 @@ def media(mid, caption, day, username='', url=None):
 
 
 class Graph:
-    """tags: 태그 글 목록, pros: 프로페셔널 아이디 → 최근 글 목록, auth: 모든 호출이 code 190, broken: 오류 날 아이디."""
+    """tags: 태그 글 목록, pros: 프로페셔널 아이디 → 최근 글 목록, auth: 모든 호출이 code 190,
+    broken: 오류 날 아이디 — 집합이면 code 2, {아이디: code}면 그 code로."""
 
     def __init__(self, tags=(), pros=None, auth=False, broken=(), tags_broken=False):
-        self.tags, self.pros, self.auth, self.broken, self.tags_broken, self.calls = list(tags), pros or {}, auth, set(broken), tags_broken, []
+        self.tags, self.pros, self.auth = list(tags), pros or {}, auth
+        self.broken = dict(broken) if isinstance(broken, dict) else {h: 2 for h in broken}
+        self.tags_broken, self.calls = tags_broken, []
 
     def __call__(self, url, params=None, timeout=None):
         path = url.split('/v26.0/', 1)[1]
@@ -38,7 +41,7 @@ class Graph:
             return self._r(200, {'data': self.tags})
         name = params['fields'].split('business_discovery.username(', 1)[1].split(')', 1)[0]
         if name in self.broken:
-            return self._r(500, {'error': {'code': 2}})
+            return self._r(500, {'error': {'code': self.broken[name]}})
         if name not in self.pros:
             return self._r(400, {'error': {'code': 110, 'error_subcode': 2207013}})
         return self._r(200, {'business_discovery': {'media': {'data': self.pros[name]}}})
@@ -183,6 +186,32 @@ class InstagramTest(TestCase):
         with self.assertLogs('intake', level='WARNING'):
             instagram.run(self.deps(), SUNDAY, self.notes.append, get=g)
         self.assertEqual(len([n for n in self.notes if '협력 계정' in n]), 1)
+
+    def test_partner_code_10_is_skipped_not_treated_as_auth_error(self):
+        pros = {p: [] for p in instagram.PARTNERS}
+        pros['todakbook'] = [media('B', '『무궁화호를 위하여』 입고', date(2026, 10, 3))]
+        g = Graph(pros=pros, broken={'hagobooks': 10})
+        with self.assertLogs('intake', level='WARNING'):
+            instagram.run(self.deps(), SUNDAY, self.notes.append, get=g)
+        self.assertEqual(Signal.objects.get().detail['where'], '@todakbook')
+        self.assertNotIn(instagram.AUTH_NOTE, self.notes)
+
+    def test_tagger_code_200_is_not_treated_as_auth_error(self):
+        g = Graph(tags=[media('A', '『무궁화호를 위하여』 읽었다', date(2026, 9, 26), 'flaky.shop')],
+                  broken={'flaky.shop': 200})
+        with self.assertLogs('intake', level='WARNING'):
+            instagram.run(self.deps(), TODAY, self.notes.append, get=g)
+        s = Signal.objects.get()
+        self.assertEqual(s.detail['where'], '')
+        self.assertNotIn(instagram.AUTH_NOTE, self.notes)
+
+    @override_settings(MARKETING={**CFG, 'META_ACCESS_EXPIRES': '2026.12.28'})
+    def test_bad_expiry_setting_falls_back_to_default(self):
+        g = Graph(pros={p: [] for p in instagram.PARTNERS})   # 12-20은 일요일
+        with self.assertLogs('intake', level='WARNING') as cm:
+            instagram.run(self.deps(), date(2026, 12, 20), self.notes.append, get=g)
+        self.assertIn('META_ACCESS_EXPIRES', '\n'.join(cm.output))
+        self.assertEqual(len([n for n in self.notes if '12월 28일' in n]), 1)
 
 
 class CommandTest(TestCase):

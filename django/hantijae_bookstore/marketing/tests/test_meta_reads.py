@@ -79,6 +79,19 @@ class ReadTest(SimpleTestCase):
         self.assertEqual([m.id for m in got], ['1'])
         self.assertIn('meta tags page', '\n'.join(cm.output))
 
+    def test_tagged_media_raises_when_a_2xx_body_is_not_json(self):
+        class BadJSON:
+            status_code = 200
+
+            def json(self):
+                raise ValueError('boom')
+
+        def get(url, params=None, timeout=None):
+            return BadJSON()
+
+        with self.assertRaises(meta.MetaError):
+            meta.tagged_media(get=get)
+
     def test_business_media_returns_none_for_personal_accounts(self):
         get = FakeGraph(lambda path, params: err(110))
         self.assertIsNone(meta.business_media('someone', get=get))
