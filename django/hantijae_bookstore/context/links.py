@@ -39,6 +39,7 @@ def youtube_info(vid, get):
             data, _ = json.JSONDecoder().raw_decode(page, i + len(_PLAYER))
         except ValueError:
             data = {}
+        data = data if isinstance(data, dict) else {}  # 'ytInitialPlayerResponse = null' 인 페이지도 있다
         d = data.get('videoDetails') or {}
         mf = (data.get('microformat') or {}).get('playerMicroformatRenderer') or {}
         if d.get('title'):
@@ -56,14 +57,16 @@ def summary(info, now):
     parts = [f"[유튜브] 「{info['title']}」", info['channel'],
              f"{info['published']} 공개" if info['published'] else '',
              f"조회 수 {info['views']:,}회({t.month}/{t.day} {t:%H:%M} 기준)" if info['views'] is not None else '']
-    desc = ' '.join(info['description'].split())[:DESC]
+    desc = redact(' '.join(info['description'].split()))[0][:DESC]  # 가린 뒤 자른다(자른 번호 끝이 남지 않게)
     return ' · '.join(p for p in parts if p) + (f'\n설명: {desc}' if desc else '')
 
 
 def read_links(entries, now, get, limit=LIMIT):
     """아직 읽지 않은 유튜브 링크가 있는 기록마다 한 번 읽어 저장한다. 못 읽어도 읽은 것으로 적고 넘어간다
     (계기 잡기를 막지 않는다). 글을 붙인 기록 수를 돌려준다."""
-    todo = [e for e in entries if not e.forgotten and e.link_read_at is None and video_ids(e.text)][:limit]
+    # 텔레그램 기록만: 노션 구역 줄은 링크 내용을 LLM에 보이지 않고, 노션 글이 바뀌어도 link_text를 비우지 않는다
+    todo = [e for e in entries if e.source == ContextEntry.TELEGRAM and not e.forgotten and e.link_read_at is None
+            and video_ids(e.text)][:limit]
     n = 0
     for e in todo:
         parts = []

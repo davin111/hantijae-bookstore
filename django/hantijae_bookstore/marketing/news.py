@@ -120,7 +120,10 @@ def narrow_new(llm, watches, now):
     except Exception:
         log.warning('저자 소식 검색어 좁히기 실패(이름만으로 찾음)', exc_info=True)
         return
-    by_id = {v.get('id'): v for v in out.get('items', []) if isinstance(v, dict)}
+    items = out.get('items') if isinstance(out, dict) else None
+    # 답 모양이 이상해도 좁히기만 건너뛴다(수집 전체가 멈추지 않게)
+    by_id = {v['id']: v for v in items if isinstance(v, dict) and isinstance(v.get('id'), int)} \
+        if isinstance(items, list) else {}
     for i, w in enumerate(todo):
         if i not in by_id:  # 답에서 빠진 사람은 다음 수집 때 다시 묻는다
             continue

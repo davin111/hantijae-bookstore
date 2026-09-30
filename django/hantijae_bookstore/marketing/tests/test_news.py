@@ -145,6 +145,14 @@ class NarrowTest(TestCase):
         self.assertIn('"박강수" when:14d', self.urls[0])
         self.assertEqual(len(made), 2)
 
+    def test_malformed_narrow_reply_does_not_stop_collection(self):
+        for reply in ({'items': None}, {'items': [{'id': [0], 'words': ['가수']}]}, {'items': '글자'}):
+            WatchQuery.objects.all().delete()
+            Signal.objects.all().delete()
+            made = self.collect(FakeLLM([reply, {'items': []}]))
+            w = WatchQuery.objects.get(query='박강수')
+            self.assertEqual((w.narrow, w.narrowed_at, len(made)), ('', None, 2))
+
     def test_queries_without_book_are_not_narrowed(self):
         ensure_watch_queries(date(2026, 9, 28))
         WatchQuery.objects.filter(query='박강수').update(narrowed_at=timezone.now())

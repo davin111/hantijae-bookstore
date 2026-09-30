@@ -59,6 +59,28 @@ class YoutubeInfoTest(TestCase):
                          {'title': '제목만', 'channel': '채널', 'published': '', 'views': None, 'description': ''})
 
 
+class ReviewFixLinksTest(TestCase):
+    def test_null_player_falls_back_to_oembed(self):
+        def get(url):
+            return json.dumps({'title': '제목', 'author_name': '채널'}) if 'oembed' in url else 'ytInitialPlayerResponse = null;'
+        self.assertEqual(L.youtube_info(VID, get)['title'], '제목')
+
+    def test_phone_on_the_clip_boundary_is_masked_whole(self):
+        info = {'title': 't', 'channel': 'c', 'published': '', 'views': None,
+                'description': '가' * (L.DESC - 6) + ' 010-1234-5678 뒤'}
+        text = L.summary(info, NOW)
+        self.assertNotIn('010-1', text)  # 자른 뒤 가리면 '010-1'처럼 앞부분이 남는다
+
+    def test_notion_sections_are_not_read(self):
+        note = ContextEntry.objects.create(key='notion:b1', source='notion', at=NOW, heading='『책』 · 홍보',
+                                           text=f'https://youtu.be/{VID}')
+
+        calls = []
+        self.assertEqual(L.read_links([note], NOW, calls.append), 0)
+        note.refresh_from_db()
+        self.assertEqual((calls, note.link_read_at), ([], None))
+
+
 class ReadLinksTest(TestCase):
     def test_saves_redacted_summary_and_marks_read(self):
         e = entry(1, f'박강수 방송. https://youtu.be/{VID}?si=abc')
