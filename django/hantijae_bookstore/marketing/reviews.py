@@ -92,6 +92,11 @@ def _save(book, post, key, verdict, reason):
     return s
 
 
+def save_old(book, post, key):
+    """판별 없이 기준선으로 적는다(오래된 글·첫 검색의 날짜 없는 글). instagram.py도 쓴다."""
+    return _save(book, post, key, 'old', '')
+
+
 def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
     """검색하고 코드로 거른다. 오래된 글과 첫 검색의 날짜 없는 글은 바로 기준선으로 적고,
     새 글은 판별하도록 [(BookTerms, Post, key)]로 돌려준다."""
@@ -141,7 +146,7 @@ def scan(today, books=None, cfg=None, get_json=http_get_json, sleep=time.sleep):
                     if is_fresh:
                         fresh.append((t, p, key))
                     else:
-                        _save(book, p, key, 'old', '')
+                        save_old(book, p, key)
                         report.baseline += 1
         # 책마다 적어 둔다 — 워커가 죽어도(배포·OOM) 다시 켰을 때 이미 끝낸 책은 되풀이하지 않는다
         WorkerState.put(SCANNED, sorted(scanned | (ok - bad)))

@@ -215,6 +215,13 @@ class CandidateTest(TestCase):
             ids = [c.id for c in C.gather(TODAY, NOW, posts=None)]
         self.assertLess(ids.index('sns:1'), ids.index(f'review:{self.sibwol.id}:2026-09-28'))
 
+    def test_instagram_reviews_are_counted_and_named(self):
+        review(self.sibwol, 1)
+        review(self.sibwol, 2, source='ig_tag', where='@hagobooks', day=date(2026, 9, 26))
+        [c] = C.review_candidates(TODAY, NOW)
+        self.assertEqual(c.summary, '새 독자 서평 2건(네이버 블로그 1, 인스타 태그 1)')
+        self.assertEqual(c.facts['items'][0]['where'], '인스타 태그 「@hagobooks」')
+
 
 class MomentCandidateTest(TestCase):
     def setUp(self):

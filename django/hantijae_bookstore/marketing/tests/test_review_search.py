@@ -90,4 +90,5 @@ class SearchTest(SimpleTestCase):
         self.assertEqual(sources({'NAVER_HUB_CLIENT_ID': 'x'}), [])   # 비밀값이 없으면 네이버를 쓰지 않는다
         self.assertEqual([s for s, _, _ in sources({'KAKAO_REST_API_KEY': 'k'})], ['daum_blog', 'daum_cafe'])
         full = {'NAVER_HUB_CLIENT_ID': 'i', 'NAVER_HUB_CLIENT_SECRET': 's', 'KAKAO_REST_API_KEY': 'k'}
-        self.assertEqual([s for s, _, _ in sources(full)], list(SOURCE_LABEL))
+        self.assertEqual([s for s, _, _ in sources(full)], ['naver_blog', 'naver_cafe', 'daum_blog', 'daum_cafe'])
+        self.assertEqual((SOURCE_LABEL['ig_tag'], SOURCE_LABEL['ig_partner']), ('인스타 태그', '인스타 협력 계정'))
