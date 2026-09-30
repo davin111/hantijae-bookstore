@@ -210,7 +210,9 @@ def with_moments(cands, moments, now):
             surge.facts['room'] = talk.signal.title
             surge.signal = talk.signal
             keep.remove(talk)
-    return cands + keep
+    # 계기를 앞에 둔다: select 가 급한 순서로만 정렬한 뒤 12개로 자르므로(같은 급한 정도면 들어온 순서),
+    # 뒤에 붙이면 같은 급한 정도 안에서 가장 먼저 잘린다. 대화 속 계기는 판매를 움직인 1순위 재료다
+    return keep + cands
 
 
 def surge_candidates(today):

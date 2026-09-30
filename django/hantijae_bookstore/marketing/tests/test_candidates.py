@@ -215,3 +215,19 @@ class MomentCandidateTest(TestCase):
         self.moment('7월 이야기', seen_on='2026-07-20')
         self.moment('어제 이야기', seen_on='2026-09-27', found=NOW - timedelta(days=40))
         self.assertEqual(self.ids(), ['어제 이야기'])
+
+
+class MomentOrderTest(TestCase):
+    def test_moments_survive_the_candidate_cap_among_equal_urgency(self):
+        books = [make_book(title=f'책 {i}', isbn=f'979-11-00000-{i:02d}-0', author=None) for i in range(15)]
+        base = [C.Candidate(id=f'news:{i}', kind='news', books=[books[i]], summary='소식', facts={}, urgency=2)
+                for i in range(13)]
+        moments = []
+        for i in (13, 14):
+            s = Signal.objects.create(kind=Signal.MOMENT, key=f'moment:{i}', book=books[i], title=f'계기 {i}',
+                                      relevant=True, detail={'type': 'selection', 'status': 'done'})
+            moments.append(C.Candidate(id=f'moment:{s.id}', kind='moment', books=[books[i]], summary='계기', facts={},
+                                       urgency=2, signal=s))
+        kept = C.select(C.with_moments(base, moments, NOW), TODAY, NOW)
+        self.assertEqual(len(kept), 12)
+        self.assertEqual([c.kind for c in kept[:2]], ['moment', 'moment'])
