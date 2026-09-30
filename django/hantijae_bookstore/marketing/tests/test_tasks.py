@@ -71,7 +71,7 @@ class RunDueTest(TestCase):
         patcher = mock.patch('marketing.tasks.instagram.run')
         self.instagram_scan = patcher.start()
         self.addCleanup(patcher.stop)
-        patcher = mock.patch('marketing.tasks.loans.collect')
+        patcher = mock.patch('marketing.tasks.loans.run')
         self.loan_scan = patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -292,7 +292,9 @@ class RunDueTest(TestCase):
         tasks.run_due(deps, datetime(2026, 10, 3, 5, 40, tzinfo=KST))
         tasks.run_due(deps, datetime(2026, 10, 3, 12, 0, tzinfo=KST))
         self.assertEqual(self.loan_scan.call_count, 1)
-        self.assertEqual(self.loan_scan.call_args.args, (date(2026, 10, 3),))
+        self.assertEqual(self.loan_scan.call_args.args[0], date(2026, 10, 3))
+        self.loan_scan.call_args.kwargs['notify']('x')   # 05:40에 부른 알림은 아침까지 모아 둔다
+        self.assertEqual(deps.bot.notes, [])
 
     def test_review_failure_is_reported_once_and_loop_goes_on(self, sales_, *_):
         self.review_scan.side_effect = RuntimeError('판별 실패')
@@ -315,7 +317,7 @@ class MomentScheduleTest(TestCase):
 
     def setUp(self):
         # 바깥 수집은 이 클래스가 보는 것이 아니다 — 시험 중에 실제 사이트에 요청하지 않게 막는다
-        for target in ('marketing.tasks.loans.collect', 'marketing.tasks.selections.run_scan',
+        for target in ('marketing.tasks.loans.run', 'marketing.tasks.selections.run_scan',
                        'marketing.tasks.social.run_due', 'marketing.tasks.reviews.run',
                        'marketing.tasks.instagram.run'):
             patcher = mock.patch(target)
@@ -393,7 +395,7 @@ class MomentScheduleTest(TestCase):
 class MomentQuietTest(TestCase):
     def setUp(self):
         # 바깥 수집은 이 클래스가 보는 것이 아니다 — 시험 중에 실제 사이트에 요청하지 않게 막는다
-        for target in ('marketing.tasks.loans.collect', 'marketing.tasks.selections.run_scan',
+        for target in ('marketing.tasks.loans.run', 'marketing.tasks.selections.run_scan',
                        'marketing.tasks.social.run_due', 'marketing.tasks.reviews.run',
                        'marketing.tasks.instagram.run'):
             patcher = mock.patch(target)

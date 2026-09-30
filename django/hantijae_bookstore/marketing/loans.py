@@ -16,10 +16,15 @@ from marketing.models import LoanSnapshot
 from marketing.selection_match import isbn13
 
 log = logging.getLogger('intake')
-API = 'http://data4library.kr/api/usageAnalysisList'
+API = 'https://data4library.kr/api/usageAnalysisList'
 SPACING = 1.0
 NOT_FOUND = 'isbnMpngErr'   # 그 ISBN이 도서관 자료에 없다 — 오류가 아니다
+GIVE_UP = 10   # 처음부터 이만큼 연달아 실패하면(서버가 죽었거나 키 문제) 나머지는 부르지 않는다 — 워커를 한 시간 붙잡지 않게
 _MONTH = re.compile(r'(\d{4})\D+(\d{1,2})')
+
+
+class Unavailable(RuntimeError):
+    """정보나루를 한 권도 읽지 못함. 문구에 키·주소가 없다."""
 
 
 @dataclass
@@ -73,6 +78,8 @@ def collect(today, books=None, key=None, get_json=http_get_json, sleep=time.slee
             report.failed += 1
             if report.failed == 1:
                 log.warning('data4library %s failed: %s', isbn, type(e).__name__)
+            if report.failed >= GIVE_UP and not report.saved and not report.missing:
+                break
             continue
         if rows is None:
             report.missing += 1
@@ -81,5 +88,18 @@ def collect(today, books=None, key=None, get_json=http_get_json, sleep=time.slee
             LoanSnapshot.objects.update_or_create(book=book, month=month, defaults={'loans': n, 'ranking': ranking})
             report.saved += 1
     if report.books and report.failed == report.books:
-        raise RuntimeError(f'도서관 정보나루를 한 권도 읽지 못했어요({report.failed}권 실패)')
+        raise Unavailable(f'도서관 정보나루를 한 권도 읽지 못했어요({report.failed}권 실패)')
+    return report
+
+
+def run(today, notify, **collect_kwargs):
+    """워커가 토요일 05:40에 부른다. 한 권도 못 읽으면 관리자에게(밤이면 08시에) 한 번. 그 밖의 오류는 _guard가."""
+    try:
+        report = collect(today, **collect_kwargs)
+    except Unavailable as e:
+        log.warning('loans: %s', e)
+        notify(f'⚠️ {e} — 서버 로그의 data4library 줄을 확인해 주세요')
+        return None
+    log.info('loans: books %d, saved %d, missing %d, failed %d', report.books, report.saved, report.missing,
+             report.failed)
     return report

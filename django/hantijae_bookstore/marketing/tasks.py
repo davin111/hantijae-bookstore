@@ -230,7 +230,7 @@ def _run_due(deps, now):
     if (local.weekday() == LOAN_WEEKDAY and _hm(local) >= LOAN_AT
             and WorkerState.get('marketing_last_loan_scan') != day):
         WorkerState.put('marketing_last_loan_scan', day)
-        _guard(deps, 'loan', now, lambda: loans.collect(today))
+        _guard(deps, 'loan', now, lambda: loans.run(today, notify=lambda text: _notify_awake(deps, now, text)))
 
     if _hm(local) >= SALES_AT and WorkerState.get('marketing_last_sales_scan') != day:
         WorkerState.put('marketing_last_sales_scan', day)

@@ -1,5 +1,6 @@
 from datetime import date
 from io import StringIO
+from types import SimpleNamespace
 from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
@@ -76,9 +77,17 @@ class LoansTest(TestCase):
 
     def test_every_book_failing_raises(self):
         api = Api({'9791192455846': RuntimeError('x'), '9788997090884': RuntimeError('y')})
-        with self.assertLogs('intake', level='WARNING'), self.assertRaises(RuntimeError) as ctx:
+        with self.assertLogs('intake', level='WARNING'), self.assertRaises(loans.Unavailable) as ctx:
             loans.collect(date(2026, 10, 3), key='SECRETKEY', get_json=api, sleep=no_sleep)
         self.assertNotIn('SECRETKEY', str(ctx.exception))
+        self.assertIsNone(ctx.exception.__context__)   # raise가 except 밖에 있어 원래 예외(주소 포함)를 물지 않는다
+
+    def test_gives_up_after_consecutive_failures(self):
+        books = [SimpleNamespace(id=i, isbn='979-11-92455-84-6') for i in range(15)]
+        api = Api({'9791192455846': RuntimeError('x')})
+        with self.assertLogs('intake', level='WARNING'), self.assertRaises(loans.Unavailable):
+            loans.collect(date(2026, 10, 3), books=books, key='k', get_json=api, sleep=no_sleep)
+        self.assertEqual(len(api.calls), loans.GIVE_UP)
 
     def test_no_key_does_nothing(self):
         api = Api({})
@@ -90,6 +99,32 @@ class LoansTest(TestCase):
         loans.collect(date(2026, 10, 3), key='k', get_json=Api({'9791192455846': MISSING, '9788997090884': MISSING}),
                       sleep=sleeps.append)
         self.assertEqual(sleeps, [loans.SPACING])
+
+
+class RunTest(TestCase):
+    def setUp(self):
+        self.mu = make_book(title='무궁화호를 위하여', published=date(2026, 3, 16), isbn='979-11-92455-84-6', author=None)
+        self.co = make_book(title='커밍아웃 스토리', published=date(2018, 6, 11), isbn='978-89-97090-88-4 (03810)',
+                            author=None)
+
+    def test_all_books_failing_notifies_without_raising(self):
+        api = Api({'9791192455846': RuntimeError('x'), '9788997090884': RuntimeError('y')})
+        notes = []
+        with self.assertLogs('intake', level='WARNING'):
+            result = loans.run(date(2026, 10, 3), notify=notes.append, key='SECRETKEY', get_json=api, sleep=no_sleep)
+        self.assertIsNone(result)
+        self.assertEqual(len(notes), 1)
+        self.assertIn('정보나루', notes[0])
+        self.assertNotIn('SECRETKEY', notes[0])
+
+    def test_success_logs_a_summary(self):
+        api = Api({'9791192455846': HIT, '9788997090884': MISSING})
+        notes = []
+        with self.assertLogs('intake', level='INFO') as cm:
+            result = loans.run(date(2026, 10, 3), notify=notes.append, key='k', get_json=api, sleep=no_sleep)
+        self.assertEqual((result.books, result.saved, result.missing, result.failed), (2, 2, 1, 0))
+        self.assertEqual(notes, [])
+        self.assertTrue(any(r.getMessage().startswith('loans: books') for r in cm.records))
 
 
 class CommandTest(TestCase):
