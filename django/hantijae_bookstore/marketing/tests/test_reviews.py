@@ -1,7 +1,10 @@
 import json
 from datetime import date
+from io import StringIO
 from types import SimpleNamespace
+from unittest import mock
 
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 
 from intake.models import WorkerState
@@ -270,3 +273,34 @@ class RunTest(TestCase):
         api = FakeAPI(naver_blog=[nb('커밍아웃 스토리 독후감', 'https://blog.naver.com/a/1', '한티재', '20260925')])
         report = reviews.run(self.deps(FakeLLM(REVIEW)), TODAY, books=[self.book], get_json=api, sleep=no_sleep)
         self.assertEqual([s.url for s in report.reviews], ['https://blog.naver.com/a/1'])
+
+
+class CommandTest(TestCase):
+    def setUp(self):
+        self.book = make_book(title='커밍아웃 스토리', subtitle='', published=date(2018, 6, 11),
+                              isbn='979-11-00000-01-1', author='성소수자부모모임')
+
+    def fake_scan(self, today, books=None, **kw):
+        Signal.objects.create(kind='review', key='review:x', book=self.book, title='기준선')
+        post = Post('naver_blog', 'https://blog.naver.com/a/1', '커밍아웃 스토리 독후감', '한티재', date(2026, 9, 25))
+        return reviews.Report(books=len(books or []), found=1, baseline=1), [(terms(self.book), post, 'review:y')]
+
+    def test_dry_run_rolls_back_and_prints(self):
+        out = StringIO()
+        with mock.patch('marketing.reviews.scan', side_effect=self.fake_scan), \
+                mock.patch('intake.deps.build_deps', return_value=SimpleNamespace(llm=FakeLLM(REVIEW))):
+            call_command('marketing_scan_reviews', '--dry-run', '--book', str(self.book.id), stdout=out)
+        text = out.getvalue()
+        self.assertIn('책 1권, 새 글 1건(서평 1건), 기준선 1건, 실패한 출처 없음', text)
+        self.assertIn('『커밍아웃 스토리』 [네이버 블로그] 커밍아웃 스토리 독후감 | 2026-09-25 | review 읽은 감상', text)
+        self.assertIn('(dry-run: 기록하지 않았어요)', text)
+        self.assertEqual(Signal.objects.count(), 0)
+
+    def test_no_judge_does_not_touch_the_llm(self):
+        out = StringIO()
+        with mock.patch('marketing.reviews.scan', side_effect=self.fake_scan), \
+                mock.patch('intake.deps.build_deps') as build, mock.patch('marketing.reviews.save_judged') as judged:
+            call_command('marketing_scan_reviews', '--dry-run', '--no-judge', '--book', str(self.book.id), stdout=out)
+        build.assert_not_called()
+        judged.assert_not_called()
+        self.assertIn('| 판별 안 함 |', out.getvalue())
