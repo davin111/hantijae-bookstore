@@ -12,22 +12,35 @@ def _total(p):
     return p.reactions + p.comments + p.shares
 
 
+def _fb_part(fb):
+    if fb is None:
+        return '페북은 읽지 못했어요'
+    if not fb:
+        return '페북 글 없음'
+    return (f'페북 {len(fb)}건 반응 {sum(p.reactions for p in fb)}·댓글 {sum(p.comments for p in fb)}·'
+            f'공유 {sum(p.shares for p in fb)}')
+
+
+def _ig_part(ig):
+    if ig is None:
+        return '인스타는 읽지 못했어요'
+    if not ig:
+        return '인스타 글 없음'
+    return f'인스타 {len(ig)}건 좋아요 {sum(p.reactions for p in ig)}·댓글 {sum(p.comments for p in ig)}'
+
+
 def week_line(today, fetch=meta.channel_posts):
     start = datetime.combine(week_start(today) - timedelta(days=7), datetime.min.time(), tzinfo=KST)
     got = fetch(start, start + timedelta(days=7))
     fb, ig = got.get('facebook'), got.get('instagram')
     if fb is None and ig is None:
         return ''
-    parts = [('페북은 읽지 못했어요' if fb is None else
-              f'페북 {len(fb)}건 반응 {sum(p.reactions for p in fb)}·댓글 {sum(p.comments for p in fb)}·'
-              f'공유 {sum(p.shares for p in fb)}'),
-             ('인스타는 읽지 못했어요' if ig is None else
-              f'인스타 {len(ig)}건 좋아요 {sum(p.reactions for p in ig)}·댓글 {sum(p.comments for p in ig)}')]
-    line = '지난주 공식 채널: ' + ', '.join(parts)
+    line = '지난주 공식 채널: ' + ', '.join([_fb_part(fb), _ig_part(ig)])
     posts = (fb or []) + (ig or [])
     if posts:
         top = max(posts, key=lambda p: (_total(p), p.posted_at))
         text = ' '.join(top.text.split())
         head = text if len(text) <= HEAD else text[:HEAD].rstrip() + '…'
-        line += f'. 반응이 가장 큰 글: {"페북" if top.channel == "facebook" else "인스타"} 「{head}」 {_total(top)}'
+        line += (f'. 반응이 가장 큰 글: {"페북" if top.channel == "facebook" else "인스타"} '
+                 f'「{head}」(반응 합계 {_total(top)})')
     return line
