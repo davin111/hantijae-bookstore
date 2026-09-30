@@ -315,6 +315,16 @@ class BuildWeeklyTest(TestCase):
         self.assertIn('지난주 공식 채널: 페북 2건', llm.calls[0][1])
         self.assertIn('<참고: 운영진 개인 SNS 소식·지난주 공식 채널 현황(후보 아님)>', llm.calls[0][1])
 
+    def test_search_line_goes_to_measure_and_llm_context(self):
+        book = make_book(title='무지개를 변호하다', published=date(2026, 6, 1), isbn='979-11-00000-14-1', author=None)
+        Signal.objects.create(kind=Signal.REVIEW, key='review:c1', book=book, title='읽고', url='https://blog.naver.com/a/1',
+                              happens_on=date(2026, 9, 25), relevant=True, detail={'source': 'naver_blog', 'where': ''})
+        llm = FakeLLM({'items': []})
+        now = datetime(2026, 9, 28, 7, 0, tzinfo=KST)
+        briefing, _ = build_weekly(llm, TODAY, now, posts=[], search_line=lambda today: '지난 7일 구글 검색: 노출 3·클릭 1')
+        self.assertIn('지난 7일 구글 검색: 노출 3·클릭 1', briefing.measure)
+        self.assertIn('지난 7일 구글 검색: 노출 3·클릭 1', llm.calls[0][1])
+
 
 class FitMeasureTest(TestCase):
     def test_fits_both_lines_when_possible(self):
@@ -352,6 +362,15 @@ class FitMeasureTest(TestCase):
         result = _fit_measure(first, line)
         self.assertEqual(result, first + '\n' + line)
         self.assertEqual(len(result), 201)  # 100 + newline + 100
+
+    def test_fit_measure_keeps_whole_lines_for_three(self):
+        first = 'ㄱ' * 400
+        channel = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 글 없음. 반응이 가장 큰 글: 페북 「' + 'ㄴ' * 120 + '」(반응 합계 22)'
+        found = '지난 7일 구글 검색: 노출 120·클릭 8. 많이 찾은 말: ' + 'ㄷ' * 150
+        text = _fit_measure(first, channel, found)
+        self.assertLessEqual(len(text), 600)
+        self.assertEqual(text.split('\n'), [first, '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 글 없음',
+                                           '지난 7일 구글 검색: 노출 120·클릭 8'])
 
 
 class PromptRulesTest(TestCase):

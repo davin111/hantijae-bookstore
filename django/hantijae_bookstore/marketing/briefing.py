@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from intake.llm import complete_json
-from marketing import bnk_sales, candidates, channels, gnews, meta
+from marketing import bnk_sales, candidates, channels, gnews, meta, search
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM, build_briefing_user
 from marketing.sales import latest
@@ -133,14 +133,39 @@ def _reactions(draft, counts):
 MEASURE_MAX = 600   # Briefing.measure 칸 길이
 
 
-def _fit_measure(first, line):
-    """성과 줄과 공식 채널 줄을 measure 칸에 넣는다. 넘치면 채널 줄의 '반응이 가장 큰 글' 부분을 빼고, 그래도 넘치면
-    채널 줄을 뺀다 — 반쯤 잘린 줄을 운영진에게 보이지 않게. 성과 줄만으로 넘치면 그 줄을 자른다(예전과 같다)."""
-    for cand in (line, line.split('. 반응이 가장 큰 글:')[0] if line else ''):
-        text = '\n'.join(x for x in (first, cand) if x)
+def _fit_measure(first, *lines):
+    """성과 줄 다음에 공식 채널·검색 줄을 measure 칸에 넣는다. 넘치면 그 줄의 첫 '. ' 뒤(가장 큰 글·많이 찾은 말)를 빼고,
+    그래도 넘치면 그 줄을 뺀다 — 반쯤 잘린 줄을 운영진에게 보이지 않게. 성과 줄만으로 넘치면 그 줄을 자른다."""
+    text_base = first[:MEASURE_MAX]
+    lines_to_add = [l for l in lines if l]
+
+    # Try to add all lines; truncate from the end if needed
+    all_lines = [text_base] + lines_to_add
+    text = '\n'.join(all_lines)
+
+    # If it fits, return
+    if len(text) <= MEASURE_MAX:
+        return text
+
+    # Try truncating lines from the end backward
+    for i in range(len(all_lines) - 1, 0, -1):  # don't truncate first line
+        line = all_lines[i]
+        truncated = line.split('. ', 1)[0]
+        if truncated and len(truncated) < len(line):
+            all_lines[i] = truncated
+            text = '\n'.join(all_lines)
+            if len(text) <= MEASURE_MAX:
+                return text
+
+    # Try dropping lines from the end
+    for i in range(len(all_lines) - 1, 0, -1):
+        all_lines_without = all_lines[:i] + all_lines[i+1:]
+        text = '\n'.join(all_lines_without)
         if len(text) <= MEASURE_MAX:
             return text
-    return first[:MEASURE_MAX]
+
+    # Worst case: just first line
+    return text_base
 
 
 def measure_line(today, counts=meta.post_counts):
@@ -174,14 +199,15 @@ def measure_line(today, counts=meta.post_counts):
     return ''
 
 
-def build_weekly(llm, today, now, posts, resolve=gnews.original_url, channel_line=channels.week_line):
+def build_weekly(llm, today, now, posts, resolve=gnews.original_url, channel_line=channels.week_line, search_line=search.week_line):
     line = channel_line(today)   # 지난주 공식 채널 한 줄: 브리핑 끝(measure)과 LLM '참고' 블록에
+    found = search_line(today)   # 지난 7일 구글 검색 한 줄
     items, dropped = compose(llm, candidates.gather(today, now, posts), today,
-                             candidates.social_context(now) + ([line] if line else []))
+                             candidates.social_context(now) + [x for x in (line, found) if x])
     for cand, *_ in items:  # 방에 보일 링크만(최대 4개): 구글 뉴스 주소는 언론사 원래 주소로, 실패하면 그대로
         if cand.link:
             cand.link = resolve(cand.link)
     briefing = save_briefing(items, today)
-    briefing.measure = _fit_measure(measure_line(today), line)
+    briefing.measure = _fit_measure(measure_line(today), line, found)
     briefing.save(update_fields=['measure'])
     return briefing, dropped
