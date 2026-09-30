@@ -1,6 +1,9 @@
 from datetime import date, datetime, timezone
+from io import StringIO
 from types import SimpleNamespace
+from unittest import mock
 
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 
 from intake.models import WorkerState
@@ -162,3 +165,38 @@ class InstagramTest(TestCase):
                 instagram.run(self.deps(), SUNDAY, self.notes.append, get=g)
         s = Signal.objects.get()
         self.assertEqual(s.detail['where'], '@todakbook')
+
+
+class CommandTest(TestCase):
+    def setUp(self):
+        self.book = make_book(title='무궁화호를 위하여', subtitle='', published=date(2026, 3, 16),
+                              isbn='979-11-00000-16-1', author='하승우')
+
+    def fake_scan(self, today, partners=False, **kw):
+        from marketing.review_filter import terms
+        from marketing.review_search import Post
+        Signal.objects.create(kind='review', key='review:x', book=self.book, title='기준선')
+        post = Post('ig_tag', 'https://www.instagram.com/p/A/', '북클럽 이번 책', '『무궁화호를 위하여』', date(2026, 9, 26),
+                    '@librariaq')
+        return reviews.Report(books=1, found=1, baseline=1), [(terms(self.book), post, 'review:y')]
+
+    def test_dry_run_rolls_back_and_prints(self):
+        out = StringIO()
+        with mock.patch('marketing.instagram.scan', side_effect=self.fake_scan) as scan, \
+                mock.patch('intake.deps.build_deps', return_value=SimpleNamespace(llm=FakeLLM(REVIEW))):
+            call_command('marketing_scan_instagram', '--dry-run', '--partners', stdout=out)
+        self.assertTrue(scan.call_args.kwargs['partners'])
+        text = out.getvalue()
+        self.assertIn('새 글 1건(서평 1건), 기준선 1건', text)
+        self.assertIn('『무궁화호를 위하여』 [인스타 태그 @librariaq] 북클럽 이번 책 | 2026-09-26 | review 읽은 감상', text)
+        self.assertIn('(dry-run: 기록하지 않았어요)', text)
+        self.assertEqual(Signal.objects.count(), 0)
+
+    def test_no_judge_skips_the_llm(self):
+        out = StringIO()
+        with mock.patch('marketing.instagram.scan', side_effect=self.fake_scan), \
+                mock.patch('intake.deps.build_deps') as build, mock.patch('marketing.reviews.save_judged') as judged:
+            call_command('marketing_scan_instagram', '--dry-run', '--no-judge', stdout=out)
+        build.assert_not_called()
+        judged.assert_not_called()
+        self.assertIn('| 판별 안 함 |', out.getvalue())
