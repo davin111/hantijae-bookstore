@@ -156,6 +156,10 @@ class WatchQuery(BaseModel):
     query = models.CharField(max_length=200, unique=True)
     book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL)
     active = models.BooleanField(default=True)
+    narrow = models.CharField(max_length=300, blank=True,
+                              help_text='검색어에 덧붙이는 조건(동명이인 거르기). 예: (가수 OR 노래 OR 한티재)')
+    narrowed_at = models.DateTimeField(null=True, blank=True,
+                                       help_text='조건을 정한 때(자동·/watch). 비어 있으면 다음 수집 때 자동으로 고른다')
 
 
 class FundingSnapshot(models.Model):

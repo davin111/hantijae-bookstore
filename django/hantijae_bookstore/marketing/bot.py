@@ -31,7 +31,7 @@ KIT_SEND_MAX_FAILURES = 3  # 이 횟수에 닿으면 관리자에게 알리고 �
 BUILDING = '만들고 있어요. 몇 분 걸려요.'
 USAGE = ('사용법: /mk off|admin_only|live · /mk social on|off · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
          '/hook <MM-DD> <이름> | <책1>, <책2> · /hook list · /quiet <제목 일부> <YYYY-MM-DD> [이유] · /quiet list · '
-         '/watch <이름> · /watch list · /watch off <번호> · /moment · /grant')
+         '/watch <이름> [+ 좁히기 조건] · /watch list · /watch off <번호> · /moment · /grant')
 MOMENT_USAGE = ('사용법: /moment off|admin_only|live · /moment midweek off|admin_only|live · /moment now (지금 한 번, 몇 분) · '
                 '/moment list')
 
@@ -542,13 +542,21 @@ class Marketing:
             return ''
         return '\n이번 주 브리핑에서 이 책 항목은 빼고 보낼게요'
 
+    @staticmethod
+    def _watch_label(w):
+        return w.query + (f' + {w.narrow}' if w.narrow else '')
+
     def _watch(self, chat_id, arg, now, today):
         if arg in ('', 'list'):
-            rows = [f'{w.id}. {w.query}{"" if w.active else " (꺼짐)"}' for w in WatchQuery.objects.order_by('id')]
+            rows = [f'{w.id}. {self._watch_label(w)}{"" if w.active else " (꺼짐)"}' for w in WatchQuery.objects.order_by('id')]
             return '\n'.join(rows) or '질의가 없어요'
         m = re.fullmatch(r'off\s+(\d+)', arg)
         if m:
             return '껐어요' if WatchQuery.objects.filter(pk=int(m.group(1))).update(active=False) else '그런 번호가 없어요'
+        narrow = None
+        m = re.fullmatch(r'(.+?)\s*\+\s*(.*)', arg)  # '이름 + 조건': 동명이인 거르기. 빈 조건이면 이름만으로 찾기
+        if m:
+            arg, narrow = m.group(1).strip(), m.group(2).strip()[:300]
         book = _book_for_query(arg)
         w, made = WatchQuery.objects.get_or_create(query=arg[:200], defaults={'book': book})
         fields = []
@@ -556,9 +564,12 @@ class Marketing:
             w.active, fields = True, fields + ['active']
         if not made and w.book_id is None and book is not None:
             w.book, fields = book, fields + ['book']
+        if narrow is not None:  # 직접 정한 조건은 자동 좁히기가 덮지 않는다(narrowed_at)
+            w.narrow, w.narrowed_at, fields = narrow, now, fields + ['narrow', 'narrowed_at']
         if fields:
             w.save(update_fields=[*fields, 'updated_at'])
-        verb = '추가했어요' if made else '이미 있어요'
+        verb = '추가했어요' if made else ('고쳤어요' if narrow is not None else '이미 있어요')
         if w.book_id:
-            return f'{verb}: {w.query} → 『{w.book.title}』'
-        return f'{verb}: {w.query} (연결된 책 없음 — 소식이 와도 브리핑 후보가 되지 않아요. 저자 이름이나 책 제목 그대로 적어 주세요)'
+            return f'{verb}: {self._watch_label(w)} → 『{w.book.title}』'
+        return (f'{verb}: {self._watch_label(w)} (연결된 책 없음 — 소식이 와도 브리핑 후보가 되지 않아요. '
+                '저자 이름이나 책 제목 그대로 적어 주세요)')

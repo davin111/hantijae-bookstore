@@ -415,6 +415,18 @@ class AdminCommandTest(TestCase):
         self.assertIn(f'{w.id}. 정은정', self.run_cmd('/watch', 'list'))
         self.assertEqual(self.run_cmd('/watch', f'off {w.id}'), '껐어요')
 
+    def test_watch_narrow_set_show_and_clear(self):
+        reply = self.run_cmd('/watch', '최정 + (시인 OR 시집)')
+        w = WatchQuery.objects.get(query='최정')
+        self.assertEqual((w.narrow, w.book), ('(시인 OR 시집)', self.book))
+        self.assertIsNotNone(w.narrowed_at)
+        self.assertIn('(시인 OR 시집)', reply)
+        self.assertIn(f'{w.id}. 최정 + (시인 OR 시집)', self.run_cmd('/watch', 'list'))
+        self.run_cmd('/watch', '최정 +')  # 빈 조건 = 이름만으로 찾기(자동으로 다시 좁히지 않음)
+        w.refresh_from_db()
+        self.assertEqual(w.narrow, '')
+        self.assertIsNotNone(w.narrowed_at)
+
     def test_watch_links_book_by_author_or_title(self):
         reply = self.run_cmd('/watch', '최정')
         self.assertIn(f'『{self.book.title}』', reply)

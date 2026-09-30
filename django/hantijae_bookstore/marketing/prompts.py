@@ -60,6 +60,14 @@ NEWS_FILTER_SYSTEM = f"""당신은 기사 제목 목록을 보고 한티재 책�
 JSON 객체 하나만 출력하세요:
 {{"items": [{{"id": 기사 번호, "same_person": true, "evidence": "근거", "relevant": true, "sensitive": false, "summary": "한 줄 요약(쉬운 말)"}}]}}"""
 
+NARROW_SYSTEM = f"""당신은 구글 뉴스에서 한티재 저자의 소식을 찾을 때, 이름이 같은 다른 사람(정치인·운동선수·연예인·기자 등)의 기사를 거를 낱말을 고르는 도우미입니다. {NO_WEB} 글은 쓰지 않습니다.
+사람마다 그 사람을 다룬 기사에 함께 나올 만한 낱말을 3~6개 고릅니다: 직업·분야(시인, 가수, 변호사), 하는 일(시집, 공연, 강연), 자료에 나온 단체·지역.
+- 자료(책 제목·부제·책 소개)에 근거한 낱말만 씁니다.
+- 이름 자체, 책 제목, '한티재'는 넣지 않습니다(코드가 붙입니다).
+- 낱말 하나는 띄어쓰기 없는 짧은 명사입니다.
+JSON 객체 하나만 출력하세요:
+{{"items": [{{"id": 번호, "words": ["가수", "노래"]}}]}}"""
+
 SOCIAL_JUDGE_SYSTEM = f"""당신은 도서출판 한티재 운영진(편집장·대표)이 개인 SNS에 올린 글을 보고, 한티재의 책·저자·행사·펀딩과 직접 관련 있는지 판정하는 도우미입니다. {NO_WEB} 글은 쓰지 않습니다.
 글마다 판정합니다:
 - relevant: 한티재 책(아래 목록에 있거나 한티재에서 곧 나올 책), 한티재 저자, 한티재가 열거나 함께하는 행사, 펀딩, 한티재 책의 서평·기사와 직접 닿으면 true. 저자의 일상 글을 공유했더라도 한티재 책이나 활동 이야기가 없으면 false.
@@ -166,6 +174,17 @@ def build_news_user(rows):
     for i, name, book_line, a in rows:
         lines.append(f'{i}. 찾은 이름: {name} / 한티재 책: {book_line} / [{a.source}] {a.title} ({a.published})')
     lines.append('</기사>')
+    return '\n'.join(lines)
+
+
+def build_narrow_user(rows):
+    """rows: (번호, 이름, 역할, 책 줄, 책 소개 앞부분)."""
+    lines = ['<사람>']
+    for i, name, role, book_line, intro in rows:
+        lines.append(f'[{i}] 이름: {name} / 역할: {role} / 한티재 책: {book_line}')
+        if intro:
+            lines.append(f'    책 소개: {intro}')
+    lines.append('</사람>')
     return '\n'.join(lines)
 
 
