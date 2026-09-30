@@ -286,7 +286,7 @@ class Marketing:
             self.host.notify_admin('ℹ️ 이번 주 주중 제안이 두 번째예요. 너무 잦으면 /moment midweek 로 조정하세요')
 
     def _send_draft(self, draft, chat_id, reply_to=None, note=''):
-        sent = self.tg.send_message(chat_id, messages.draft_text(draft, note), reply_to=reply_to,
+        sent = self.tg.send_message(chat_id, messages.draft_text(draft), reply_to=reply_to,
                                     buttons=messages.draft_buttons(draft))
         Draft.objects.filter(pk=draft.pk).update(chat_id=chat_id, message_id=sent['message_id'])  # 마지막 사본
         DraftMessage.objects.create(draft=draft, chat_id=chat_id, message_id=sent['message_id'])
@@ -390,7 +390,7 @@ class Marketing:
                                    title=fix_title_marks(str(out.get('title') or '').strip())[:300],
                                    body=fix_title_marks(str(out.get('body') or '').strip()) or draft.body,
                                    version=draft.version + 1, parent=draft)
-        self._send_draft(new, chat_id, reply_to=msg['message_id'], note=str(out.get('note') or '').strip())
+        self._send_draft(new, chat_id, reply_to=msg['message_id'])
 
     # ---- 관리자 명령 ----
     def admin_command(self, chat_id, cmd, arg, now=None):

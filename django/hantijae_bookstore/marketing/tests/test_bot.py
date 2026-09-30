@@ -309,7 +309,7 @@ class MarketingBotTest(TestCase):
         self.assertEqual(CopyNote.objects.get().text, '첫 줄이 너무 길어요')
         texts = [c['text'] for c in self.tg.sent('send')]
         self.assertEqual(texts[0], '고치고 있어요. 2~3분쯤 걸려요.')
-        self.assertIn('첫 줄을 줄였어요', texts[1])
+        self.assertEqual(texts[1], '짧아진 인스타 글')
 
     def test_rewrite_title_is_clipped(self):
         d = kit(self.book).drafts.get(channel=Draft.INSTAGRAM)

@@ -1,4 +1,5 @@
 """마케팅 비서 텔레그램 문구·버튼 (순수 함수). 콜백은 'mk:<동작>:<번호>' (64바이트 제한 안)."""
+import re
 from datetime import date, timedelta
 
 from django.utils import timezone
@@ -12,9 +13,6 @@ from marketing.timeutil import kst_today
 TEXT_LIMIT = 4096
 KIT_BULLET = {Draft.BLOG: '블로그 글', Draft.INSTAGRAM: '인스타 글', Draft.LINKS: '서점 링크 공지',
               Draft.SHORT: '짧은 소개 (한 줄 3가지, 200자)', Draft.LETTER: '알리면 좋을 곳과 보낼 글'}
-INTRO = {Draft.BLOG: '블로그 글이에요.', Draft.INSTAGRAM: '인스타 글이에요.',
-         Draft.LINKS: '서점 링크 공지예요. 카톡이나 단체방에 그대로 붙이시면 돼요.',
-         Draft.SHORT: '짧은 소개예요. 배너·카드·신청서에 쓰세요.', Draft.LETTER: '알리면 좋을 곳과 보낼 글이에요.'}
 
 
 def cb(action, pk):
@@ -28,7 +26,36 @@ def parse_cb(data):
     return parts[1], int(parts[2])
 
 
-def kit_caption(book, drafts, missing, blog_exists, today=None):
+PLACES_HEAD = '알리면 좋을 곳'
+OPEN, POSTED, SKIPPED = 'open', 'posted', 'skipped'
+# 초안 메시지는 올릴 글만 두고(복사하기 좋게), 버튼 설명은 허브 메시지에 한 번만(2026-09-30 사용자)
+BRIEF_GUIDE = ('글 보기를 누르면 올릴 글만 따로 보내 드려요. 올렸으면 그 글의 [올렸어요]를 눌러 주세요(2주쯤 뒤 반응을 알려 드려요). '
+               '고칠 점은 그 글에 답장으로, 안 쓸 글은 [다음에].')
+KIT_GUIDE = '버튼을 누르면 올릴 글만 따로 보내 드려요. 올렸으면 [올렸어요], 고칠 점은 그 글에 답장으로.'
+NOTION_BUTTON = '노션에서 크게 보기 ↗'
+ITEM_LABEL = {OPEN: '{}번 글 보기', POSTED: '{}번 ✅ 올림', SKIPPED: '{}번 넘김'}
+KIT_LABEL = {OPEN: '{} 글 보기', POSTED: '{} ✅ 올림', SKIPPED: '{} 넘김'}
+KIT_SHORT = {Draft.BLOG: '블로그', Draft.INSTAGRAM: '인스타'}
+POSTED_TOAST = '기록했어요. 어디에 올리셨는지는 봇이 찾아보고, 2주쯤 뒤 반응을 브리핑에 알려 드려요'
+WORKING = '고치고 있어요. 2~3분쯤 걸려요.'
+REWRITE_FAILED = '지금은 고치지 못했어요. 잠시 뒤에 다시 적어 주세요.'
+TOAST_NOTE = {'notion': ' · 노션에서 고친 글이에요', 'empty': ' · 노션 글이 비어 있어 원래 글을 보냈어요'}
+
+
+def _with_guide(text, guide, limit):
+    """안내가 잘리지 않게 본문을 먼저 줄인다."""
+    return clip(text, limit - tg_len(guide) - 2) + '\n\n' + guide
+
+
+def _with_notion(rows, url):
+    return rows + [[{'text': NOTION_BUTTON, 'url': url}]] if url else rows
+
+
+def _pairs(btns):
+    return [btns[i:i + 2] for i in range(0, len(btns), 2)]
+
+
+def kit_caption(book, drafts, missing, blog_exists, today=None, guide=True):
     d, today = book.published_date, today or kst_today(timezone.now())
     year = '' if d.year == today.year else f'{d.year}년 '  # 올해 책이 아니면 연도를 붙인다
     lines = [f'『{book.title}』 홍보 자료를 만들어 두었어요.',
@@ -36,39 +63,32 @@ def kit_caption(book, drafts, missing, blog_exists, today=None):
              '', '준비된 것', *[f'· {KIT_BULLET[x.channel]}' for x in drafts]]
     if missing:
         lines += ['', f'사이트에 {"·".join(missing)} 상품 링크가 비어 있어요.']
-    return clip('\n'.join(lines), CAPTION_LIMIT)
+    text = '\n'.join(lines)
+    return _with_guide(text, KIT_GUIDE, CAPTION_LIMIT) if guide else clip(text, CAPTION_LIMIT)
 
 
-def kit_buttons(proposal, drafts):
-    by = {x.channel: x for x in drafts}
-    first = [(f'{by[c].label} 보기', cb('v', by[c].id)) for c in (Draft.BLOG, Draft.INSTAGRAM) if c in by]
+def kit_buttons(proposal, drafts, states=None, notion_url=''):
+    states, by = states or {}, {x.channel: x for x in drafts}
+    first = [(KIT_LABEL[states.get(c, OPEN)].format(KIT_SHORT[c]), cb('v', by[c].id))
+             for c in (Draft.BLOG, Draft.INSTAGRAM) if c in by]
     rows = [first] if first else []
     rows.append([('나머지 보기', cb('m', proposal.id)), ('이번엔 넘기기', cb('sk', proposal.id))])
-    return keyboard(rows)
+    return keyboard(_with_notion(rows, notion_url))
 
 
-# 버튼 바로 위에 두는 안내: 누르면 무엇이 되는지 운영진이 누르기 전에 알게(2026-09-30 사용자)
-GUIDE_POSTED = '[올렸어요] 올린 뒤 누르면 기록해 두고, 2주쯤 뒤 반응을 브리핑에 알려 드려요'
-GUIDE_EDIT = '[고치기] 이 메시지에 답장으로 고칠 점을 적으면 다시 써 드려요'
-GUIDE_LATER = '[다음에] 이번엔 쓰지 않을 때 눌러 주세요'
-PLACES_HEAD = '알리면 좋을 곳'
+def draft_text(draft):
+    """올릴 글 그대로(제목이 있으면 제목 한 줄 + 빈 줄 + 본문). 복사해 붙이면 지울 줄이 없게(2026-09-30 사용자)."""
+    return clip((draft.title + '\n\n' if draft.title else '') + draft.body, TEXT_LIMIT)
 
 
-def _button_guide(channel):
-    posted = [] if channel in (Draft.LINKS, Draft.SHORT) else [GUIDE_POSTED]  # draft_buttons와 같은 기준
-    return '\n'.join(posted + [GUIDE_EDIT, GUIDE_LATER])
-
-
-def draft_text(draft, note=''):
-    intro = INTRO[draft.channel]
-    if draft.channel == Draft.LETTER and not draft.body.startswith(PLACES_HEAD):
-        intro = '보낼 글이에요.'  # 보낼 곳 목록이 없는 편지에 '알리면 좋을 곳과'라고 하지 않는다
-    head = intro + (f' (고친 글 {draft.version})' if draft.version > 1 else '')
-    if note:
-        head += '\n' + note
-    body = (draft.title + '\n\n' if draft.title else '') + draft.body
-    guide = _button_guide(draft.channel)
-    return clip(head + '\n\n' + body, TEXT_LIMIT - tg_len(guide) - 2) + '\n\n' + guide
+def places_text(draft):
+    """편지 앞에 따로 보내는 보낼 곳. 없으면 ''."""
+    extra = getattr(draft, 'extra', None) or {}
+    places, to = extra.get('places') or [], extra.get('to') or ''
+    lines = [PLACES_HEAD, *[f'· {p}' for p in places]] if places else []
+    if to:
+        lines += ([''] if lines else []) + [f'보낼 곳: {to}']
+    return clip('\n'.join(lines), TEXT_LIMIT)
 
 
 def draft_buttons(draft):
@@ -77,7 +97,7 @@ def draft_buttons(draft):
     return keyboard([[('올렸어요', cb('p', draft.id)), ('고치기', cb('e', draft.id)), ('다음에', cb('l', draft.id))]])
 
 
-def briefing_text(week_start, proposals, measure='', grants=()):
+def briefing_text(week_start, proposals, measure='', grants=(), guide=True):
     end = week_start + timedelta(days=6)
     lines = [f'이번 주 홍보 제안 ({week_start.month}월 {week_start.day}일 ~ {end.month}월 {end.day}일)']
     for i, p in enumerate(proposals, 1):
@@ -89,26 +109,69 @@ def briefing_text(week_start, proposals, measure='', grants=()):
         lines += ['', '📌 지원사업 신청', *grants]
     if measure:
         lines += ['', measure]
-    return clip('\n'.join(lines), TEXT_LIMIT)
+    text = '\n'.join(lines)
+    return _with_guide(text, BRIEF_GUIDE, TEXT_LIMIT) if guide else clip(text, TEXT_LIMIT)
 
 
-def briefing_buttons(briefing, proposals):
-    btns = [(f'{i}번 글 보기', cb('b', p.id)) for i, p in enumerate(proposals, 1)]
-    btns.append(('이번 주는 넘기기', cb('sw', briefing.id)))
-    return keyboard([btns[i:i + 2] for i in range(0, len(btns), 2)])
+def _item_buttons(proposals, states):
+    states = states or [OPEN] * len(proposals)
+    return [(ITEM_LABEL[s].format(i), cb('b', p.id)) for i, (p, s) in enumerate(zip(proposals, states), 1)]
 
 
-def midweek_text(proposals):
+def briefing_buttons(briefing, proposals, states=None, notion_url=''):
+    btns = _item_buttons(proposals, states) + [('이번 주는 넘기기', cb('sw', briefing.id))]
+    return keyboard(_with_notion(_pairs(btns), notion_url))
+
+
+def midweek_text(proposals, guide=True):
     lines = ['이번 주에 앞둔 일이 있어 글을 준비해 뒀어요']
     for i, p in enumerate(proposals, 1):
         lines += ['', f'{i}. {p.headline}', p.reason]
-    return clip('\n'.join(lines), TEXT_LIMIT)
+    text = '\n'.join(lines)
+    return _with_guide(text, BRIEF_GUIDE, TEXT_LIMIT) if guide else clip(text, TEXT_LIMIT)
 
 
-def midweek_buttons(proposals):
-    btns = [(f'{i}번 글 보기', cb('b', p.id)) for i, p in enumerate(proposals, 1)]
-    btns.append(('넘기기', cb('sn', proposals[0].id)))
-    return keyboard([btns[i:i + 2] for i in range(0, len(btns), 2)])
+def midweek_buttons(proposals, states=None, notion_url=''):
+    btns = _item_buttons(proposals, states) + [('넘기기', cb('sn', proposals[0].id))]
+    return keyboard(_with_notion(_pairs(btns), notion_url))
+
+
+# ---- 인용 줄·알림 ----
+_ITEM = re.compile(r'(\d+)\. (.*)$')
+
+
+def item_line(hub_text, headline):
+    """허브 글에서 'N. 제목' 줄을 찾는다(인용 답장용). 잘려서 없으면 None."""
+    for line in (hub_text or '').split('\n'):
+        m = _ITEM.match(line)
+        if m and m.group(2) == headline:
+            return line
+    return None
+
+
+def line_number(line):
+    m = _ITEM.match(line or '')
+    return int(m.group(1)) if m else None
+
+
+def kit_line(hub_text, channel):
+    line = f'· {KIT_BULLET[channel]}'
+    return line if line in (hub_text or '').split('\n') else None
+
+
+def _obj(word):
+    """목적격 조사: 받침이 있으면 '을', 없으면 '를'."""
+    code = ord(word[-1]) - 0xAC00 if word else -1
+    return word + ('을' if 0 <= code < 11172 and code % 28 else '를')
+
+
+def sent_toast(number, draft, note=''):
+    head = (f'{number}번 ' if number else '') + _obj(draft.label) + ' 보냈어요'
+    return (head + TOAST_NOTE.get(note, ''))[:200]
+
+
+def rewrite_done(note):
+    return clip(f'고쳤어요: {note}' if note else '고쳤어요.', TEXT_LIMIT)
 
 
 # ---- 지원사업 공고(marketing.grants) ----

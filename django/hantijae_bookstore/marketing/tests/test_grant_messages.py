@@ -59,7 +59,7 @@ class CardTextTest(TestCase):
     def test_briefing_block(self):
         ps = [type('P', (), {'headline': '항목', 'reason': '이유', 'extra': {}})()]
         lines = ['· 2026년 제3차 전자책 제작 지원 사업 공고 — 10월 12일(월) 16시 마감 (신청하기로 함)']
-        text = messages.briefing_text(date(2026, 10, 5), ps, measure='측정 줄', grants=lines)
+        text = messages.briefing_text(date(2026, 10, 5), ps, measure='측정 줄', grants=lines, guide=False)
         self.assertTrue(text.endswith('\n\n📌 지원사업 신청\n' + lines[0] + '\n\n측정 줄'))
         self.assertNotIn('지원사업', messages.briefing_text(date(2026, 10, 5), ps))
         c = make_call(state=GrantCall.APPLYING)
