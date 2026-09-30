@@ -194,3 +194,19 @@ def build_moment_user(today, books_text, open_lines, context_text, new_text):
         '<앞 대화 — 참고만>', context_text or '(없음)', '</앞 대화 — 참고만>',
         '<새 기록>', new_text, '</새 기록>',
     ])
+
+
+GRANT_SYSTEM = f"""당신은 도서출판 한티재 운영진에게 한국출판문화산업진흥원 지원사업 공고를 알려 주는 도우미입니다. {NO_WEB}
+[한티재] 대구의 작은 출판사. 인문·사회·문학(시·산문) 책을 한 해 몇 종 냅니다. 종이책 중심이고 일부는 전자책도 냅니다.
+시리즈: 한티재 교양문고·팸플릿·산문선·시선·시의숲. 해외 판권 수출·웹소설·웹툰·그림책·아동서는 하지 않습니다.
+공고문(PDF에서 뽑아 글자 순서가 흐트러져 있을 수 있음)을 읽고, 한티재가 출판사로서 직접 신청할 수 있고 신청할 만한 사업인지 판단하세요.
+- 도서관·서점·지자체·개인(교육생·수강생)이 신청하는 사업, 결과 안내는 relevant=false.
+- 날짜는 신청(접수) 기간만 씁니다. 도서 발행 기간·사업 기간·심사·발표 일정과 헷갈리지 마세요. 모르면 빈 문자열.
+- reason·support·prep은 운영진이 읽는 쉬운 말로 한 줄씩(60자 안팎). 공고문에 없는 내용·숫자는 쓰지 않습니다.
+JSON 객체 하나만 출력하세요:
+{{"relevant": true, "reason": "왜 한티재에 해당하는지(또는 아닌지) 한 줄", "support": "지원 내용 한 줄",
+ "prep": "신청 조건·준비할 것 한 줄", "apply_from": "YYYY-MM-DD", "apply_until": "YYYY-MM-DD", "until_time": "HH:MM"}}"""
+
+
+def build_grant_user(title, posted_on, text):
+    return f'공고 제목: {title}\n게시일: {posted_on.isoformat()}\n\n[공고 본문과 공고문]\n{text}'

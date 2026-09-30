@@ -233,3 +233,26 @@ class SocialPost(models.Model):
 
     def full_text(self):
         return '\n'.join(t for t in (self.text, self.shared.get('text', ''), self.link.get('title', '')) if t)
+
+
+class GrantCall(models.Model):
+    """진흥원 지원사업 공고 한 건(게시글). 한 번 본 글은 다시 판단하지 않으려고 모두 적는다(grants.py)."""
+    IGNORED, OLD, PENDING, SKIPPED_LLM = 'ignored', 'old', 'pending', 'skipped_llm'
+    READY, ANNOUNCED, APPLYING, PASSED = 'ready', 'announced', 'applying', 'passed'
+    OPEN = (ANNOUNCED, APPLYING)
+    key = models.CharField(max_length=200, unique=True)
+    title = models.CharField(max_length=300)
+    url = models.URLField(max_length=1000)
+    posted_on = models.DateField()
+    state = models.CharField(max_length=20)
+    tries = models.PositiveSmallIntegerField(default=0, help_text='LLM 판단 실패 횟수(3번이면 건너뜀)')
+    verdict = models.JSONField(default=dict, blank=True)
+    apply_until = models.DateField(null=True, blank=True, help_text='원문과 대조해 확인한 마감일만')
+    preview_at = models.DateTimeField(null=True, blank=True, help_text='관리자 1:1 미리보기를 보낸 시각')
+    chat_id = models.BigIntegerField(null=True, blank=True)
+    message_id = models.BigIntegerField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True, help_text='검수 방에 카드를 보낸 시각')
+    decided_by = models.CharField(max_length=100, blank=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    reminded_at = models.DateTimeField(null=True, blank=True, help_text='마감 이틀 전 알림을 보낸 시각')
+    created_at = models.DateTimeField(auto_now_add=True)

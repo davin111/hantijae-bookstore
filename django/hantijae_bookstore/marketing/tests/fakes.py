@@ -151,3 +151,15 @@ class FakeApify:
 
     def dataset_items(self, dataset_id, limit=500):
         return self.datasets[dataset_id]
+
+
+def make_call(no='2167', state='ready', until=date(2026, 10, 12), posted=date(2026, 9, 29), **kw):
+    """지원사업 공고 한 건(제3차 전자책 제작 지원 모양)."""
+    from marketing.models import GrantCall
+    verdict = {'relevant': True, 'reason': '종이책이 있는 책이면 신청할 수 있어요',
+               'support': '전자책 제작비 지원(출판사당 10종까지)', 'prep': '출판유통통합전산망 가입, 종이책 정보 등록',
+               'apply_from': '2026-10-02', 'until_time': '16:00', 'date_checked': until is not None}
+    verdict.update(kw.pop('verdict', {}))
+    return GrantCall.objects.create(key=f'kpipa:{no}', title=kw.pop('title', '2026년 제3차 전자책 제작 지원 사업 공고'),
+                                    url=f'https://www.kpipa.or.kr/p/g1_2/{no}', posted_on=posted, state=state,
+                                    apply_until=until, verdict=verdict, **kw)
