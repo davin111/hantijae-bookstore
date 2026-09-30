@@ -22,3 +22,10 @@ def http_get_bytes(url, timeout=30, max_bytes=MAX_BYTES):
                 raise ValueError(f'첨부 파일이 너무 커요({max_bytes // (1024 * 1024)}MB 초과): {url}')
             chunks.append(chunk)
         return b''.join(chunks)
+
+
+def http_get_json(url, headers=None, timeout=20):
+    """검색 API처럼 JSON을 돌려주는 주소. 키는 headers로만 받는다(주소·예외 메시지에 키가 들어가지 않게)."""
+    res = requests.get(url, timeout=timeout, headers={'User-Agent': UA, **(headers or {})})
+    res.raise_for_status()
+    return res.json()

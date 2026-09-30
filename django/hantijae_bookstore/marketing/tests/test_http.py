@@ -2,7 +2,7 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from marketing.http import http_get_bytes
+from marketing.http import http_get_bytes, http_get_json
 
 
 class FakeResponse:
@@ -36,3 +36,19 @@ class HttpGetBytesTest(SimpleTestCase):
         with mock.patch('marketing.http.requests.get', return_value=resp):
             with self.assertRaises(ValueError):
                 http_get_bytes('https://x.kr/a.pdf', max_bytes=10)
+
+
+class GetJsonTest(SimpleTestCase):
+    def test_sends_extra_headers_and_returns_json(self):
+        res = mock.Mock(**{'json.return_value': {'items': []}})
+        with mock.patch('marketing.http.requests.get', return_value=res) as get:
+            self.assertEqual(http_get_json('https://api.example/x?q=1', {'Authorization': 'KakaoAK k'}), {'items': []})
+        headers = get.call_args.kwargs['headers']
+        self.assertEqual(headers['Authorization'], 'KakaoAK k')
+        self.assertIn('User-Agent', headers)
+        res.raise_for_status.assert_called_once()
+
+    def test_http_error_raises(self):
+        res = mock.Mock(**{'raise_for_status.side_effect': RuntimeError('429')})
+        with mock.patch('marketing.http.requests.get', return_value=res), self.assertRaises(RuntimeError):
+            http_get_json('https://api.example/x')

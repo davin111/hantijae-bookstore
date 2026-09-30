@@ -207,7 +207,8 @@ INTAKE = {
     'FUND_SCAN_SECONDS': 6 * 3600,
 }
 
-# 마케팅 비서 바깥 수집: 운영진 개인 SNS(Apify)와 한티재 공식 채널(Meta). 계정 주소는 공개 저장소에 두지 않는다.
+# 마케팅 비서 바깥 수집: 운영진 개인 SNS(Apify), 한티재 공식 채널(Meta), 독자 서평 검색(네이버 API HUB·카카오).
+# 계정 주소는 공개 저장소에 두지 않는다.
 MARKETING = {
     'APIFY_TOKEN': secret_info.get('APIFY_TOKEN', ''),
     'SOCIAL_ACCOUNTS': secret_info.get('SOCIAL_ACCOUNTS', ''),
@@ -215,6 +216,9 @@ MARKETING = {
     'META_APP_SECRET': secret_info.get('META_APP_SECRET', ''),
     'META_PAGE_ID': secret_info.get('META_PAGE_ID', ''),
     'META_IG_USER_ID': secret_info.get('META_IG_USER_ID', ''),
+    'KAKAO_REST_API_KEY': secret_info.get('KAKAO_REST_API_KEY', ''),
+    'NAVER_HUB_CLIENT_ID': secret_info.get('NAVER_HUB_CLIENT_ID', ''),
+    'NAVER_HUB_CLIENT_SECRET': secret_info.get('NAVER_HUB_CLIENT_SECRET', ''),
 }
 
 # 맥락 기록(검수 방 대화 등). 원문은 가린 채 이 기간만 보관한다.

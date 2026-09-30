@@ -52,9 +52,9 @@ class HookDate(BaseModel):
 
 
 class Signal(models.Model):
-    NEWS, SELECTION, SOCIAL, MOMENT = 'news', 'selection', 'social', 'moment'
+    NEWS, SELECTION, SOCIAL, MOMENT, REVIEW = 'news', 'selection', 'social', 'moment', 'review'
     kind = models.CharField(max_length=20, choices=((NEWS, '저자 소식'), (SELECTION, '공공 선정'), (SOCIAL, '운영진 SNS'),
-                                                    (MOMENT, '대화 속 계기')))
+                                                    (MOMENT, '대화 속 계기'), (REVIEW, '독자 서평')))
     key = models.CharField(max_length=200, unique=True)
     book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL)
     title = models.CharField(max_length=500)

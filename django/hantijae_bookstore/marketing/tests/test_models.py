@@ -99,3 +99,9 @@ class MomentModelTest(TestCase):
         p = Proposal.objects.create(kind=Proposal.NOW, headline='『책』 ― 금요일 강연')
         self.assertEqual(p.get_kind_display(), '주중 제안')
         self.assertEqual(Signal(kind=Signal.MOMENT).get_kind_display(), '대화 속 계기')
+
+
+class SignalKindTest(TestCase):
+    def test_review_kind(self):
+        self.assertEqual(Signal.REVIEW, 'review')
+        self.assertEqual(dict(Signal._meta.get_field('kind').choices)['review'], '독자 서평')
