@@ -48,14 +48,17 @@ class YoutubeTest(SimpleTestCase):
     def test_search_builds_request_and_parses_videos_only(self):
         calls = []
         posts = W.youtube_search('"커밍아웃 스토리" 성소수자부모모임', 'kk', datetime(2026, 9, 16, tzinfo=timezone.utc),
-                                 lambda url, headers=None: calls.append(url) or YT)
+                                 lambda url, headers=None: calls.append((url, headers)) or YT)
         [p] = posts
         self.assertEqual((p.source, p.url, p.posted_on, p.where), ('youtube', 'https://www.youtube.com/watch?v=WZT0TDU3izg',
                                                                    date(2026, 9, 21), ''))
         self.assertEqual(p.title, '[까칠한 언니들의 책수다] "커밍아웃 스토리" 성소수자부모모임')
-        q = parse_qs(urlsplit(calls[0]).query)
-        self.assertEqual((q['type'], q['order'], q['maxResults'], q['publishedAfter'], q['key']),
-                         (['video'], ['date'], ['25'], ['2026-09-16T00:00:00Z'], ['kk']))
+        url, headers = calls[0]
+        q = parse_qs(urlsplit(url).query)
+        self.assertEqual((q['type'], q['order'], q['maxResults'], q['publishedAfter']),
+                         (['video'], ['date'], ['25'], ['2026-09-16T00:00:00Z']))
+        self.assertNotIn('key', q)   # 키는 헤더로만 간다
+        self.assertEqual(headers, {'X-Goog-Api-Key': 'kk'})
 
     def test_youtube_search_with_kst_datetime(self):
         """KST 시간을 UTC로 변환해 publish 시간 필터가 맞다."""

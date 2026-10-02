@@ -1,5 +1,5 @@
 """구글 알리미 RSS(Atom)와 유튜브 검색 결과를 서평 길의 Post로 바꾼다. 알리미 링크는 구글 리디렉트라 원래 주소를 꺼낸다.
-유튜브 키는 주소 쿼리에 들어가므로 오류는 종류 이름만 담은 SourceError로 올린다(키·주소를 남기지 않게)."""
+유튜브 키는 헤더(X-Goog-Api-Key)로 보낸다 — 주소·쿼리에 남지 않는다. 그래도 오류는 종류 이름만 담은 SourceError로 올린다(혹시를 위해)."""
 import html
 import json
 import urllib.parse
@@ -54,10 +54,10 @@ def parse_alerts(xml_bytes):
 
 def youtube_search(query, key, published_after, get_json):
     utc_time = published_after.astimezone(timezone.utc)   # 'Z'는 UTC — KST 시각을 그대로 쓰면 9시간 어긋난다
-    params = {'part': 'snippet', 'type': 'video', 'order': 'date', 'maxResults': 25, 'q': query, 'key': key,
+    params = {'part': 'snippet', 'type': 'video', 'order': 'date', 'maxResults': 25, 'q': query,
               'publishedAfter': utc_time.strftime('%Y-%m-%dT%H:%M:%SZ')}
     try:   # 모양이 이상한 응답도 SourceError로 — 부르는 쪽이 한 번의 실패로 세고 다음 책으로 넘어간다
-        data = get_json(YOUTUBE_URL + urllib.parse.urlencode(params))
+        data = get_json(YOUTUBE_URL + urllib.parse.urlencode(params), headers={'X-Goog-Api-Key': key})
         out = []
         for it in (data or {}).get('items') or []:
             vid = (it.get('id') or {}).get('videoId')
