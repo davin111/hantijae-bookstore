@@ -1,11 +1,10 @@
 """화면에 보여 줄 값으로 바꾸는 함수들. DB를 새로 조회하지 않는다(미리 불러온 관계만 쓴다)."""
-import html
 import re
 from dataclasses import dataclass, field
 from datetime import date
 from typing import List, Optional, Sequence, Tuple
 
-from django.utils.html import escape, strip_tags
+from django.utils.html import escape
 from django.utils.safestring import SafeString, mark_safe
 
 from books.constants import SERIES_MENU_NAME, SERIES_NUMBER_DIGITS, SERIES_OFFICIAL_NAME
@@ -161,42 +160,105 @@ ZERO_WIDTH = re.compile('[​‌‍⁠﻿]')
 HEADING = re.compile(r'^■\s*(.*?)[\s\-–—]*$')
 LEAD_MAX = 120
 
+# 소제목: 보도자료의 굵은 소제목이 옮겨지며 서식을 잃고 '짧은 한 줄 문단'으로 남은 것.
+# 문장처럼 끝나지 않고, 따옴표·기호로 시작하지 않으며, 바로 뒤에 본문 문단이 이어질 때만 소제목으로 본다.
+SUBHEAD_MAX = 45
+BODY_MIN, BODY_SENTENCE_MIN = 80, 20
+NOT_SUBHEAD_END = re.compile(r'([.。?!…,:;”’"\')」』\]]|다|요|추천사)$')
+SENTENCE_END = re.compile(r'([.。?!…”’"\')」』]|다)$')
+NOT_SUBHEAD_START = re.compile(r'^[“‘"\'「『(\[―\-–—*<《∵_+·•]')
+# 옛 책 소개에 섞인 연락처(@)·글쓴이 표기(_, |)·쪽수가 붙은 차례 줄(005책머리에)
+NOT_SUBHEAD_ANY = re.compile(r'[@_|]|^0\d\d')
+EXCERPT = re.compile(r'본문|중에서')   # 시 구절처럼 짧은 줄이 많은 발췌 구획은 건드리지 않는다
+
+Lines = List[str]
+
+
+@dataclass
+class Paragraph:
+    html: SafeString
+    subhead: bool = False
+
 
 @dataclass
 class Section:
     title: Optional[str]
     anchor: str = ''
     lead: Optional[SafeString] = None
-    paragraphs: List[SafeString] = field(default_factory=list)
+    paragraphs: List[Paragraph] = field(default_factory=list)
     collapsible: bool = False
 
 
+def render_lines(lines: Lines) -> SafeString:
+    return mark_safe('<br>'.join(render_inline(l) for l in lines))
+
+
+def plain(lines: Lines) -> str:
+    return ''.join(strip_marks(l) for l in lines)
+
+
+def subhead_shaped(lines: Lines) -> bool:
+    text = plain(lines)
+    return (len(lines) == 1 and 2 <= len(text) <= SUBHEAD_MAX
+            and not NOT_SUBHEAD_END.search(text) and not NOT_SUBHEAD_START.match(text)
+            and not NOT_SUBHEAD_ANY.search(text))
+
+
+def body_like(lines: Lines) -> bool:
+    text = plain(lines)
+    return len(text) >= BODY_MIN or (len(text) >= BODY_SENTENCE_MIN and bool(SENTENCE_END.search(text)))
+
+
+def with_subheads(paras: List[Lines]) -> List[Paragraph]:
+    """본문 앞의 소제목 모양 줄을 소제목으로. 두 줄 연달아면 한 소제목으로 합치고, 셋 이상이면(시 구절·목록) 그대로 둔다."""
+    out: List[Paragraph] = []
+    run = 0   # 지금까지 이어진 소제목 모양 문단 수
+    for i, lines in enumerate(paras):
+        run = run + 1 if subhead_shaped(lines) else 0
+        followed_by_body = i + 1 < len(paras) and body_like(paras[i + 1])
+        if run in (1, 2) and followed_by_body:
+            if run == 2:
+                out.pop()
+                lines = paras[i - 1] + lines
+            out.append(Paragraph(render_lines(lines), subhead=True))
+        else:
+            out.append(Paragraph(render_lines(lines)))
+    return out
+
+
 def parse_description(text: str) -> List[Section]:
-    """'■ 제목' 줄을 구획 제목으로, 빈 줄을 문단 경계로. 첫 구획의 짧은 첫 문단은 리드."""
+    """'■ 제목' 줄을 구획 제목으로, 빈 줄을 문단 경계로. 첫 구획의 짧은 첫 문단은 리드, 구획 안 소제목은 따로 표시."""
     sections = [Section(title=None)]
-    lines: List[str] = []
+    raw: List[List[Lines]] = [[]]   # 구획별 문단(줄 목록)
+    lines: Lines = []
 
     def flush():
         if lines:
-            sections[-1].paragraphs.append(mark_safe('<br>'.join(render_inline(l) for l in lines)))
+            raw[-1].append(list(lines))
             lines.clear()
 
-    for raw in (text or '').splitlines():
-        line = ZERO_WIDTH.sub('', raw).strip()
+    for source in (text or '').splitlines():
+        line = ZERO_WIDTH.sub('', source).strip()
         heading = HEADING.match(line)
         if heading:
             flush()
             title = heading.group(1).strip() or '소개'
             sections.append(Section(title=title, collapsible='차례' in title))
+            raw.append([])
         elif line:
             lines.append(line)
         else:
             flush()
     flush()
 
-    intro = sections[0]
-    if intro.paragraphs and len(html.unescape(strip_tags(intro.paragraphs[0]))) <= LEAD_MAX:
-        intro.lead = intro.paragraphs.pop(0)
+    intro = raw[0]
+    if intro and len(plain(intro[0])) <= LEAD_MAX:
+        sections[0].lead = render_lines(intro.pop(0))
+    for section, paras in zip(sections, raw):
+        if section.collapsible or EXCERPT.search(section.title or ''):
+            section.paragraphs = [Paragraph(render_lines(p)) for p in paras]
+        else:
+            section.paragraphs = with_subheads(paras)
     sections = [s for s in sections if s.lead or s.paragraphs]
     if len(sections) > 1 and sections[0].title is None:
         sections[0].title = '책 소개'

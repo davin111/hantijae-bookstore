@@ -126,6 +126,18 @@ class SeriesNameTest(SimpleTestCase):
         self.assertEqual(p.series_label(series('단행본'), None), '단행본')
 
 
+def texts(section):
+    return [x.html for x in section.paragraphs]
+
+
+def marked(section):
+    return [(x.html, x.subhead) for x in section.paragraphs]
+
+
+# 리드(120자 이하 첫 문단)로 빠지지 않을 만큼 긴 본문 문단
+BODY = ' '.join(['시인은 골짝 밖으로 나가 산불감시원 일을 시작했다.'] * 5)
+
+
 class DescriptionTest(SimpleTestCase):
     def test_parse_description_sections_lead_and_collapsible(self):
         text = ('갈릴레이 온도계부터,\n일기예보의 시대\n\n본문 첫 문단입니다.\n​\n'
@@ -134,10 +146,47 @@ class DescriptionTest(SimpleTestCase):
         self.assertEqual([s.title for s in sections], ['책 소개', '저자 소개', '차례'])
         self.assertEqual([s.anchor for s in sections], ['section-1', 'section-2', 'section-3'])
         self.assertEqual(sections[0].lead, '갈릴레이 온도계부터,<br>일기예보의 시대')
-        self.assertEqual(sections[0].paragraphs, ['본문 첫 문단입니다.'])
-        self.assertEqual(sections[1].paragraphs, ['김해동', '약력'])
+        self.assertEqual(texts(sections[0]), ['본문 첫 문단입니다.'])
+        self.assertEqual(texts(sections[1]), ['김해동', '약력'])
         self.assertTrue(sections[2].collapsible)
-        self.assertEqual(sections[2].paragraphs, ['1장<br>2장'])
+        self.assertEqual(texts(sections[2]), ['1장<br>2장'])
+
+    def test_short_line_followed_by_body_is_subhead(self):
+        text = (f'시집 출간\n\n{BODY}\n\n몸을 통과한 흙과 노동의 언어\n\n{BODY}\n\n'
+                '풀과 나무, 지구를 향한 상상력\n\n2부와 3부에는 이웃 이야기가 담겨 있다.')
+        section = p.parse_description(text)[0]
+        self.assertEqual(section.lead, '시집 출간')   # 첫 짧은 문단은 소제목이 아니라 리드
+        self.assertEqual(marked(section), [
+            (BODY, False), ('몸을 통과한 흙과 노동의 언어', True), (BODY, False),
+            ('풀과 나무, 지구를 향한 상상력', True), ('2부와 3부에는 이웃 이야기가 담겨 있다.', False)])
+
+    def test_two_short_lines_before_body_make_one_subhead(self):
+        text = f'{BODY}\n\n캐나다 외교관이 기록한\n\n성소수자 인권 외교의 현황과 과제\n\n{BODY}'
+        self.assertEqual(marked(p.parse_description(text)[0]), [
+            (BODY, False), ('캐나다 외교관이 기록한<br>성소수자 인권 외교의 현황과 과제', True), (BODY, False)])
+
+    def test_short_lines_that_are_not_subheads(self):
+        verse = '아무도 중심에 서지 않아\n\n새로운 것은 자잘한 데서 오는 법\n\n모두가 둘레를 자청하고 살지'
+        text = (f'{BODY}\n\n{verse}\n\n{BODY}\n\n이 책은 좋은 지침서가 될 것이다\n\n{BODY}\n\n'
+                f'“따옴표로 여는 인용\n\n{BODY}\n\n뒤에 본문이 없는 줄')
+        self.assertFalse(any(x.subhead for x in p.parse_description(text)[0].paragraphs))
+
+    def test_contact_toc_and_credit_lines_are_not_subheads(self):
+        # 옛 책 소개에 섞인 연락처·쪽수 붙은 차례·글쓴이 표기·추천사 출처 줄(운영 데이터에서 본 모양)
+        for line in ('verticalkjh@naver.com', '005책머리에', '책을 펴내며 _ 안수진', '닫는 글_  21세기 지역 인문학',
+                     '발문 | 질병의 시대에 건네는 생명의 목소리 | 김연주', '이희인 (『여행자의 독서』 저자), 추천사'):
+            with self.subTest(line=line):
+                self.assertFalse(p.parse_description(f'{BODY}\n\n{line}\n\n{BODY}')[0].paragraphs[1].subhead)
+        # 숫자로 시작해도 쪽수가 아니면 소제목
+        self.assertTrue(p.parse_description(f'{BODY}\n\n150년이 지나서도 유효한 사상\n\n{BODY}')[0].paragraphs[1].subhead)
+
+    def test_subheads_skip_toc_and_excerpt_sections(self):
+        text = (f'{BODY}\n■ 본문 중에서\n꽃밭에서\n\n{BODY}\n■ 차례\n1부 첫 이야기\n\n{BODY}\n'
+                f'■ 저자 소개\n김해동\n\n{BODY}')
+        sections = {s.title: s for s in p.parse_description(text)}
+        self.assertFalse(any(x.subhead for x in sections['본문 중에서'].paragraphs))
+        self.assertFalse(any(x.subhead for x in sections['차례'].paragraphs))
+        self.assertTrue(sections['저자 소개'].paragraphs[0].subhead)   # 약력 앞 이름 줄
 
     def test_parse_description_without_headings_is_single_untitled_section(self):
         sections = p.parse_description('첫 줄\n\n둘째 문단')
@@ -148,7 +197,7 @@ class DescriptionTest(SimpleTestCase):
         long = '가' * 130
         sections = p.parse_description(f'{long}\n\n<script>alert(1)</script> **굵게**')
         self.assertIsNone(sections[0].lead)
-        self.assertEqual(sections[0].paragraphs[1], '&lt;script&gt;alert(1)&lt;/script&gt; <strong>굵게</strong>')
+        self.assertEqual(texts(sections[0])[1], '&lt;script&gt;alert(1)&lt;/script&gt; <strong>굵게</strong>')
 
     def test_heading_trailing_dashes_and_empty_sections(self):
         sections = p.parse_description('■ 한티재 교양문고 ---------\n소개글\n■ 빈 구획\n')

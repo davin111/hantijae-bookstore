@@ -23,11 +23,11 @@
       {% for s in sections %}
         {% if s.collapsible %}
           <h2 id="{{ s.anchor }}">{{ s.title }}</h2>
-          <details><summary>펼쳐 보기</summary>{% for p in s.paragraphs %}<p>{{ p }}</p>{% endfor %}</details>
+          <details><summary>펼쳐 보기</summary>{% for p in s.paragraphs %}<p>{{ p.html }}</p>{% endfor %}</details>
         {% else %}
           {% if s.title %}<h2 id="{{ s.anchor }}">{{ s.title }}</h2>{% endif %}
           {% if s.lead %}<p class="lead"{% if not s.title %} id="{{ s.anchor }}"{% endif %}>{{ s.lead }}</p>{% endif %}
-          {% for p in s.paragraphs %}<p>{{ p }}</p>{% endfor %}
+          {% for p in s.paragraphs %}{% if p.subhead %}<h3>{{ p.html }}</h3>{% else %}<p>{{ p.html }}</p>{% endif %}{% endfor %}
         {% endif %}
       {% endfor %}
     </div>

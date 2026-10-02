@@ -94,6 +94,12 @@ class DetailTest(TestCase):
         self.assertIn('한티재 교양문고 모두 보기 →', body)
         self.assertIn('<p class="card-no">02</p>', body)
 
+    def test_subhead_renders_as_h3(self):
+        body_text = ' '.join(['3부는 홀로 농사짓는 몸의 시간을 다룬다.'] * 6)   # 120자를 넘겨 리드가 되지 않게
+        b = f.book('소제목 있는 책', description=f'{body_text}\n\n몸을 통과한 흙과 노동의 언어\n\n{body_text}')
+        body = self.get(b).content.decode()
+        self.assertIn(f'<p>{body_text}</p><h3>몸을 통과한 흙과 노동의 언어</h3><p>{body_text}</p>', body)
+
     def test_same_series_excludes_self(self):
         r = self.get(self.book)
         self.assertEqual(r.context['same_series'], [self.sibling])
