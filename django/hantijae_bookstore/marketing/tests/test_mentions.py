@@ -96,11 +96,12 @@ class MentionsTest(TestCase):
         self.assertEqual((Signal.objects.get().detail['verdict'], llm.calls), ('old', []))
 
     def test_short_title_guard_is_not_defeated_by_hantijae_in_every_alert(self):
-        """알리미 질의가 '도서출판 한티재'라 모든 글에 '한티재'가 있다 — 그걸로 짧은 제목 보호를 뚫으면 안 된다(F3).
-        (brief 예시 문구 '도서출판 한티재 …'·'… 출판사 소식'은 '도서'·'출판'이 BOOK_WORDS라 다른 경로로도 걸려
-        그 문구로는 이 가드만 따로 보일 수 없다 — '한티재'만 단서인 문구로 바꿨다.)"""
+        """알리미 질의가 '도서출판 한티재'라 모든 글에 '도서출판 한티재'가 있다 — '한티재'·'도서'·'출판'으로 짧은 제목 보호를
+        뚫으면 안 된다. 다른 단서(지은이·『』·책 이야기 말)가 있으면 그대로 찾는다."""
         make_book(title='기후정의', subtitle='', published=date(2020, 1, 1), isbn='979-11-00003-00-0', author='다른사람')
-        self.run_scan(feed(('한티재와 함께 기후정의행진에 걸어요', 'https://news.example.com/b/1', '2026-09-27',
+        self.run_scan(feed(('도서출판 한티재, 기후정의행진에 함께 걸어요', 'https://news.example.com/b/1', '2026-09-27',
+                            '한티재 출판사 소식'),
+                           ('한티재와 함께 기후정의행진에 걸어요', 'https://news.example.com/b/2', '2026-09-27',
                             '기후위기 대응 소식')))
         self.assertEqual(Signal.objects.count(), 0)
 

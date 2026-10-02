@@ -3,6 +3,7 @@
 피드 주소·유튜브 키는 비밀이라 로그·알림에 넣지 않는다."""
 import dataclasses
 import logging
+import re
 import time
 from datetime import datetime, timedelta
 
@@ -20,6 +21,9 @@ log = logging.getLogger('intake')
 OWN_SITE = 'hantijae-bookstore.com'
 SPACING = 0.5
 YOUTUBE_GIVE_UP = 3   # 연속 실패 — 한도 초과(403)일 수 있어 그날 유튜브는 멈춘다
+# 알리미 질의가 '도서출판 한티재'라 글마다 이 말이 들어 있다. 책 찾기 전에 지운다 — '한티재'(출판사 단서)와
+# '도서'·'출판'(BOOK_WORDS)이 늘 맞아 짧은 제목 보호가 꺼지지 않게. 저장·판별에는 원래 글을 쓴다
+_ALERT_QUERY = re.compile(r'도서\s*출판|출판사|한티재')
 
 
 def _consider(post, t, today, report, fresh, seen, probe=None):
@@ -53,8 +57,8 @@ def scan(today, books=None, cfg=None, get_bytes=http_get_bytes, get_json=http_ge
                 continue
             ok += 1
             for p in posts:
-                # 알리미 질의가 '도서출판 한티재'라 글마다 '한티재'가 들어 있다 — 짧은 제목 보호가 꺼지지 않게
-                probe = dataclasses.replace(p, title=p.title.replace('한티재', ''), snippet=p.snippet.replace('한티재', ''))
+                probe = dataclasses.replace(p, title=_ALERT_QUERY.sub('', p.title),
+                                            snippet=_ALERT_QUERY.sub('', p.snippet))
                 for t in all_terms:
                     _consider(p, t, today, report, fresh, seen, probe=probe)
         if not ok:
