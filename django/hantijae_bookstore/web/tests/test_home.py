@@ -52,12 +52,12 @@ class HomeTest(TestCase):
         nav = body[body.index('<nav class="section-nav"'):]
         nav = nav[:nav.index('</nav>')]
         self.assertEqual(re.findall(r'>([^<>]+)</a>', nav),
-                         ['신간', '전체 보기', '단행본', '교양문고', '팸플릿', '산문선', '한티재 시선', '시의숲', '한티재 소개'])
+                         ['신간', '전체 보기', '단행본', '교양문고', '팸플릿', '산문선', '시선', '시의숲', '한티재 소개'])
 
     def test_series_tabs_use_menu_names(self):
         body = self.client.get('/').content.decode()
         tabs = body[body.index('<nav class="tabs"'):]
-        self.assertEqual(re.findall(r'>([^<>]+) <span>', tabs[:tabs.index('</nav>')]), ['단행본', '교양문고', '한티재 시선'])
+        self.assertEqual(re.findall(r'>([^<>]+) <span>', tabs[:tabs.index('</nav>')]), ['단행본', '교양문고', '시선'])
 
     def test_recent_block_links_to_all_books(self):
         self.assertIn('<a href="/books">펴낸 책 모두 보기 →</a>', self.client.get('/').content.decode())

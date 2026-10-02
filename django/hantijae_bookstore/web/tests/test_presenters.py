@@ -104,9 +104,9 @@ class SeriesNameTest(SimpleTestCase):
         self.assertEqual(p.series_name(series('교양문고')), '한티재 교양문고')
         self.assertEqual(p.series_name(series('단행본')), '단행본')
 
-    def test_menu_name_is_short_except_siseon(self):
+    def test_menu_name_is_short(self):
         self.assertEqual(p.series_menu_name(series('팸플릿')), '팸플릿')
-        self.assertEqual(p.series_menu_name(series('시선')), '한티재 시선')
+        self.assertEqual(p.series_menu_name(series('시선')), '시선')
 
     def test_series_number_padded_by_series_rule(self):
         self.assertEqual(p.series_number(series('교양문고'), '001'), '01')
