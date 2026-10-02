@@ -302,6 +302,7 @@ class RunDueTest(TestCase):
         self.assertEqual(self.web_scan.call_count, 1)
         self.assertEqual(self.web_scan.call_args.args[:2], (deps, date(2026, 9, 29)))
         self.web_scan.call_args.kwargs['notify']('x')   # 04:40 알림은 아침까지 모아 둔다
+        self.assertEqual(WorkerState.get('moment_admin_queue'), ['x'])
         self.assertEqual(deps.bot.notes, [])
 
     def test_instagram_scan_once_per_day_after_0450(self, *_):

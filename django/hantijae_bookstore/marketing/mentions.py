@@ -1,6 +1,7 @@
 """구글 알리미·유튜브에서 한티재 책 이야기 찾기(스펙 §2 alerts·youtube). 서평 길(Signal kind=review, 출처 web·youtube)로 넣는다.
 알리미 글은 모든 공개 도서와, 유튜브는 오늘 순번 책(책마다 주 1회)의 최근 14일 영상만 그 책과 대조한다.
 피드 주소·유튜브 키는 비밀이라 로그·알림에 넣지 않는다."""
+import dataclasses
 import logging
 import time
 from datetime import datetime, timedelta
@@ -21,8 +22,8 @@ SPACING = 0.5
 YOUTUBE_GIVE_UP = 3   # 연속 실패 — 한도 초과(403)일 수 있어 그날 유튜브는 멈춘다
 
 
-def _consider(post, t, today, report, fresh, seen):
-    if OWN_SITE in post.url or excluded(post) or not mentions_book(post, t):
+def _consider(post, t, today, report, fresh, seen, probe=None):
+    if OWN_SITE in post.url or excluded(post) or not mentions_book(probe or post, t):
         return
     key = reviews.signal_key(t.book, post)
     if key in seen or Signal.objects.filter(key=key).exists():
@@ -52,8 +53,10 @@ def scan(today, books=None, cfg=None, get_bytes=http_get_bytes, get_json=http_ge
                 continue
             ok += 1
             for p in posts:
+                # 알리미 질의가 '도서출판 한티재'라 글마다 '한티재'가 들어 있다 — 짧은 제목 보호가 꺼지지 않게
+                probe = dataclasses.replace(p, title=p.title.replace('한티재', ''), snippet=p.snippet.replace('한티재', ''))
                 for t in all_terms:
-                    _consider(p, t, today, report, fresh, seen)
+                    _consider(p, t, today, report, fresh, seen, probe=probe)
         if not ok:
             report.failed.append('web')
     if key:
@@ -83,11 +86,11 @@ def scan(today, books=None, cfg=None, get_bytes=http_get_bytes, get_json=http_ge
 
 
 def run(deps, today, notify, **scan_kwargs):
-    """워커가 매일 04:40에 부른다. 모든 알리미 피드 실패·유튜브 연속 실패는 관리자에게(밤이면 08시에) 한 번."""
-    report, fresh = scan(today, **scan_kwargs)
-    report = reviews.save_judged(deps.llm, fresh, report)
-    if 'web' in report.failed:
-        notify('⚠️ 구글 알리미 피드를 읽지 못했어요 — 서버 로그의 google alerts 줄을 확인해 주세요')
-    if 'youtube' in report.failed:
-        notify('⚠️ 유튜브 검색이 연달아 실패해 오늘은 멈췄어요(사용 한도일 수 있어요) — 서버 로그의 youtube 줄을 확인해 주세요')
-    return report
+    """워커가 매일 04:40에 부른다. 같은 출처(알리미·유튜브)가 사흘 연속 실패하면 관리자에게(밤이면 08시에) 한 번 —
+    서평 검색과 같은 규칙(reviews._track_failures). 실패 기록은 판별 전에 적는다(판별 LLM이 모두 실패해도 남게)."""
+    cfg = scan_kwargs.pop('cfg', None)
+    cfg = getattr(settings, 'MARKETING', {}) if cfg is None else cfg
+    report, fresh = scan(today, cfg=cfg, **scan_kwargs)
+    active = (['web'] if feeds(cfg) else []) + (['youtube'] if cfg.get('YOUTUBE_API_KEY') else [])
+    reviews._track_failures(notify, report.failed, active)
+    return reviews.save_judged(deps.llm, fresh, report)

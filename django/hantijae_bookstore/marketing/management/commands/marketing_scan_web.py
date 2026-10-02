@@ -37,7 +37,8 @@ class Command(BaseCommand):
                 if not no_judge:
                     reviews.save_judged(llm, fresh, report)
                 self.stdout.write(f'책 {report.books}권, 새 글 {report.found}건(서평 {len(report.reviews)}건), '
-                                  f'기준선 {report.baseline}건, 읽지 못한 곳 {", ".join(report.failed) or "없음"}')
+                                  f'기준선 {report.baseline}건, 읽지 못한 곳 '
+                                  f'{", ".join(SOURCE_LABEL.get(s, s) for s in report.failed) or "없음"}')
                 for t, p, key in fresh:
                     verdict = '판별 안 함' if no_judge else ' '.join(report.verdicts.get(key, ('판정 없음', '')))
                     self.stdout.write(f'- 『{t.title}』 [{SOURCE_LABEL[p.source]}] {p.title[:50]} | {p.posted_on} | '
