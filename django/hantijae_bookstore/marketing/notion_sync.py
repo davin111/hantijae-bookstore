@@ -23,8 +23,21 @@ READ_TIMEOUT, WRITE_TIMEOUT = 5, 10
 RETRY_EVERY, GIVE_UP = timedelta(minutes=10), timedelta(days=7)
 FLUSH_MAX = 5  # 한 바퀴에 다시 적는 페이지 수(워커가 텔레그램을 오래 못 보지 않게)
 NET_ERRORS = (requests.Timeout, requests.ConnectionError)  # 노션에 닿지 않음 → 남은 쓰기도 기다리기만 한다
+PERMANENT = (400, 404)  # 지워진(보관된) 블록·페이지: 다시 해도 같은 답이다. 401/403·409/429/5xx는 고치면 되니 제외
 BRIEF, NOW, KIT = 'brief', 'now', 'kit'
 KIND_LABEL = {BRIEF: '주간 브리핑', NOW: '주중 제안', KIT: '신간 묶음'}
+
+
+def _permanent(e):
+    """노션에서 지워진 부분 때문에 생기는 영구 오류인가(404 없음 / 400 보관된 블록·페이지)."""
+    return isinstance(e, requests.HTTPError) and getattr(e.response, 'status_code', None) in PERMANENT
+
+
+def _prefer_transient(old, new):
+    """여러 오류 중 다시 낼 하나: 고치면 되는(일시적) 오류를 영구 오류보다 먼저. 호출 쪽이 영구 오류만 남았을 때만 포기한다."""
+    if old is None or (_permanent(old) and not _permanent(new)):
+        return new
+    return old
 
 
 def enabled():
@@ -199,13 +212,13 @@ def refresh(client, t):
             raise  # 노션에 닿지 않으면 남은 제목·'진행'도 기다리기만 한다 — 다음 갱신 때 처음부터
         except Exception as e:
             log.warning('notion heading update failed', exc_info=True)
-            first_exc = first_exc or e
+            first_exc = _prefer_transient(first_exc, e)
     try:
         client.update_page(t.info()['page'], nb.progress_property(_progress_states(t, states)),
                            timeout=WRITE_TIMEOUT)
     except Exception as e:
         log.warning('notion progress update failed (%s)', t.name, exc_info=True)
-        first_exc = first_exc or e
+        first_exc = _prefer_transient(first_exc, e)
     if first_exc is not None:
         raise first_exc
 
@@ -382,10 +395,25 @@ def _flush_one(client, t):
             raise
         except Exception as e:  # 제목 하나가 지워졌어도 다른 항목과 상태는 계속 고친다
             log.warning('notion append retry failed for draft %s', d.pk, exc_info=True)
-            first_exc = first_exc or e
-    refresh(client, t)
+            first_exc = _prefer_transient(first_exc, e)
+    try:
+        refresh(client, t)
+    except Exception as e:
+        raise _prefer_transient(first_exc, e)  # 덧붙이기 쪽이 일시적 오류면 그쪽을 낸다(네트워크 오류는 그대로 올라간다)
     if first_exc is not None:
         raise first_exc
+
+
+def _tell_gone(host, t):
+    """페이지마다 한 번만(버튼을 또 눌러 다시 같은 실패가 나도 조용히). 알림이 실패해도 워커는 계속한다."""
+    if t.info().get('gone_noticed'):
+        return
+    t.put(gone_noticed=True)
+    try:
+        host.notify_admin(f"ℹ️ 노션 '{t.name}' 페이지에서 지워진 부분이 있어 상태 표시를 다 고치지 못했어요(404/400). "
+                          '남은 부분은 계속 고쳐요.')
+    except Exception:
+        log.warning('notion gone notice failed (%s)', t.name, exc_info=True)
 
 
 def flush(host, now):
@@ -399,6 +427,11 @@ def flush(host, now):
         try:
             _flush_one(client, t)
         except Exception as e:
+            if _permanent(e):  # 지워진 부분은 다시 해도 소용없다 — 표시를 지워 굶지 않게 하고 관리자에게 한 번만 알린다
+                log.warning('notion page %s has deleted parts (%s); giving up on it', t.name, e)
+                t.put(dirty=False)
+                _tell_gone(host, t)
+                continue
             log.warning('notion flush failed (%s)', t.name, exc_info=True)
             first_exc = first_exc or e
             if isinstance(e, NET_ERRORS):

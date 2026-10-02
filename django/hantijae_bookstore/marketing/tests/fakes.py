@@ -202,9 +202,15 @@ class FakeNotion:
     def __init__(self):
         self.blocks, self.kids, self.pages, self.calls, self.fail, self.n = {}, {}, {}, [], {}, 0
         self.timeouts = {}
+        self.sticky = {}  # 메서드 이름 → 예외: 부를 때마다 계속 낸다(지워진 페이지처럼)
+        self.bad_blocks = {}  # (메서드 이름, 블록 id) → 예외: 그 블록에만 계속 낸다(지워진 제목처럼)
 
-    def _check(self, name):
+    def _check(self, name, block_id=None):
         self.calls.append(name)
+        if (name, block_id) in self.bad_blocks:
+            raise self.bad_blocks[(name, block_id)]
+        if name in self.sticky:
+            raise self.sticky[name]
         if name in self.fail:
             raise self.fail.pop(name)
 
@@ -248,19 +254,19 @@ class FakeNotion:
         return [self.blocks[i] for i in self.kids[block_id]]
 
     def append_children(self, block_id, children, timeout=10):
-        self._check('append_children')
+        self._check('append_children', block_id)
         if block_id not in self.kids:
             raise http_error(404)
         return [self._add(block_id, c) for c in children]
 
     def update_block(self, block_id, payload):
-        self._check('update_block')
+        self._check('update_block', block_id)
         for key, value in json.loads(json.dumps(payload)).items():
             self.blocks[block_id][key].update(value)
             self._plain(self.blocks[block_id][key])
 
     def update_page(self, page_id, properties, timeout=30):
-        self._check('update_page')
+        self._check('update_page', page_id)
         self.timeouts['update_page'] = timeout
         self.pages[page_id]['properties'].update(properties)
 

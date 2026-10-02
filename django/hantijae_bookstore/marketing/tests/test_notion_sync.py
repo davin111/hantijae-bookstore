@@ -250,6 +250,107 @@ class NotionSyncTest(TestCase):
         b.refresh_from_db()
         self.assertFalse(b.notion['dirty'])
 
+    # ---- 노션에서 지워진 부분(404/400)은 영영 다시 하지 않는다 ----
+    def gone_setup(self):
+        b, ps = briefing(self.book, 3)
+        self.page(b)
+        for p in ps:
+            p.refresh_from_db()
+        Proposal.objects.filter(pk__in=[p.pk for p in ps]).update(status=Proposal.ACTED)
+        return b, ps
+
+    def test_deleted_heading_is_forgiven_once_and_the_admin_hears_once(self):
+        b, ps = self.gone_setup()
+        self.fake.bad_blocks[('update_block', ps[1].notion['heading'])] = http_error(400)
+        ns.mark_dirty(ps[0])
+        with self.assertLogs('intake', 'WARNING'):
+            self.assertEqual(ns.flush(self.host, NOW), 0)  # 던지지 않는다(포기한 페이지는 '고친 수'에 넣지 않는다)
+        b.refresh_from_db()
+        self.assertFalse(b.notion['dirty'])
+        self.assertEqual(self.fake.text_of(ps[0].notion['heading']), '✅ 1. 항목 1')
+        self.assertEqual(self.fake.text_of(ps[2].notion['heading']), '✅ 3. 항목 3')
+        self.assertIn('✅ 3', self.fake.pages[b.notion['page']]['properties']['진행']['rich_text'][0]['text']['content'])
+        self.assertEqual(len(self.host.notes), 1)
+        self.assertIn('주 홍보 제안', self.host.notes[0])
+        ns.mark_dirty(ps[0])  # 또 눌러도 같은 이유로 실패 → 다시 알리지 않는다
+        with self.assertLogs('intake', 'WARNING'):
+            ns.flush(self.host, NOW)
+        b.refresh_from_db()
+        self.assertFalse(b.notion['dirty'])
+        self.assertEqual(len(self.host.notes), 1)
+
+    def test_trashed_page_clears_the_mark_and_notifies_once(self):
+        b, ps = self.gone_setup()
+        for name in ('update_block', 'update_page', 'append_children'):
+            self.fake.sticky[name] = http_error(400)
+        ns.mark_dirty(ps[0])
+        with self.assertLogs('intake', 'WARNING'):
+            self.assertEqual(ns.flush(self.host, NOW), 0)
+        b.refresh_from_db()
+        self.assertFalse(b.notion['dirty'])
+        self.assertEqual(len(self.host.notes), 1)
+
+    def test_missing_append_on_a_deleted_heading_clears_the_mark(self):
+        b, ps = self.gone_setup()
+        d = Draft.objects.create(proposal=ps[0], channel=Draft.INSTAGRAM, body='고친 글', version=2)
+        self.fake.bad_blocks[('append_children', ps[0].notion['heading'])] = http_error(404)
+        ns.mark_dirty(ps[0])
+        with self.assertLogs('intake', 'WARNING'):
+            self.assertEqual(ns.flush(self.host, NOW), 0)
+        b.refresh_from_db()
+        self.assertFalse(b.notion['dirty'])
+        self.assertEqual(len(self.host.notes), 1)
+        self.assertFalse(d.notion)
+
+    def test_permanent_then_transient_error_keeps_the_mark_and_raises_the_transient(self):
+        b, ps = self.gone_setup()
+        self.fake.bad_blocks[('update_block', ps[0].notion['heading'])] = http_error(400)
+        self.fake.bad_blocks[('update_block', ps[2].notion['heading'])] = http_error(502)
+        ns.mark_dirty(ps[0])
+        with self.assertRaises(requests.HTTPError) as cm, self.assertLogs('intake', 'WARNING'):
+            ns.flush(self.host, NOW)
+        self.assertEqual(cm.exception.response.status_code, 502)
+        b.refresh_from_db()
+        self.assertTrue(b.notion['dirty'])
+        self.assertEqual(self.host.notes, [])
+
+    def test_forbidden_keeps_the_mark_and_raises(self):
+        b, ps = self.gone_setup()
+        self.fake.sticky['update_block'] = http_error(403)
+        ns.mark_dirty(ps[0])
+        with self.assertRaises(requests.HTTPError), self.assertLogs('intake', 'WARNING'):
+            ns.flush(self.host, NOW)
+        b.refresh_from_db()
+        self.assertTrue(b.notion['dirty'])
+        self.assertEqual(self.host.notes, [])
+
+    def test_permanent_error_without_response_is_not_permanent(self):
+        self.assertFalse(ns._permanent(requests.HTTPError('x')))
+        self.assertFalse(ns._permanent(RuntimeError('x')))
+        self.assertTrue(ns._permanent(http_error(404)) and ns._permanent(http_error(400)))
+        self.assertFalse(ns._permanent(http_error(409)))
+
+    def test_broken_pages_do_not_starve_a_healthy_one(self):
+        broken = [self.kit(700 + i) for i in range(ns.FLUSH_MAX)]
+        healthy = self.kit(900)
+        healthy.refresh_from_db()
+        self.fake.edit(healthy.notion['headings'][Draft.BLOG], '낡은 제목')  # 다시 적혔는지 알아보는 표시
+        for p in broken:
+            p.refresh_from_db()
+            for h in p.notion['headings'].values():
+                self.fake.bad_blocks[('update_block', h)] = http_error(400)
+            self.fake.bad_blocks[('update_page', p.notion['page'])] = http_error(400)
+        for p in broken:
+            ns.mark_dirty(p)
+        ns.mark_dirty(healthy)
+        with self.assertLogs('intake', 'WARNING'):
+            for _ in range(2):
+                ns.flush(self.host, NOW)
+        healthy.refresh_from_db()
+        self.assertFalse(healthy.notion['dirty'])
+        self.assertNotEqual(self.fake.text_of(healthy.notion['headings'][Draft.BLOG]), '낡은 제목')
+        self.assertEqual(Proposal.objects.filter(notion__dirty=True).count(), 0)
+
     def test_flush_does_nothing_when_off(self):
         b, ps = briefing(self.book)
         self.page(b)
