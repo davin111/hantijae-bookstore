@@ -139,16 +139,17 @@ def _month_end(month_start):
     return (month_start.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
 
 
-def month_ready(month_start):
-    """그 달 모든 날을 '그날+2일' 뒤에 한 번 이상 읽었는가(늦게 들어오는 날까지 다 반영됐는가). 로그인 없이 DB만 본다."""
+def missing_days(month_start):
+    """그 달에서 '그날+2일' 뒤에 한 번도 읽지 못한 날(늦게 들어오는 날까지 반영이 안 된 날). 로그인 없이 DB만 본다."""
     end = _month_end(month_start)
     read = dict(BnkDay.objects.filter(day__range=(month_start, end)).values_list('day', 'read_on'))
-    day = month_start
-    while day <= end:
-        if day not in read or read[day] < day + timedelta(days=2):
-            return False
-        day += timedelta(days=1)
-    return True
+    days = [month_start + timedelta(days=i) for i in range((end - month_start).days + 1)]
+    return [d for d in days if d not in read or read[d] < d + timedelta(days=2)]
+
+
+def month_ready(month_start):
+    """그 달 모든 날을 '그날+2일' 뒤에 한 번 이상 읽었는가."""
+    return not missing_days(month_start)
 
 
 def active(today):

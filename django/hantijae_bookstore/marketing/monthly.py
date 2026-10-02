@@ -14,10 +14,10 @@ from intake.models import FundingCampaign, ReviewItem, TelegramChat, WorkerState
 from marketing import bnk_sales, meta
 from marketing.candidates import sns_where
 from marketing.funding import ends_on
-from marketing.messages import _clock, h
+from marketing.messages import TEXT_LIMIT, _clock, h
 from marketing.models import BnkSale, Draft, FundingSnapshot, GrantCall, HookDate, Signal
 from marketing.prompts import MONTHLY_SYSTEM, build_monthly_user
-from marketing.text import fix_title_marks, foreign_numbers
+from marketing.text import clip, fix_title_marks, foreign_numbers, tg_len
 from marketing.timeutil import KST, kst_today
 from web.blog import fetch_rss, parse_rss
 
@@ -72,7 +72,7 @@ def _weeks(start, end):
 
 
 def sales(start, end, client):
-    """지난달 판매(전산망). 판매 경로·구매자는 그때 사이트에서 읽고, 못 읽으면 None(그 줄을 뺀다)."""
+    """지난달 판매(전산망). 판매 경로·구매자는 그때 사이트에서 읽고, 못 읽거나 client가 없으면 None(그 줄을 뺀다)."""
     qs = BnkSale.objects.filter(day__range=(start, end))
     sums = bnk_sales._sums(qs)
     top = []
@@ -82,17 +82,17 @@ def sales(start, end, client):
         if r['n'] > 0:
             top.append((r['book'] or r['name'], r['n'],
                         {bnk_sales.STORE_LABEL[k]: r[k] or 0 for k in bnk_sales.STORE_KEYS}))
-    try:
-        t = client.totals(start, end)
-        channels = {'pc': t['pc'], 'mobile': t['mobile'], 'offline': t['offline']}
-    except Exception:
-        log.warning('monthly: sales channels failed', exc_info=True)
-        channels = None
-    try:
-        readers = client.readers(start, end)
-    except Exception:
-        log.warning('monthly: readers failed', exc_info=True)
-        readers = None
+    channels = readers = None   # client 없음 = 전산망에 못 들어감(점검 등). 그 두 줄만 빼고 보낸다
+    if client is not None:
+        try:
+            t = client.totals(start, end)
+            channels = {'pc': t['pc'], 'mobile': t['mobile'], 'offline': t['offline']}
+        except Exception:
+            log.warning('monthly: sales channels failed', exc_info=True)
+        try:
+            readers = client.readers(start, end)
+        except Exception:
+            log.warning('monthly: readers failed', exc_info=True)
     return {'total': sums['total'], 'stores': {bnk_sales.STORE_LABEL[k]: sums[k] for k in bnk_sales.STORE_KEYS},
             'weeks': _weeks(start, end), 'kinds': qs.values('isbn').distinct().count(), 'top': top,
             'channels': channels, 'readers': readers}
@@ -110,54 +110,110 @@ def _signals(kind, start, end, dated=True):
     return out
 
 
-def events(start, end):
-    found = []
+def _moments(start, end):
+    out = []
     for day, s in _signals(Signal.MOMENT, start, end):
         summary = (s.detail or {}).get('summary', '')
-        found.append((day, f'{s.title} — {summary}' if summary else s.title, '검수 방'))
+        out.append((day, f'{s.title} — {summary}' if summary else s.title, '검수 방'))
+    return out
+
+
+def _social(start, end):
+    out = []
     for s in Signal.objects.filter(kind=Signal.SOCIAL, relevant=True, sensitive=False).order_by('id'):
         try:
             day = date.fromisoformat((s.detail or {}).get('posted_on', ''))
         except ValueError:
             continue
         if start <= day <= end:
-            found.append((day, s.detail.get('summary', ''), sns_where(s)))
+            out.append((day, s.detail.get('summary', ''), sns_where(s)))
+    return out
+
+
+def _news(start, end):
+    out = []
     for day, s in _signals(Signal.NEWS, start, end):
         d = s.detail or {}
         head = f'『{s.book.title}』 관련 뉴스' if s.book else '뉴스'
-        found.append((day, f'{head} 〈{d.get("source", "")}〉 「{s.title}」' + (f' — {d["summary"]}' if d.get('summary') else ''),
-                      '뉴스 검색'))
-    for day, s in _signals(Signal.SELECTION, start, end):
-        found.append((day, f'『{s.book.title}』 {s.title} 선정' if s.book else f'{s.title} 선정', '공공 선정 발표'))
-    for camp in FundingCampaign.objects.filter(is_ours=True).order_by('starts_at'):
-        snap = FundingSnapshot.objects.filter(campaign=camp, date__lte=end).order_by('-date').first()
-        began = camp.starts_at and start <= kst_today(camp.starts_at) <= end
-        if not began and not (snap and snap.date >= start):
+        out.append((day, f'{head} 〈{d.get("source", "")}〉 「{s.title}」' + (f' — {d["summary"]}' if d.get('summary') else ''),
+                    '뉴스 검색'))
+    return out
+
+
+def _selections(start, end):
+    return [(day, f'『{s.book.title}』 {s.title} 선정' if s.book else f'{s.title} 선정', '공공 선정 발표')
+            for day, s in _signals(Signal.SELECTION, start, end)]
+
+
+FUNDING_NAME = {'tumblbug': ('텀블벅 펀딩', '텀블벅 페이지')}
+ALADIN_FUNDING = ('북펀드', '알라딘 북펀드 페이지')
+
+
+def _funding(start, end):
+    """그 달에 시작했거나 그 달 진척 기록이 있는 우리 펀딩. 알라딘은 시작일을 몰라서(starts_at 없음) 그 달 마지막 기록일로 적는다."""
+    out = []
+    for camp in FundingCampaign.objects.filter(is_ours=True).order_by('id'):
+        began = bool(camp.starts_at) and start <= kst_today(camp.starts_at) <= end
+        snap = FundingSnapshot.objects.filter(campaign=camp, date__range=(start, end)).order_by('-date').first()
+        if not began and not snap:
             continue
-        end_on = ends_on(camp)
-        parts = ([f'목표의 {snap.percent}%', f'{snap.books}권'] if snap else []) + [f'{end_on.month}월 {end_on.day}일 마감']
-        found.append((kst_today(camp.starts_at) if began else None,
-                      f'『{_book_name(camp.title)}』 북펀드 {"시작" if began else "진행"} — ' + ', '.join(parts),
-                      '알라딘 북펀드 페이지'))
+        noun, source = FUNDING_NAME.get(camp.platform, ALADIN_FUNDING)
+        parts = [f'목표의 {snap.percent}%', f'{snap.books}권'] if snap else []
+        if camp.ends_at:
+            end_on = ends_on(camp)
+            parts.append(f'{end_on.month}월 {end_on.day}일 마감')
+        out.append((kst_today(camp.starts_at) if began else snap.date,
+                    f'『{_book_name(camp.title)}』 {noun} {"시작" if began else "진행"}' + (' — ' + ', '.join(parts) if parts else ''),
+                    source))
+    return out
+
+
+def _grants(start, end):
+    out = []
     for g in GrantCall.objects.filter(sent_at__isnull=False).order_by('sent_at'):
         day = kst_today(g.sent_at)
         if start <= day <= end:
             note = {GrantCall.APPLYING: ' — 신청하기로 함', GrantCall.PASSED: ' — 이번엔 넘김'}.get(g.state, '')
-            found.append((day, f'{g.title} 알림{note}', '출판진흥원 공고'))
-    for b in Book.objects.filter(is_published=True, published_date__range=(start, end)).order_by('published_date'):
-        found.append((b.published_date, f'『{b.title}』 출간', '사이트 도서 정보'))
+            out.append((day, f'{g.title} 알림{note}', '출판진흥원 공고'))
+    return out
+
+
+def _new_books(start, end):
+    return [(b.published_date, f'『{b.title}』 출간', '사이트 도서 정보')
+            for b in Book.objects.filter(is_published=True, published_date__range=(start, end)).order_by('published_date')]
+
+
+def _out_of_print(start, end):
+    out = []
     for item in ReviewItem.objects.filter(status=ReviewItem.APPLIED, book__isnull=False).select_related('book'):
         day = kst_today(item.updated_at)
         if start <= day <= end and any(c[1] == '판매 상태' and c[3] is False for c in item.changed or []):
-            found.append((day, f'『{item.book.title}』 종이책 절판 처리', '검수 방 확인'))
+            out.append((day, f'『{item.book.title}』 종이책 절판 처리', '검수 방 확인'))
+    return out
+
+
+def _reviews(start, end):
     reviews = {}
     for _, s in _signals(Signal.REVIEW, start, end, dated=False):
         if s.book:
             reviews[s.book.title] = reviews.get(s.book.title, 0) + 1
-    if reviews:
-        ranked = sorted(reviews.items(), key=lambda x: -x[1])
-        found.append((None, f'새 독자 서평 {sum(reviews.values())}건 (' + ', '.join(f'『{t}』 {n}' for t, n in ranked[:5]) + ')',
-                      '블로그·카페 검색'))
+    if not reviews:
+        return []
+    ranked = sorted(reviews.items(), key=lambda x: -x[1])
+    return [(None, f'새 독자 서평 {sum(reviews.values())}건 (' + ', '.join(f'『{t}』 {n}' for t, n in ranked[:5]) + ')',
+             '블로그·카페 검색')]
+
+
+def events(start, end):
+    """있었던 일 후보(날짜순, 날짜 없는 것은 뒤). 자료 한 곳이 실패해도 나머지는 모은다."""
+    found = []
+    for name, source in (('moments', _moments), ('social', _social), ('news', _news), ('selections', _selections),
+                         ('funding', _funding), ('grants', _grants), ('new books', _new_books),
+                         ('out of print', _out_of_print), ('reviews', _reviews)):
+        try:
+            found += source(start, end)
+        except Exception:
+            log.warning('monthly: %s failed', name, exc_info=True)
     found.sort(key=lambda x: (x[0] is None, x[0] or date.max))
     return [Item(i, day, text, source) for i, (day, text, source) in enumerate(found, 1) if text]
 
@@ -199,26 +255,52 @@ def posts(start, end, fetch_meta=meta.official_posts, fetch_blog=_blog):
 
 # ---- 다음 달 준비 ----
 
-def next_month(start):
-    end = month_end(start)
-    found = []
+def _hooks_next(start, end):
+    out = []
     for hook in HookDate.objects.prefetch_related('books').order_by('id'):
         on = hook.next_on(start)
         if on and on <= end:
             books = ' '.join(f'『{b.title}』' for b in hook.books.all() if b.is_published)
-            found.append((on, f'{on.month}/{on.day} {hook.name}' + ('(추모)' if hook.memorial else '')
-                          + (f' {books}' if books else '')))
-    for s in Signal.objects.filter(kind=Signal.MOMENT, relevant=True, sensitive=False, happens_on__range=(start, end)):
-        if (s.detail or {}).get('status') != 'cancelled':
-            found.append((s.happens_on, f'{s.happens_on.month}/{s.happens_on.day} {s.title}'))
-    for camp in FundingCampaign.objects.filter(is_ours=True):
+            out.append((on, f'{on.month}/{on.day} {hook.name}' + ('(추모)' if hook.memorial else '')
+                        + (f' {books}' if books else '')))
+    return out
+
+
+def _moments_next(start, end):
+    return [(s.happens_on, f'{s.happens_on.month}/{s.happens_on.day} {s.title}')
+            for s in Signal.objects.filter(kind=Signal.MOMENT, relevant=True, sensitive=False, happens_on__range=(start, end))
+            if (s.detail or {}).get('status') != 'cancelled']
+
+
+def _funding_next(start, end):
+    out = []
+    for camp in FundingCampaign.objects.filter(is_ours=True, ends_at__isnull=False):
         day = ends_on(camp)
         if start <= day <= end:
-            found.append((day, f'{day.month}/{day.day} 『{_book_name(camp.title)}』 북펀드 마감'))
+            noun = FUNDING_NAME.get(camp.platform, ALADIN_FUNDING)[0]
+            out.append((day, f'{day.month}/{day.day} 『{_book_name(camp.title)}』 {noun} 마감'))
+    return out
+
+
+def _grants_next(start, end):
+    out = []
     for g in GrantCall.objects.filter(state__in=GrantCall.OPEN, apply_until__range=(start, end)):
         clock = _clock((g.verdict or {}).get('until_time', ''))
-        found.append((g.apply_until, f'{g.apply_until.month}/{g.apply_until.day}' + (f' {clock}' if clock else '')
-                      + f' {g.title} 신청 마감' + (' (신청하기로 함)' if g.state == GrantCall.APPLYING else '')))
+        out.append((g.apply_until, f'{g.apply_until.month}/{g.apply_until.day}' + (f' {clock}' if clock else '')
+                    + f' {g.title} 신청 마감' + (' (신청하기로 함)' if g.state == GrantCall.APPLYING else '')))
+    return out
+
+
+def next_month(start):
+    """다음 달 준비 줄(날짜순). 자료 한 곳이 실패해도 나머지는 보낸다."""
+    end = month_end(start)
+    found = []
+    for name, part in (('hooks', _hooks_next), ('moments', _moments_next), ('funding', _funding_next),
+                       ('grants', _grants_next)):
+        try:
+            found += part(start, end)
+        except Exception:
+            log.warning('monthly: next %s failed', name, exc_info=True)
     found.sort(key=lambda x: x[0])
     return [text for _, text in found]
 
@@ -226,7 +308,9 @@ def next_month(start):
 # ---- LLM 정리·검증 ----
 
 _DATE = re.compile(r'(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)')
+_KDATE = re.compile(r'(?<!\d)(\d{1,2})월\s*(\d{1,2})일')
 _TITLE = re.compile(r'『([^』]+)』')
+LINE_LIMIT, TOPIC_LIMIT, PROPOSAL_LIMIT = 120, 200, 300   # 텔레그램 4096자 안에 들게 줄마다 자른다
 SALES_SOURCE = ('출처: 출판유통통합전산망 판매통계. 종이책만, 교보·예스24(제휴사 제외)·알라딘·영풍·지역서점 판매예요. '
                 '전자책·오디오북, 쿠팡 등 다른 몰, 직접 판매·행사·단체 주문, 도서관 납품, 북펀드 후원은 들어 있지 않아요.')
 READER_SOURCE = "출처: 전산망 독자 분석(교보·알라딘·예스24 온라인 판매 기준, 비회원 구매는 '기타')"
@@ -237,34 +321,33 @@ def _line(item):
     return f'{item.day.month}/{item.day.day} {item.text}' if item.day else item.text
 
 
+def _pairs(text):
+    """글 속 날짜를 (월, 일)로. '10/11'과 '10월 11일'을 같은 날로 본다."""
+    return {(int(m), int(d)) for rx in (_DATE, _KDATE) for m, d in rx.findall(text)}
+
+
 def _dates_ok(text, allowed_days, allowed_texts):
-    """줄의 M/D 날짜가 근거 후보의 날짜이거나 자료 글에 그대로 있어야 한다."""
-    for m, d in _DATE.findall(text):
-        if (int(m), int(d)) not in allowed_days and not any(f'{m}/{d}' in t for t in allowed_texts):
-            return False
-    return True
+    """줄의 날짜(M/D·M월 D일)가 근거 후보의 날짜이거나 자료 글에 있는 날짜여야 한다."""
+    return _pairs(text) <= set(allowed_days).union(*(_pairs(t) for t in allowed_texts))
 
 
 def _clean(value):
-    return fix_title_marks(' '.join(str(value or '').split()))
+    """LLM이 준 글. 글자가 아니면(목록·객체) 버린다."""
+    return fix_title_marks(' '.join(value.split())) if isinstance(value, str) else ''
 
 
-def compose(llm, month_label, items, facts):
-    """(있었던 일 [(줄, 출처)], 올린 글 주제, 제안 목록). 출처는 근거 번호로 코드가 붙인다.
-    LLM이 실패하거나 남는 줄이 없으면 후보를 날짜순 10개 그대로 쓰고 주제·제안은 비운다."""
+def _cites(value, by_no):
+    return (isinstance(value, list) and bool(value)
+            and all(isinstance(n, int) and not isinstance(n, bool) and n in by_no for n in value))
+
+
+def _check(raw, items, facts):
     by_no = {i.no: i for i in items}
-    fallback = [(_line(i), i.source) for i in items[:MAX_EVENTS]]
-    try:
-        raw = complete_json(llm, MONTHLY_SYSTEM, build_monthly_user(month_label, items, facts))
-    except Exception:
-        log.warning('monthly: compose failed', exc_info=True)
-        return fallback, '', []
     events = []
-    for e in raw.get('events') or []:
-        cited = e.get('from') if isinstance(e, dict) else None
-        if not isinstance(cited, list) or not cited or any(n not in by_no for n in cited):
+    for e in raw.get('events') if isinstance(raw.get('events'), list) else []:
+        if not isinstance(e, dict) or not _cites(e.get('from'), by_no):
             continue
-        text, used = _clean(e.get('text')), [by_no[n] for n in cited]
+        text, used = _clean(e.get('text')), [by_no[n] for n in e['from']]
         texts = [i.text for i in used]
         if not text or foreign_numbers(text, texts) or not _dates_ok(text, {(i.day.month, i.day.day) for i in used if i.day},
                                                                      texts):
@@ -278,12 +361,27 @@ def compose(llm, month_label, items, facts):
         topics = ''
     site = set(Book.objects.filter(is_published=True).values_list('title', flat=True))
     proposals = []
-    for p in raw.get('proposals') or []:
+    for p in raw.get('proposals') if isinstance(raw.get('proposals'), list) else []:
         p = _clean(p)
         if (p and not foreign_numbers(p, all_texts) and _dates_ok(p, set(), all_texts)
                 and all(t in site for t in _TITLE.findall(p))):
             proposals.append(p)
-    return events or fallback, topics, proposals[:3]
+    return events, topics, proposals[:3]
+
+
+def compose(llm, month_label, items, facts):
+    """(있었던 일 [(줄, 출처)], 올린 글 주제, 제안 목록). 출처는 근거 번호로 코드가 붙인다.
+    LLM이 실패하거나(모양이 틀린 답 포함) 남는 줄이 없으면 후보를 날짜순 10개 그대로 쓰고, 실패면 주제·제안도 비운다."""
+    fallback = [(_line(i), i.source) for i in items[:MAX_EVENTS]]
+    try:
+        raw = complete_json(llm, MONTHLY_SYSTEM, build_monthly_user(month_label, items, facts))
+        if not isinstance(raw, dict):
+            raise ValueError(f'answer is {type(raw).__name__}, not an object')
+        events, topics, proposals = _check(raw, items, facts)
+    except Exception:
+        log.warning('monthly: compose failed', exc_info=True)
+        return fallback, '', []
+    return events or fallback, topics, proposals
 
 
 # ---- HTML ----
@@ -329,8 +427,7 @@ def _posts_section(p, topics):
     return '\n'.join(lines)
 
 
-def render(month_start, s, events_, topics, proposals, p, next_lines):
-    """HTML(send_message html=True). 숫자 요약·다음 달·제안은 펼치고, 있었던 일·출처는 접는다(feedback-telegram-formatting)."""
+def _render(month_start, s, events_, topics, proposals, p, next_lines):
     end = month_end(month_start)
     nxt = end + timedelta(days=1)
     sections = [f'<b>📅 {month_start.month}월 돌아보기</b> ({month_start.month}월 1일~{end.day}일)', _sales_section(s)]
@@ -347,6 +444,23 @@ def render(month_start, s, events_, topics, proposals, p, next_lines):
     return '\n\n'.join(sections)
 
 
+def render(month_start, s, events_, topics, proposals, p, next_lines):
+    """HTML(send_message html=True). 숫자 요약·다음 달·제안은 펼치고, 있었던 일·출처는 접는다(feedback-telegram-formatting).
+    줄마다 자르고, 그래도 텔레그램 한 메시지(4096자)를 넘으면 접힌 있었던 일 → 다음 달 준비 순으로 뒤에서부터 뺀다
+    (넘으면 서식 없는 글로 가면서 접기가 풀리고 끝의 제안이 잘린다)."""
+    events_ = [(clip(text, LINE_LIMIT), src) for text, src in events_]
+    next_lines = [clip(x, LINE_LIMIT) for x in next_lines]
+    topics, proposals = clip(topics, TOPIC_LIMIT), [clip(x, PROPOSAL_LIMIT) for x in proposals]
+    while True:
+        text = _render(month_start, s, events_, topics, proposals, p, next_lines)
+        if tg_len(text) <= TEXT_LIMIT or not (events_ or next_lines):
+            return text
+        if events_:
+            events_ = events_[:-1]
+        else:
+            next_lines = next_lines[:-1]
+
+
 def _sales_facts(s):
     lines = [f'합계 {s["total"]}권, {s["kinds"]}종', '서점별 ' + ', '.join(f'{k} {v}' for k, v in s['stores'].items()),
              '7일씩 ' + ', '.join(f'{label} {n}권' for label, n in s['weeks'])]
@@ -354,7 +468,8 @@ def _sales_facts(s):
 
 
 def build(llm, client, month_start, now, fetch_meta=meta.official_posts, fetch_blog=_blog):
-    """지난달을 다 읽었을 때만(로그인한 client로 판매 경로·구매자를 더 읽는다) 돌아보기 HTML. 아니면 ''."""
+    """지난달을 다 읽었을 때만(로그인한 client로 판매 경로·구매자를 더 읽는다. None이면 그 두 줄 없이) 돌아보기 HTML.
+    아니면 ''."""
     if not bnk_sales.month_ready(month_start):
         return ''
     end = month_end(month_start)

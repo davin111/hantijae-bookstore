@@ -222,6 +222,7 @@ class MonthlyTest(Books, TestCase):
         BnkDay.objects.filter(day=date(2026, 9, 30)).update(read_on=date(2026, 10, 3))
         BnkDay.objects.filter(day=date(2026, 9, 12)).delete()   # 한 번도 못 읽은 날(처음 켠 달·빈틈)
         self.assertFalse(bnk_sales.month_ready(date(2026, 9, 1)))
+        self.assertEqual(bnk_sales.missing_days(date(2026, 9, 1)), [date(2026, 9, 12)])
         c = FakeBnkClient(readers=parse_readers(READERS_JSON))
         self.assertEqual(bnk_sales.monthly_text(c, date(2026, 9, 1)), '')
         self.assertEqual(c.asked, [])

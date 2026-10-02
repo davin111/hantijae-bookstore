@@ -21,6 +21,7 @@ MOMENT_AT, MIDWEEK_BUILD_AT, MIDWEEK_SEND_AT = (5, 0), (5, 30), (9, 30)
 ADMIN_QUEUE = 'moment_admin_queue'
 BNK_AT = (6, 20)   # 알라딘(06:00)·선정(06:10) 다음, 지원사업(06:40) 전
 BNK_MONTH_DAY, BNK_MONTH_AT = 3, (9, 30)   # 전산망이 약 2일 늦어서 1일이 아니라 3일
+MONTHLY_LATE_DAY = 5   # 이날까지 지난달을 다 못 읽었으면 관리자에게 한 번 알린다
 BNK_FAIL_ALERT_DAYS = 3
 GRANT_AT = (6, 40)   # 선정(06:10) 다음, 월요일 브리핑 만들기(07:00) 전. 한 번에 LLM 최대 3번(grants.JUDGE_PER_RUN)
 SELECTION_AT = (6, 10)   # 판매 지수(06:00) 다음. LLM을 쓰지 않아 07:00 브리핑 만들기 전에 끝난다
@@ -167,19 +168,26 @@ def _bnk_collect(deps, today, now, started):
     WorkerState.put('bnk_fail_streak', 0)
 
 
-def _monthly(deps, today, now, started):
-    """월간 돌아보기(monthly.build)를 monthly_mode에 맞는 방으로. 판매 경로·구매자를 더 읽으려 로그인한다."""
+def _monthly(deps, today, now, started, month):
+    """월간 돌아보기(monthly.build)를 monthly_mode에 맞는 방으로. 판매 경로·구매자를 더 읽으려 로그인하고,
+    전산망에 못 들어가면(점검 등) 그 두 줄 없이 보낸다. 보낸 뒤에만 그 달을 적는다(실패하면 다음 날 다시)."""
     chat = monthly.target(deps.bot, deps.bot.marketing.mode())
     if chat is None:
         return
+    start, text = bnk_sales.last_month_start(today), None
     try:
         with bnk.client_from_settings() as client:
-            text = monthly.build(deps.llm, client, bnk_sales.last_month_start(today), now)
+            text = monthly.build(deps.llm, client, start, now)
     except bnk.BnkLoginError as e:
         _bnk_login_rejected(deps, today, now, started, e)
         return
+    except bnk.BnkError:
+        log.warning('monthly: KPIPA site unavailable, sending without channels and readers', exc_info=True)
+    if text is None:
+        text = monthly.build(deps.llm, None, start, now)
     if text:
         deps.bot.tg.send_message(chat, text, html=True)
+        WorkerState.put('bnk_last_monthly', month)
 
 
 def _build_midweek(deps, m, today, now, started):
@@ -251,12 +259,19 @@ def _run_due(deps, now):
         _guard(deps, 'bnk', now, lambda: _bnk_collect(deps, today, now, started))
     month_start = bnk_sales.last_month_start(today)
     month = month_start.strftime('%Y-%m')
-    # 그 달을 다 읽었을 때만(로그인 전에 DB로 확인) 보내고, 그때 적는다 — 덜 읽은 달은 다음 날 다시 본다
-    if (bnk_on and monthly.mode() != 'off' and local.day >= BNK_MONTH_DAY and _hm(local) >= BNK_MONTH_AT
-            and not in_quiet_hours(now) and WorkerState.get('bnk_last_monthly') != month
-            and bnk_sales.month_ready(month_start)):
-        WorkerState.put('bnk_last_monthly', month)
-        _guard(deps, 'monthly', now, lambda: _monthly(deps, today, now, started))
+    # 그 달을 다 읽었을 때만(로그인 전에 DB로 확인) 하루 한 번 시도하고, 보낸 뒤에 적는다(_monthly).
+    # 위 수집이 이번 바퀴에 계정 거부를 당했으면 다시 로그인하지 않도록 멈춤을 새로 확인한다
+    if (bnk_sales.mode() == 'on' and not bnk_sales.blocked() and monthly.mode() != 'off'
+            and local.day >= BNK_MONTH_DAY and _hm(local) >= BNK_MONTH_AT and not in_quiet_hours(now)
+            and WorkerState.get('bnk_last_monthly') != month and WorkerState.get('monthly_last_try') != day):
+        if bnk_sales.month_ready(month_start):
+            WorkerState.put('monthly_last_try', day)
+            _guard(deps, 'monthly', now, lambda: _monthly(deps, today, now, started, month))
+        elif local.day >= MONTHLY_LATE_DAY and WorkerState.get('monthly_late_noted') != month:
+            WorkerState.put('monthly_late_noted', month)
+            missing = ', '.join(f'{d.month}/{d.day}' for d in bnk_sales.missing_days(month_start))
+            deps.bot.notify_admin(f'⚠️ {month_start.month}월 돌아보기를 아직 못 보냈어요. 전산망 판매를 다 읽지 못한 날: '
+                                  f'{missing}. 다 읽히면 다음 09:30 뒤에 가요(/bnk 상태·워커 로그 확인)')
 
     if (_hm(local) >= GRANT_AT and grants.mode() != 'off'
             and WorkerState.get('grant_last_scan') != day):

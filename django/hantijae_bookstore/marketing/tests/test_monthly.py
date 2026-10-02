@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from unittest import mock
 
 from django.test import TestCase
 
@@ -6,7 +7,9 @@ from intake.models import FundingCampaign, ReviewItem
 from marketing import monthly
 from marketing.meta import OfficialPost
 from marketing.models import Draft, FundingSnapshot, GrantCall, HookDate, Proposal, Signal
+from marketing.messages import TEXT_LIMIT
 from marketing.tests.fakes import FakeBnkClient, make_book, make_call, make_sale
+from marketing.text import tg_len
 from marketing.timeutil import KST
 from web.blog import BlogPost
 
@@ -101,6 +104,30 @@ class EventsTest(Books):
         self.assertEqual(texts[7], '『밥은 먹고 다니냐는 말』 종이책 절판 처리')
         self.assertEqual(texts[8], '새 독자 서평 2건 (『무지개를 변호하다』 2)')
 
+    def test_aladin_funding_without_a_start_is_dated_by_its_latest_snapshot(self):
+        camp = FundingCampaign.objects.create(platform='aladin', external_id='3013', url='u', publisher='한티재',
+                                              title='농부, 짠한 형 - 부제', is_ours=True,
+                                              ends_at=datetime(2026, 10, 12, 0, 0, tzinfo=KST))
+        FundingSnapshot.objects.create(campaign=camp, date=date(2026, 9, 27), amount=1, goal=5000000, books=100)
+        FundingSnapshot.objects.create(campaign=camp, date=date(2026, 9, 30), amount=6966000, goal=5000000, books=387)
+        FundingCampaign.objects.create(platform='aladin', external_id='9', url='u2', publisher='한티재', title='마감 모름',
+                                       is_ours=True, starts_at=at(9, 20))
+        FundingCampaign.objects.create(platform='tumblbug', external_id='t', url='u3', publisher='한티재', title='텀블벅 책',
+                                       is_ours=True, starts_at=at(9, 25), ends_at=datetime(2026, 10, 21, 0, 0, tzinfo=KST))
+        found = [(i.day, i.text, i.source) for i in monthly.events(SEP, SEP_END)]
+        self.assertEqual(found, [
+            (date(2026, 9, 20), '『마감 모름』 북펀드 시작', '알라딘 북펀드 페이지'),
+            (date(2026, 9, 25), '『텀블벅 책』 텀블벅 펀딩 시작 — 10월 20일 마감', '텀블벅 페이지'),
+            (date(2026, 9, 30), '『농부, 짠한 형』 북펀드 진행 — 목표의 139%, 387권, 10월 11일 마감', '알라딘 북펀드 페이지')])
+
+    def test_one_failing_source_does_not_take_the_others_down(self):
+        make_book(title='새 책', subtitle='', published=date(2026, 9, 15), isbn='979-11-92455-99-0', author='')
+        signal(Signal.SELECTION, '2026년 세종도서 교양부문', book=self.bap, happens_on=date(2026, 9, 20))
+        with mock.patch('marketing.monthly._new_books', side_effect=RuntimeError('db')), \
+                self.assertLogs('intake', 'WARNING'):
+            found = monthly.events(SEP, SEP_END)
+        self.assertEqual([(i.no, i.source) for i in found], [(1, '공공 선정 발표')])
+
 
 class PostsTest(TestCase):
     def test_counts_this_month_and_unknown_channels(self):
@@ -135,6 +162,15 @@ class NextMonthTest(Books):
             '10/11 『농부, 짠한 형』 북펀드 마감',
             '10/12 16시 2026년 제3차 전자책 제작 지원 사업 공고 신청 마감 (신청하기로 함)',
             '10/16 세계 식량의 날 『밥은 먹고 다니냐는 말』'])
+
+    def test_funding_without_an_end_date_is_skipped_and_a_failing_part_is_isolated(self):
+        FundingCampaign.objects.create(platform='aladin', external_id='9', url='u', publisher='한티재', title='마감 모름',
+                                       is_ours=True)
+        HookDate.objects.create(name='세계 식량의 날', month=10, day=16)
+        self.assertEqual(monthly.next_month(OCT), ['10/16 세계 식량의 날'])
+        with mock.patch('marketing.monthly.GrantCall.objects') as calls, self.assertLogs('intake', 'WARNING'):
+            calls.filter.side_effect = RuntimeError('db')
+            self.assertEqual(monthly.next_month(OCT), ['10/16 세계 식량의 날'])
 
 
 from marketing.tests.fakes import FakeLLM  # noqa: E402
@@ -172,6 +208,33 @@ class ComposeTest(Books):
         self.assertEqual(events[0], ('9/8 박한희 변호사 대구 북토크 안내', '대표님 개인 페이스북'))
         self.assertEqual((len(events), topics, proposals), (3, '', []))
 
+    def test_malformed_llm_shapes_fall_back_instead_of_crashing(self):
+        good = {'text': '9/8 박한희 변호사 대구 북토크', 'from': [1]}
+        for raw in ([1, 2], {'events': 5}, {'events': [{'text': 'x', 'from': [[1]]}]},
+                    {'events': [{'text': 'x', 'from': [{'no': 1}]}]}, {'events': [{'text': 'x', 'from': [True]}]},
+                    {'events': [good], 'proposals': 3}, {'events': [good], 'posts_topics': ['a']}):
+            with self.subTest(raw=raw):
+                events, topics, proposals = monthly.compose(FakeLLM(raw), '9월', items(), FACTS)
+                self.assertIn(events, ([('9/8 박한희 변호사 대구 북토크', '대표님 개인 페이스북')],
+                                       [(monthly._line(i), i.source) for i in items()]))
+                self.assertEqual((topics, proposals), ('', []))
+
+    def test_proposals_and_topics_must_be_plain_text(self):
+        llm = FakeLLM({'events': [{'text': '9/8 박한희 변호사 대구 북토크', 'from': [1]}], 'posts_topics': {'a': 1},
+                       'proposals': [{'text': '『밥은 먹고 다니냐는 말』'}, '『밥은 먹고 다니냐는 말』을 다시 소개해요.']})
+        self.assertEqual(monthly.compose(llm, '9월', items(), FACTS)[1:], ('', ['『밥은 먹고 다니냐는 말』을 다시 소개해요.']))
+        self.assertEqual(monthly.compose(FakeLLM({'events': [], 'proposals': '10/16 소개'}), '9월', items(), FACTS)[2], [])
+
+    def test_dates_are_checked_as_month_day_pairs_in_both_forms(self):
+        its = items() + [monthly.Item(4, None, '『농부, 짠한 형』 북펀드 진행 — 10월 11일 마감', '알라딘 북펀드 페이지')]
+        llm = FakeLLM({'events': [{'text': '『농부, 짠한 형』 북펀드 10/11 마감', 'from': [4]},    # 근거의 '10월 11일'
+                                  {'text': '9월 18일 박한희 변호사 대구 북토크', 'from': [1]}],    # 근거는 9/8
+                       'proposals': ['10월 16일 세계 식량의 날에 『밥은 먹고 다니냐는 말』을 소개해요.',
+                                     '10/1 『밥은 먹고 다니냐는 말』을 소개해요.']})              # '10/16'의 앞부분일 뿐
+        events, _, proposals = monthly.compose(llm, '9월', its, FACTS)
+        self.assertEqual(events, [('『농부, 짠한 형』 북펀드 10/11 마감', '알라딘 북펀드 페이지')])
+        self.assertEqual(proposals, ['10월 16일 세계 식량의 날에 『밥은 먹고 다니냐는 말』을 소개해요.'])
+
 
 SALES = {'total': 44, 'kinds': 3, 'stores': {'교보': 10, '예스24': 28, '알라딘': 2, '영풍': 1, '지역서점': 3},
          'weeks': [('1~7일', 10), ('8~14일', 5), ('15~21일', 0), ('22~28일', 26), ('29~30일', 3)],
@@ -199,6 +262,16 @@ class RenderTest(TestCase):
                       '· 봇 제안 중 올린 글: 『그리운 바람이 나를 불러』 ― 영상\n<blockquote expandable>', text)
         self.assertIn('\n\n<b>🗓 10월 준비</b>\n· 10/16 세계 식량의 날', text)
         self.assertTrue(text.endswith('\n\n<b>💡 제안</b>\n<b>1.</b> 10/16에 『밥은 먹고 다니냐는 말』을 다시 소개해요.'))
+
+    def test_long_lines_are_clipped_and_events_dropped_to_fit_telegram(self):
+        long_events = [(f'9/{d} ' + '아주 긴 소식 😀 ' * 60, '검수 방') for d in range(1, 11)]
+        text = monthly.render(SEP, SALES, long_events, '주제 ' * 200, ['제안 ' * 200, '둘째 제안'], POSTS,
+                              [f'10/{d} ' + '기념일 ' * 30 for d in range(1, 13)])
+        self.assertLessEqual(tg_len(text), TEXT_LIMIT)
+        shown = text.split('<blockquote expandable>· ')[1].split('</blockquote>')[0].split('\n')
+        self.assertIn(f'({len(shown)}가지 · 눌러서 보기)', text)
+        self.assertTrue(all(tg_len(line) <= monthly.LINE_LIMIT + 20 for line in shown))
+        self.assertTrue(text.endswith('<b>2.</b> 둘째 제안'))
 
     def test_missing_site_lookups_and_empty_sections_are_left_out(self):
         bare = {**SALES, 'channels': None, 'readers': None}

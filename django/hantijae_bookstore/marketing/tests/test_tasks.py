@@ -579,6 +579,63 @@ class BnkScheduleTest(TestCase):
         self.assertEqual(WorkerState.get('bnk_last_monthly'), '2026-09')
         self.assertEqual(deps.bot.notes, [])
 
+    def test_monthly_failure_is_retried_the_next_day_not_lost(self, *_):
+        WorkerState.put('monthly_mode', 'live')
+        deps = Deps()
+        with mock.patch('marketing.tasks.monthly.build', side_effect=[RuntimeError('sidecar'), '<b>📅 9월 돌아보기</b>']) as build, \
+                mock.patch('marketing.tasks.bnk_sales.month_ready', return_value=True):
+            tasks.run_due(deps, datetime(2026, 10, 3, 9, 30, tzinfo=KST))
+            tasks.run_due(deps, datetime(2026, 10, 3, 12, 0, tzinfo=KST))   # 같은 날은 다시 하지 않는다
+            self.assertIsNone(WorkerState.get('bnk_last_monthly'))
+            tasks.run_due(deps, datetime(2026, 10, 4, 9, 30, tzinfo=KST))
+        self.assertEqual(build.call_count, 2)
+        self.assertEqual(len([n for n in deps.bot.notes if 'monthly' in n]), 1)
+        self.assertEqual([c['chat'] for c in deps.bot.tg.sent('send') if '돌아보기' in c['text']], [-200])
+        self.assertEqual(WorkerState.get('bnk_last_monthly'), '2026-09')
+
+    def test_monthly_goes_without_the_site_lines_when_the_site_is_down(self, *_):
+        from marketing import bnk
+        WorkerState.put('monthly_mode', 'live')
+        WorkerState.put('bnk_last_run', '2026-10-03')
+        self.factory.side_effect = bnk.BnkError('점검 중')
+        deps = Deps()
+        with mock.patch('marketing.tasks.monthly.build', return_value='<b>📅 9월 돌아보기</b>') as build, \
+                mock.patch('marketing.tasks.bnk_sales.month_ready', return_value=True), self.assertLogs('intake', 'WARNING'):
+            tasks.run_due(deps, datetime(2026, 10, 3, 9, 30, tzinfo=KST))
+        self.assertIsNone(build.call_args[0][1])
+        self.assertEqual([c['chat'] for c in deps.bot.tg.sent('send') if '돌아보기' in c['text']], [-200])
+        self.assertEqual(WorkerState.get('bnk_last_monthly'), '2026-09')
+
+    def test_monthly_login_rejection_stops_auto_login_and_keeps_the_month(self, *_):
+        from marketing import bnk, bnk_sales
+        WorkerState.put('monthly_mode', 'live')
+        self.factory.side_effect = bnk.BnkLoginError('비밀번호가 맞지 않습니다')
+        deps = Deps()
+        with mock.patch('marketing.tasks.monthly.build', return_value='<b>📅 9월 돌아보기</b>') as build, \
+                mock.patch('marketing.tasks.bnk_sales.month_ready', return_value=True):
+            tasks.run_due(deps, datetime(2026, 10, 3, 9, 30, tzinfo=KST))   # 수집이 먼저 거부되면 같은 바퀴에 다시 로그인하지 않는다
+            self.assertEqual(self.factory.call_count, 1)
+            WorkerState.put('bnk_last_run', '2026-10-04')
+            bnk_sales.unblock()
+            tasks.run_due(deps, datetime(2026, 10, 4, 9, 30, tzinfo=KST))   # 월간 로그인 자체가 거부됨
+        build.assert_not_called()
+        self.assertEqual(self.factory.call_count, 2)
+        self.assertEqual(WorkerState.get('bnk_login_blocked'), '2026-10-04')
+        self.assertIsNone(WorkerState.get('bnk_last_monthly'))
+
+    def test_a_month_that_never_gets_fully_read_is_reported_once(self, *_):
+        WorkerState.put('monthly_mode', 'live')
+        deps = Deps()
+        with mock.patch('marketing.tasks.bnk_sales.missing_days', return_value=[date(2026, 9, 12), date(2026, 9, 13)]), \
+                mock.patch('marketing.tasks.monthly.build') as build:
+            tasks.run_due(deps, datetime(2026, 10, 4, 10, 0, tzinfo=KST))
+            self.assertEqual(deps.bot.notes, [])
+            tasks.run_due(deps, datetime(2026, 10, 5, 10, 0, tzinfo=KST))
+            tasks.run_due(deps, datetime(2026, 10, 6, 10, 0, tzinfo=KST))
+        build.assert_not_called()
+        self.assertEqual(len(deps.bot.notes), 1)
+        self.assertIn('9/12, 9/13', deps.bot.notes[0])
+
     def test_monthly_admin_only_goes_to_the_admin_and_off_sends_nothing(self, *_):
         with mock.patch('marketing.tasks.monthly.build', return_value='<b>📅 9월 돌아보기</b>') as build, \
                 mock.patch('marketing.tasks.bnk_sales.month_ready', return_value=True):
