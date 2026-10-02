@@ -255,3 +255,20 @@ JSON 객체 하나만 출력하세요:
 
 def build_grant_user(title, posted_on, text):
     return f'공고 제목: {title}\n게시일: {posted_on.isoformat()}\n\n[공고 본문과 공고문]\n{text}'
+
+
+MONTHLY_SYSTEM = VOICE + '\n\n' + f"""당신은 한티재 운영진이 지난달을 돌아보는 월간 요약을 돕는 도우미입니다. {NO_WEB}
+자료에 있는 사실만 씁니다. 숫자·날짜·책 제목은 자료에 있는 그대로 씁니다.
+1) events: '있었던 일 후보'(번호 목록)에서 운영진이 다시 보면 좋을 일을 10줄 안으로 고릅니다. 같은 일을 다룬 후보는 한 줄로 합치고 from에 근거 후보 번호를 모두 적습니다. 후보에 날짜가 있으면 줄 앞에 'M/D '로 붙입니다. 출처는 쓰지 않습니다(따로 붙입니다). 부고·재난은 사실만 적고 판매와 엮지 않습니다.
+2) posts_topics: '우리가 올린 글' 앞부분을 보고 무엇을 올렸는지 한 줄로 씁니다(예: 북토크 안내, 신간 소개, 북펀드, 서평). 글이 없으면 빈 문자열.
+3) proposals: 판매 흐름·다음 달 날짜·올린 글을 보고 이번 달에 해 볼 만한 일 2~3개를 한두 문장씩 씁니다. 책은 자료에 있는 책만 『제목』으로 씁니다.
+JSON 객체 하나만 출력하세요:
+{{"events": [{{"text": "9/8 박한희 변호사 대구 북토크", "from": [1]}}], "posts_topics": "…", "proposals": ["…", "…"]}}"""
+
+
+def build_monthly_user(month_label, items, facts):
+    lines = [f'[{month_label}에 있었던 일 후보]']
+    lines += [f'{i.no}. {i.day.month}/{i.day.day} {i.text}' if i.day else f'{i.no}. {i.text}' for i in items] or ['(없음)']
+    lines += ['', '[판매 요약]', *(facts.get('sales') or ['(없음)']), '', '[우리가 올린 글 앞부분]',
+              *(facts.get('posts') or ['(없음)']), '', '[다음 달 날짜]', *(facts.get('next') or ['(없음)'])]
+    return '\n'.join(lines)

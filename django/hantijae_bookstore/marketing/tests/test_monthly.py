@@ -135,3 +135,80 @@ class NextMonthTest(Books):
             '10/11 『농부, 짠한 형』 북펀드 마감',
             '10/12 16시 2026년 제3차 전자책 제작 지원 사업 공고 신청 마감 (신청하기로 함)',
             '10/16 세계 식량의 날 『밥은 먹고 다니냐는 말』'])
+
+
+from marketing.tests.fakes import FakeLLM  # noqa: E402
+
+
+def items():
+    return [monthly.Item(1, date(2026, 9, 8), '박한희 변호사 대구 북토크 안내', '대표님 개인 페이스북'),
+            monthly.Item(2, date(2026, 9, 22), '인저리타임에 실린 『내란 앞에서』 서평', '검수 방'),
+            monthly.Item(3, date(2026, 9, 23), '『무지개를 변호하다』 관련 뉴스 〈연합뉴스〉 「인권 아카데미」', '뉴스 검색')]
+
+
+FACTS = {'sales': ['합계 263권, 48종', '『밥은 먹고 다니냐는 말』 91권'], 'posts': ['페이스북: 북토크 안내'],
+         'next': ['10/16 세계 식량의 날 『밥은 먹고 다니냐는 말』']}
+
+
+class ComposeTest(Books):
+    def test_sources_come_from_cited_items_and_invented_facts_are_dropped(self):
+        llm = FakeLLM({'events': [{'text': '9/8 박한희 변호사 대구 북토크', 'from': [1]},
+                                  {'text': '9/22 서평을 300명이 읽음', 'from': [2]},           # 지어낸 숫자
+                                  {'text': '9/9 박한희 변호사 북토크', 'from': [1]},            # 근거와 다른 날짜
+                                  {'text': '없는 근거', 'from': [99]},                          # 없는 번호
+                                  {'text': '9/22·9/23 『내란 앞에서』 서평과 박한희 변호사 강연 소식', 'from': [2, 3]}],
+                       'posts_topics': '북토크 안내', 'proposals': [
+                           '10/16 세계 식량의 날에 『밥은 먹고 다니냐는 말』을 다시 소개해요.',
+                           '『없는 책』을 소개해요.', '독자 1000명에게 편지를 보내요.']})
+        events, topics, proposals = monthly.compose(llm, '9월', items(), FACTS)
+        self.assertEqual(events, [('9/8 박한희 변호사 대구 북토크', '대표님 개인 페이스북'),
+                                  ('9/22·9/23 『내란 앞에서』 서평과 박한희 변호사 강연 소식', '검수 방·뉴스 검색')])
+        self.assertEqual((topics, proposals), ('북토크 안내', ['10/16 세계 식량의 날에 『밥은 먹고 다니냐는 말』을 다시 소개해요.']))
+        self.assertIn('1. 9/8 박한희 변호사 대구 북토크 안내', llm.calls[0][1])
+
+    def test_llm_failure_falls_back_to_the_candidates(self):
+        with self.assertLogs('intake', 'WARNING'):
+            events, topics, proposals = monthly.compose(FakeLLM('JSON이 아닌 답'), '9월', items(), FACTS)
+        self.assertEqual(events[0], ('9/8 박한희 변호사 대구 북토크 안내', '대표님 개인 페이스북'))
+        self.assertEqual((len(events), topics, proposals), (3, '', []))
+
+
+SALES = {'total': 44, 'kinds': 3, 'stores': {'교보': 10, '예스24': 28, '알라딘': 2, '영풍': 1, '지역서점': 3},
+         'weeks': [('1~7일', 10), ('8~14일', 5), ('15~21일', 0), ('22~28일', 26), ('29~30일', 3)],
+         'top': [('밥은 먹고 다니냐는 말', 36, {'교보': 5, '예스24': 28, '알라딘': 2, '영풍': 1, '지역서점': 0}),
+                 ('<지역> 책', 5, {'교보': 5, '예스24': 0, '알라딘': 0, '영풍': 0, '지역서점': 0})],
+         'channels': {'pc': 20, 'mobile': 17, 'offline': 7}, 'readers': READERS}
+POSTS = {'facebook': 7, 'instagram': None, 'blog': 0, 'samples': [], 'posted': ['『그리운 바람이 나를 불러』 ― 영상']}
+
+
+class RenderTest(TestCase):
+    def test_sections_fold_rule_and_escaping(self):
+        text = monthly.render(SEP, SALES, [('9/8 박한희 변호사 대구 북토크', '대표님 개인 페이스북')], '북토크 안내',
+                              ['10/16에 『밥은 먹고 다니냐는 말』을 다시 소개해요.'], POSTS, ['10/16 세계 식량의 날'])
+        self.assertTrue(text.startswith('<b>📅 9월 돌아보기</b> (9월 1일~30일)\n\n<b>📈 판매 44권 · 3종</b>\n'
+                                        '· 교보 10 · 예스24 28 · 알라딘 2 · 영풍 1 · 지역서점 3\n'
+                                        '· 온라인 37권(PC 20 · 모바일 17), 서점 매장 7권\n'
+                                        '· 7일씩 10 → 5 → 0 → 26 → 3권(마지막은 29~30일)\n'
+                                        '· 1위 <b>『밥은 먹고 다니냐는 말』 36권</b>(예스24 28 · 교보 5) — 한 달 판매의 82%\n'
+                                        '· 다음: 『&lt;지역&gt; 책』 5\n<blockquote expandable>출처: '))
+        self.assertIn('\n\n<b>👥 누가 샀나</b> (구매자 정보가 있는 온라인 판매 190부)\n· 50대 35% · 40대 16% · 60대 이상 16% · 30대 15%\n'
+                      '· 여성 61% · 남성 37%\n· 경기 73부 · 서울 32부 · 충북 14부 · 대구 8부\n<blockquote expandable>', text)
+        self.assertIn('\n\n<b>🗂 9월에 있었던 일</b> (1가지 · 눌러서 보기)\n<blockquote expandable>· 9/8 박한희 변호사 대구 북토크 '
+                      '(대표님 개인 페이스북)</blockquote>', text)
+        self.assertIn('\n\n<b>📣 우리가 올린 글</b>\n· 페이스북 페이지 7편 · 인스타그램 확인 못 함 · 네이버 블로그 0편\n· 북토크 안내\n'
+                      '· 봇 제안 중 올린 글: 『그리운 바람이 나를 불러』 ― 영상\n<blockquote expandable>', text)
+        self.assertIn('\n\n<b>🗓 10월 준비</b>\n· 10/16 세계 식량의 날', text)
+        self.assertTrue(text.endswith('\n\n<b>💡 제안</b>\n<b>1.</b> 10/16에 『밥은 먹고 다니냐는 말』을 다시 소개해요.'))
+
+    def test_missing_site_lookups_and_empty_sections_are_left_out(self):
+        bare = {**SALES, 'channels': None, 'readers': None}
+        text = monthly.render(SEP, bare, [], '', [], {**POSTS, 'posted': []}, [])
+        for absent in ('온라인 37권', '👥', '🗂', '🗓', '💡'):
+            self.assertNotIn(absent, text)
+
+
+class BuildTest(TestCase):
+    def test_nothing_until_the_month_is_fully_read(self):
+        c = FakeBnkClient(readers=READERS, totals=TOTALS)
+        self.assertEqual(monthly.build(FakeLLM({}), c, SEP, at(10, 3), fetch_meta=lambda s: {}, fetch_blog=lambda: []), '')
+        self.assertEqual(c.asked, [])
