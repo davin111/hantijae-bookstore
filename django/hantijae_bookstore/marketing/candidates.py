@@ -178,7 +178,9 @@ def review_candidates(today, now):
             continue
         counts = Counter(s.detail.get('source', '') for s in signals)
         where = ', '.join(f'{label} {counts[k]}' for k, label in SOURCE_LABEL.items() if counts[k])
-        summary = f'새 독자 서평 {len(signals)}건({where})'
+        # 웹 언급·유튜브가 섞여 있으면 '독자 서평'이 아니라 기사·영상일 수 있다(KIND_LABEL['review']는 그대로 둔다)
+        label = '새 서평·언급' if any(s.detail.get('source') in ('web', 'youtube') for s in signals) else '새 독자 서평'
+        summary = f'{label} {len(signals)}건({where})'
         facts = {'count': len(signals),
                  'items': [{'where': _review_where(s), 'date': s.happens_on.isoformat() if s.happens_on else '',
                             'title': s.title[:80]} for s in signals[:REVIEW_LINKS]]}

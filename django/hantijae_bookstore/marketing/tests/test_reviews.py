@@ -11,6 +11,7 @@ from django.test import TestCase, override_settings
 from intake.models import WorkerState
 from marketing import reviews
 from marketing.models import Signal
+from marketing.prompts import REVIEW_JUDGE_SYSTEM
 from marketing.review_filter import terms
 from marketing.review_search import Post
 from marketing.tests.fakes import FakeLLM, make_book
@@ -63,6 +64,11 @@ class JudgeTest(TestCase):
     def test_every_batch_failing_raises(self):
         with self.assertLogs('intake', level='WARNING'), self.assertRaises(RuntimeError):
             reviews.judge(FlakyLLM(fail_first=9), [(self.t, self.post(0))])
+
+    def test_judge_prompt_covers_web_and_youtube_sources(self):
+        """F1: 알리미·유튜브 글(기사·인터뷰·영상)도 판별 대상이라고 프롬프트가 분명히 말한다."""
+        self.assertIn('웹 언급', REVIEW_JUDGE_SYSTEM)
+        self.assertIn('유튜브', REVIEW_JUDGE_SYSTEM)
 
     def test_dateless_post_says_date_unknown(self):
         llm = FakeLLM({'items': []})

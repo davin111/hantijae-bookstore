@@ -179,6 +179,14 @@ class CandidateTest(TestCase):
         self.assertNotIn('http', json.dumps(c.as_prompt(), ensure_ascii=False))   # 주소는 LLM에 보내지 않는다
         self.assertEqual((C.KIND_LABEL['review'], C.LINK_LABEL['review']), ('새 독자 서평', '서평 글'))
 
+    def test_review_candidate_summary_for_web_or_youtube_mentions(self):
+        """기사·영상(출처 web·youtube)이 섞이면 '새 독자 서평'이 아니라 '새 서평·언급'으로 쓴다(F1).
+        KIND_LABEL['review']는 그대로 '새 독자 서평'이다(briefing.py의 다른 쓰임이 바뀌면 안 되므로)."""
+        review(self.sibwol, 1, source='web')
+        [c] = C.review_candidates(TODAY, NOW)
+        self.assertEqual(c.summary, '새 서평·언급 1건(웹 언급 1)')
+        self.assertEqual(C.KIND_LABEL['review'], '새 독자 서평')
+
     def test_review_candidate_notes_missing_aladin_reviews(self):
         SalesSnapshot.objects.create(book=self.sibwol, date=TODAY, sales_point=50, short_reviews=0, reviews=0)
         review(self.sibwol, 1)
