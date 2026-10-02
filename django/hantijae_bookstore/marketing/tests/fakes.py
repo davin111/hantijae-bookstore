@@ -292,8 +292,8 @@ class FakeNotion:
 
 class FakeBnkClient:
     """전산망 클라이언트 흉내. days: 날짜 → 행 목록 또는 예외(없는 날짜는 빈 목록). with 문을 쓸 수 있다."""
-    def __init__(self, days=None, readers=None):
-        self.days, self._readers = dict(days or {}), readers
+    def __init__(self, days=None, readers=None, totals=None):
+        self.days, self._readers, self._totals = dict(days or {}), readers, totals
         self.asked, self.entered, self.exited = [], False, False
 
     def __enter__(self):
@@ -313,7 +313,15 @@ class FakeBnkClient:
 
     def readers(self, start, end):
         self.asked.append((start, end))
+        if isinstance(self._readers, Exception):
+            raise self._readers
         return self._readers
+
+    def totals(self, start, end):
+        self.asked.append(('totals', start, end))
+        if isinstance(self._totals, Exception):
+            raise self._totals
+        return self._totals
 
 
 def make_sale(day, total, book=None, isbn=None, title='책', **stores):
