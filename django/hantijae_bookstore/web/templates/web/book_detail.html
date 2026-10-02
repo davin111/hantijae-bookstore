@@ -13,6 +13,8 @@
       <div class="buy">
         {% if book.visible and links %}<p class="buy-label">서점에서 만나기</p>{% endif %}
         {% include 'web/_store_buttons.html' with direct=preview first_fill=True %}
+        {% if ebook_links %}{% if book.visible %}<p class="ebook-links">전자책 {% for l in ebook_links %}<a href="{% if preview %}{{ l.url }}{% else %}/go/{{ book.id }}/{{ l.store }}{% endif %}" target="_blank" rel="nofollow noopener">{{ l.label }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+        {% else %}<p class="buy-label">전자책으로 읽을 수 있어요</p><div class="store-buttons ebook-buttons">{% for l in ebook_links %}<a class="btn{% if forloop.first %} btn-fill{% endif %}" href="{% if preview %}{{ l.url }}{% else %}/go/{{ book.id }}/{{ l.store }}{% endif %}" target="_blank" rel="nofollow noopener">{{ l.label }}</a>{% endfor %}</div>{% endif %}{% endif %}
       </div>
     </div>
   </div>

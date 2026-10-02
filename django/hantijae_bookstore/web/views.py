@@ -23,10 +23,10 @@ def referrer_host(request) -> str:
 
 
 def store_redirect(request, book_id, store):
-    if store not in dict(presenters.STORES):
+    if store not in dict(presenters.STORES + presenters.EBOOK_STORES):
         raise Http404
     book = get_object_or_404(Book, pk=book_id, is_published=True)
-    url = presenters.store_url(book, store)
+    url = presenters.link_url(book, store)
     if not url:
         raise Http404
     # 로컬 dev 모드는 운영 DB를 보므로 기록하지 않는다
@@ -126,7 +126,8 @@ def book_detail(request, book_id):
     return render_page(request, 'web/book_detail.html', {
         'book': book, 'series': series, 'series_label': presenters.series_label(series, entry.index) if entry else '',
         'credit': presenters.credit_line(authors), 'spec': spec,
-        'links': presenters.store_links(book), 'preview': preview, 'sections': sections,
+        'links': presenters.store_links(book), 'ebook_links': presenters.ebook_links(book),
+        'preview': preview, 'sections': sections,
         'section_nav': sections if len(sections) > 1 else [],
         'video_url': site_info.AUTHOR_VIDEOS.get(book.id),
         'same_series': numbered(catalog.same_series_books(book, series), series) if series else [],

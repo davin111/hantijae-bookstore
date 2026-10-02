@@ -100,6 +100,28 @@ class DetailTest(TestCase):
         body = self.get(b).content.decode()
         self.assertIn(f'<p>{body_text}</p><h3>몸을 통과한 흙과 노동의 언어</h3><p>{body_text}</p>', body)
 
+    def test_out_of_print_book_points_to_ebook(self):
+        b = f.book('기독교 본질 논쟁', visible=False, ebook_isbn='9791192455471',
+                   ebook_yes24_url='https://www.yes24.com/product/goods/128200636')
+        body = self.get(b).content.decode()
+        self.assertIn('종이책은 절판되었습니다', body)
+        self.assertIn('전자책으로 읽을 수 있어요', body)
+        self.assertIn(f'class="btn btn-fill" href="/go/{b.id}/e_aladin"', body)
+        self.assertIn(f'href="/go/{b.id}/e_yes24"', body)
+        self.assertNotIn('서점에서 만나기', body)
+
+    def test_in_print_book_lists_ebook_stores_quietly(self):
+        b = f.book('전자책도 있는 책', ebook_ridi_url='https://ridibooks.com/books/1')
+        body = self.get(b).content.decode()
+        self.assertIn('서점에서 만나기', body)
+        self.assertIn(f'<p class="ebook-links">전자책 <a href="/go/{b.id}/ridi"', body)
+
+    def test_out_of_print_without_ebook_keeps_plain_notice(self):
+        b = f.book('절판된 책', visible=False)
+        body = self.get(b).content.decode()
+        self.assertIn('절판된 책입니다', body)
+        self.assertNotIn('전자책', body)
+
     def test_same_series_excludes_self(self):
         r = self.get(self.book)
         self.assertEqual(r.context['same_series'], [self.sibling])

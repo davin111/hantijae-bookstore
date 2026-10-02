@@ -31,6 +31,7 @@ class BookAdmin(admin.ModelAdmin):
                     '_visible', 'is_published']
     fields = ['title', 'subtitle', 'short_description', 'description', 'full_price', 'price', 'isbn', 'page_count',
               'size', 'category', 'published_date', 'visible', 'is_published', 'kyobo_url', 'aladin_url', 'yes24_url', 'interpark_url',
+              'ebook_isbn', 'ebook_aladin_url', 'ebook_yes24_url', 'ebook_kyobo_url', 'ebook_ridi_url',
               'cover_image', 'cover_image_display', 'cover_image_3d', 'cover_image_3d_display']
     readonly_fields = ['cover_image_display', 'cover_image_3d_display']
     search_fields = ['title', 'subtitle', 'authors__author__name']

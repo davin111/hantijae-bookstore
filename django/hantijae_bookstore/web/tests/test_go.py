@@ -41,6 +41,13 @@ class StoreRedirectTest(TestCase):
         for path in (f'/go/{self.book.id}/amazon', f'/go/{hidden.id}/aladin', f'/go/{bare.id}/kyobo', '/go/999999/aladin'):
             self.assertEqual(self.go(path).status_code, 404, path)
 
+    def test_ebook_store_redirects_and_records(self):
+        b = f.book('기독교 본질 논쟁', visible=False, ebook_ridi_url='https://ridibooks.com/books/754042189')
+        r = self.go(f'/go/{b.id}/ridi')
+        self.assertEqual((r.status_code, r['Location']), (302, 'https://ridibooks.com/books/754042189'))
+        self.assertEqual(StoreClick.objects.get().store, 'ridi')
+        self.assertEqual(self.go(f'/go/{b.id}/e_yes24').status_code, 404)   # 저장 주소도, 믿을 만한 검색 주소도 없음
+
     def test_db_error_still_redirects(self):
         with mock.patch('web.views.StoreClick.objects.create', side_effect=DatabaseError('down')):
             self.assertEqual(self.go(f'/go/{self.book.id}/kyobo').status_code, 302)

@@ -61,6 +61,9 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .btn-fill:hover { background: var(--ink-soft); }
 .actions, .store-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .out-of-print { color: var(--muted); font-size: 14px; margin: 0; }
+.ebook-links { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; }
+.ebook-links a { color: var(--ink-soft); }
+.out-of-print + .buy-label { margin-top: 14px; }
 
 /* 첫 화면 신간 */
 .hero { display: grid; grid-template-columns: minmax(160px, 260px) 1fr; gap: 40px; align-items: center; padding-top: 40px; padding-bottom: 40px; }
@@ -174,6 +177,7 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
   .detail-info .buy { order: 1; margin-bottom: 18px; }
   .detail-info .spec { order: 2; }
   .detail-info .store-buttons { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .detail-info .ebook-buttons { grid-template-columns: repeat(2, 1fr); }
   .reading p { font-size: 15px; }
   .reading .lead { font-size: 17px; }
   .posts { grid-template-columns: 1fr; }

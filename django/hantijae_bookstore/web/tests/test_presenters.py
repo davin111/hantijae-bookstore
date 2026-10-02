@@ -84,6 +84,37 @@ class StoreLinkTest(SimpleTestCase):
         self.assertEqual([l.store for l in p.store_links(book(aladin_url='https://aladin.kr/p/X'))], ['aladin'])
 
 
+def ebook(**kw):
+    base = dict(ebook_isbn='', ebook_aladin_url='', ebook_yes24_url='', ebook_kyobo_url='', ebook_ridi_url='')
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+class EbookLinkTest(SimpleTestCase):
+    def test_saved_urls_in_store_order(self):
+        b = ebook(ebook_ridi_url='https://ridibooks.com/books/754042189',
+                  ebook_yes24_url='https://www.yes24.com/product/goods/128200636')
+        self.assertEqual([(l.store, l.label) for l in p.ebook_links(b)], [('e_yes24', 'YES24'), ('ridi', '리디')])
+
+    def test_isbn_search_only_where_it_reaches_the_ebook(self):
+        # 예스24 검색 주소는 쿠키 없는 데스크톱 첫 방문자를 첫 화면으로 보내고, 리디 검색은 화면을 스크립트로 그린다(2026-10-02)
+        links = {l.store: l.url for l in p.ebook_links(ebook(ebook_isbn='979-11-92455-47-1'))}
+        self.assertEqual(links, {
+            'e_aladin': 'https://www.aladin.co.kr/search/wsearchresult.aspx?SearchTarget=eBook&SearchWord=9791192455471',
+            'e_kyobo': 'https://search.kyobobook.co.kr/search?keyword=9791192455471&gbCode=TOT&target=total'})
+
+    def test_no_ebook_data_means_no_links(self):
+        self.assertEqual(p.ebook_links(ebook()), [])
+        self.assertEqual(p.ebook_links(ebook(ebook_aladin_url='https://bit.ly/x')), [])
+
+    def test_link_url_covers_paper_and_ebook_stores(self):
+        b = SimpleNamespace(**vars(book(isbn='9791190178600')), **vars(ebook(ebook_ridi_url='https://ridibooks.com/books/1')))
+        self.assertEqual(p.link_url(b, 'ridi'), 'https://ridibooks.com/books/1')
+        self.assertTrue(p.link_url(b, 'aladin').endswith('SearchWord=9791190178600'))
+        self.assertIsNone(p.link_url(b, 'e_yes24'))
+        self.assertIsNone(p.link_url(b, 'amazon'))
+
+
 class CoverUrlTest(SimpleTestCase):
     def test_cover_card_url_prefers_thumbnail(self):
         f = lambda url: SimpleNamespace(url=url) if url else None  # noqa: E731

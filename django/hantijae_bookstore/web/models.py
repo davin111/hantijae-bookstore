@@ -69,7 +69,8 @@ def current_notice(now=None):
 
 class StoreClick(models.Model):
     """서점 버튼 클릭 기록 — 어떤 책을 어느 서점으로 보냈는지. IP·쿠키·세션은 저장하지 않는다."""
-    STORE_CHOICES = (('aladin', '알라딘'), ('yes24', 'YES24'), ('kyobo', '교보문고'))
+    STORE_CHOICES = (('aladin', '알라딘'), ('yes24', 'YES24'), ('kyobo', '교보문고'),
+                     ('e_aladin', '알라딘 전자책'), ('e_yes24', 'YES24 전자책'), ('e_kyobo', '교보문고 전자책'), ('ridi', '리디'))
 
     book = models.ForeignKey('books.Book', related_name='store_clicks', on_delete=models.CASCADE)
     store = models.CharField(max_length=10, choices=STORE_CHOICES)

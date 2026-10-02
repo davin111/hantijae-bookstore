@@ -72,6 +72,12 @@ class Book(BaseModel):
     aladin_url = models.URLField(max_length=500, null=False, blank=True)
     yes24_url = models.URLField(max_length=500, null=False, blank=True)
     interpark_url = models.URLField(max_length=500, null=False, blank=True)
+    # 전자책. 있으면 책 페이지에 전자책 서점 링크를 보여 준다(종이책이 절판이면 그 자리를 대신한다)
+    ebook_isbn = models.CharField(max_length=20, blank=True, help_text="전자책 ISBN (EPUB)")
+    ebook_aladin_url = models.URLField(max_length=500, blank=True, help_text="알라딘 전자책 상품 주소")
+    ebook_yes24_url = models.URLField(max_length=500, blank=True, help_text="예스24 전자책 상품 주소")
+    ebook_kyobo_url = models.URLField(max_length=500, blank=True, help_text="교보문고 전자책 상품 주소")
+    ebook_ridi_url = models.URLField(max_length=500, blank=True, help_text="리디 상품 주소")
     cover_image = models.FileField(max_length=255, upload_to=cover_image_path, null=True, blank=True,
                                    validators=[FileExtensionValidator(allowed_extensions=["jpg", "jpeg", "png"])])
     cover_image_3d = models.FileField(max_length=255, upload_to=cover_image_3d_path, null=True, blank=True,

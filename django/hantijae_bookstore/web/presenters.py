@@ -20,6 +20,16 @@ STORE_SEARCH_URL = {
     'yes24': 'https://www.yes24.com/product/search?domain=ALL&query={isbn}',
     'kyobo': 'https://search.kyobobook.co.kr/search?keyword={isbn}&gbCode=TOT&target=total',
 }
+# 전자책 서점. 키는 /go/ 주소와 클릭 기록(StoreClick.store)에 그대로 쓴다
+EBOOK_STORES = (('e_aladin', '알라딘'), ('e_yes24', 'YES24'), ('e_kyobo', '교보문고'), ('ridi', '리디'))
+EBOOK_FIELD = {'e_aladin': 'ebook_aladin_url', 'e_yes24': 'ebook_yes24_url', 'e_kyobo': 'ebook_kyobo_url',
+               'ridi': 'ebook_ridi_url'}
+# 전자책 ISBN 검색이 상품까지 닿는 곳만(2026-10-02 확인). 예스24 검색은 쿠키 없는 데스크톱 첫 방문자를 첫 화면으로
+# 보내고, 리디 검색 화면은 스크립트로 그려서 확인할 수 없다 → 이 둘은 저장한 상품 주소가 있을 때만 보인다.
+EBOOK_SEARCH_URL = {
+    'e_aladin': 'https://www.aladin.co.kr/search/wsearchresult.aspx?SearchTarget=eBook&SearchWord={isbn}',
+    'e_kyobo': 'https://search.kyobobook.co.kr/search?keyword={isbn}&gbCode=TOT&target=total',
+}
 # 제3자 단축 링크는 믿지 않는다(2026-09-29 확인): bit.ly 는 브라우저에 7초 미리보기 페이지를 끼우고,
 # url.kr 은 만료됐고, kyobo.link 는 도메인이 없어졌다. 서점이 직접 운영하는 aladin.kr 은 바로 상품 페이지로 가므로 허용.
 UNTRUSTED_SHORTLINK = re.compile(
@@ -121,6 +131,32 @@ def store_links(book) -> List[StoreLink]:
         if url:
             links.append(StoreLink(store, label, url))
     return links
+
+
+def ebook_url(book, store: str) -> Optional[str]:
+    saved = (getattr(book, EBOOK_FIELD[store], '') or '').strip()
+    if saved and not UNTRUSTED_SHORTLINK.match(saved):
+        return saved
+    code = isbn13(book.ebook_isbn)
+    return EBOOK_SEARCH_URL[store].format(isbn=code) if code and store in EBOOK_SEARCH_URL else None
+
+
+def ebook_links(book) -> List[StoreLink]:
+    links = []
+    for store, label in EBOOK_STORES:
+        url = ebook_url(book, store)
+        if url:
+            links.append(StoreLink(store, label, url))
+    return links
+
+
+def link_url(book, store: str) -> Optional[str]:
+    """/go/ 가 보낼 주소. 종이책·전자책 서점 모두."""
+    if store in dict(STORES):
+        return store_url(book, store)
+    if store in EBOOK_FIELD:
+        return ebook_url(book, store)
+    return None
 
 
 def file_url(f) -> str:
