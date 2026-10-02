@@ -10,7 +10,7 @@ from django.db.models import Max, Sum
 
 from books.models import Book
 from intake.llm import complete_json
-from intake.models import FundingCampaign, ReviewItem
+from intake.models import FundingCampaign, ReviewItem, TelegramChat, WorkerState
 from marketing import bnk_sales, meta
 from marketing.candidates import sns_where
 from marketing.funding import ends_on
@@ -23,7 +23,22 @@ from web.blog import fetch_rss, parse_rss
 
 log = logging.getLogger('intake')
 TOP_BOOKS, MAX_EVENTS = 5, 10
+MODES = ('off', 'admin_only', 'live')
 PLATFORMS = (('facebook', '페이스북'), ('instagram', '인스타그램'))
+
+
+def mode():
+    return WorkerState.get('monthly_mode', 'off')
+
+
+def target(host, marketing_mode):
+    """받는 곳: live(마케팅도 live) → 검수 방, admin_only(또는 마케팅이 live 아님) → 관리자 1:1, off → 없음."""
+    m = mode()
+    if m == 'off':
+        return None
+    if m == 'live' and marketing_mode == 'live':
+        return host.review_chat_id()
+    return host._chat(TelegramChat.ADMIN)
 
 
 @dataclass

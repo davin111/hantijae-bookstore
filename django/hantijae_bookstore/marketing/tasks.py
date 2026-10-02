@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 from intake.models import WorkerState
-from marketing import (bnk, bnk_sales, briefing, funding, grants, instagram, kit, loans, midweek, moments, news,
-                       notion_sync, placements, reviews, sales, selections, social)
+from marketing import (bnk, bnk_sales, briefing, funding, grants, instagram, kit, loans, midweek, moments, monthly,
+                       news, notion_sync, placements, reviews, sales, selections, social)
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
@@ -167,15 +167,19 @@ def _bnk_collect(deps, today, now, started):
     WorkerState.put('bnk_fail_streak', 0)
 
 
-def _bnk_month(deps, today, now, started):
+def _monthly(deps, today, now, started):
+    """월간 돌아보기(monthly.build)를 monthly_mode에 맞는 방으로. 판매 경로·구매자를 더 읽으려 로그인한다."""
+    chat = monthly.target(deps.bot, deps.bot.marketing.mode())
+    if chat is None:
+        return
     try:
         with bnk.client_from_settings() as client:
-            text = bnk_sales.monthly_text(client, bnk_sales.last_month_start(today), html=True)
+            text = monthly.build(deps.llm, client, bnk_sales.last_month_start(today), now)
     except bnk.BnkLoginError as e:
         _bnk_login_rejected(deps, today, now, started, e)
         return
     if text:
-        deps.bot.notify_admin(text, html=True)
+        deps.bot.tg.send_message(chat, text, html=True)
 
 
 def _build_midweek(deps, m, today, now, started):
@@ -248,10 +252,11 @@ def _run_due(deps, now):
     month_start = bnk_sales.last_month_start(today)
     month = month_start.strftime('%Y-%m')
     # 그 달을 다 읽었을 때만(로그인 전에 DB로 확인) 보내고, 그때 적는다 — 덜 읽은 달은 다음 날 다시 본다
-    if (bnk_on and local.day >= BNK_MONTH_DAY and _hm(local) >= BNK_MONTH_AT and not in_quiet_hours(now)
-            and WorkerState.get('bnk_last_monthly') != month and bnk_sales.month_ready(month_start)):
+    if (bnk_on and monthly.mode() != 'off' and local.day >= BNK_MONTH_DAY and _hm(local) >= BNK_MONTH_AT
+            and not in_quiet_hours(now) and WorkerState.get('bnk_last_monthly') != month
+            and bnk_sales.month_ready(month_start)):
         WorkerState.put('bnk_last_monthly', month)
-        _guard(deps, 'bnk_month', now, lambda: _bnk_month(deps, today, now, started))
+        _guard(deps, 'monthly', now, lambda: _monthly(deps, today, now, started))
 
     if (_hm(local) >= GRANT_AT and grants.mode() != 'off'
             and WorkerState.get('grant_last_scan') != day):

@@ -15,7 +15,7 @@ from intake.models import TelegramChat, WorkerState
 from marketing import board
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
-from marketing import bnk, bnk_sales, grants, messages, midweek, moments, notion_sync, social
+from marketing import bnk, bnk_sales, grants, messages, midweek, moments, monthly, notion_sync, social
 from marketing.hooks import add_hook, upcoming
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, GrantCall, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
@@ -559,6 +559,10 @@ class Marketing:
         return grants.status_text(today) + '\n' + grants.USAGE
 
     def _bnk(self, chat_id, arg, now, today):
+        parts = arg.split()
+        if len(parts) == 2 and parts[0] == 'monthly' and parts[1] in monthly.MODES:
+            WorkerState.put('monthly_mode', parts[1])
+            return f'monthly_mode={parts[1]}'
         if arg in bnk_sales.MODES:
             WorkerState.put('bnk_mode', arg)
             if arg == 'on':
@@ -576,8 +580,13 @@ class Marketing:
                 start = bnk_sales.last_month_start(today)
                 if not bnk_sales.month_ready(start):   # 로그인하기 전에 DB로 확인
                     return '지난달 하루하루를 다 읽은 기록이 아직 없어요'
+                self.tg.send_message(chat_id, BUILDING)
                 with bnk.client_from_settings() as client:
-                    return bnk_sales.monthly_text(client, start)
+                    text = monthly.build(self.llm, client, start, now)
+                if not text:
+                    return '지난달 하루하루를 다 읽은 기록이 아직 없어요'
+                self.tg.send_message(chat_id, text, html=True)
+                return f'미리보기예요. 검수 방에는 매달 3일 09:30 뒤 자동으로 가요 (monthly_mode={monthly.mode()})'
         except bnk.BnkLoginError as e:
             bnk_sales.block(today)
             return f'전산망 조회 실패: {e}'

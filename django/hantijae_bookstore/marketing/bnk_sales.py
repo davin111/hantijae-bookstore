@@ -119,7 +119,7 @@ TOP_STORE_SHARE = 0.6   # 한 서점이 이보다 많으면 괄호로 밝힌다
 LOGIN_FAIL = ('⚠️ 출판유통통합전산망이 로그인을 거부해서 자동 로그인을 멈췄어요(대표님 계정이 잠기지 않게). '
               '대표님이 비밀번호를 바꾸셨으면 새 비밀번호를 저장한 뒤 /bnk on 해 주세요')
 USAGE = ('사용법: /bnk on|off (on은 자동 로그인 멈춤도 풂) · /bnk now (지금 수집, 처음이면 35일) · '
-         '/bnk month (지난달 요약 미리 보기)')
+         '/bnk month (지난달 돌아보기 미리 보기, 몇 분) · /bnk monthly off|admin_only|live (매달 3일 자동 발송)')
 
 
 def blocked():
@@ -274,4 +274,5 @@ def status_text(today):
     week = _sums(BnkSale.objects.filter(day__range=(end - timedelta(days=6), end)))['total'] if end else 0
     return '\n'.join([f'bnk_mode={mode()}', f'bnk_last_run={WorkerState.get("bnk_last_run")}',
                       f'자동 로그인 멈춤={blocked() or "-"}',
-                      f'가장 최근 판매일={end.isoformat() if end else "-"}', f'최근 7일 합계={week}권', USAGE])
+                      f'가장 최근 판매일={end.isoformat() if end else "-"}', f'최근 7일 합계={week}권',
+                      f'monthly_mode={WorkerState.get("monthly_mode", "off")}', USAGE])

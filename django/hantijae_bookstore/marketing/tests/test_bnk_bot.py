@@ -54,6 +54,20 @@ class BnkCommandTest(TestCase):
             self.m().admin_command(ADMIN, '/bnk', 'now', now=NOW)
         self.assertFalse(WorkerState.get('bnk_login_blocked'))
 
+    def test_month_preview_sends_the_full_review_to_the_admin(self):
+        with mock.patch('marketing.bot.bnk_sales.month_ready', return_value=True), \
+                mock.patch('marketing.bot.bnk.client_from_settings', return_value=FakeBnkClient()), \
+                mock.patch('marketing.bot.monthly.build', return_value='<b>📅 9월 돌아보기</b>') as build:
+            self.m().admin_command(ADMIN, '/bnk', 'month', now=datetime(2026, 10, 2, 10, 0, tzinfo=KST))
+        self.assertEqual(build.call_args[0][2], date(2026, 9, 1))
+        preview = [c for c in self.tg.sent('send') if '돌아보기' in c['text']]
+        self.assertEqual([(c['chat'], c['html']) for c in preview], [(ADMIN, True)])
+        self.assertTrue(self.last().startswith('미리보기예요'))
+
+    def test_monthly_switch(self):
+        self.m().admin_command(ADMIN, '/bnk', 'monthly live', now=NOW)
+        self.assertEqual((self.last(), WorkerState.get('monthly_mode')), ('monthly_mode=live', 'live'))
+
     def test_month_preview_checks_records_before_logging_in(self):
         with mock.patch('marketing.bot.bnk.client_from_settings') as factory:
             self.m().admin_command(ADMIN, '/bnk', 'month', now=NOW)
