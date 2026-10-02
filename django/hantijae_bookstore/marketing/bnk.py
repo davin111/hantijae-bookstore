@@ -16,6 +16,7 @@ LOGIN = BASE + '/home/v3/loginAjax'
 LOGOUT = BASE + '/home/v3/logoutAjax'
 SALES_PAGE = BASE + '/home/v3/stats/sec/statsSaleAllList'
 SALES_DAY = SALES_PAGE + '/searchGridOnly'
+SALES_TOTALS = SALES_PAGE + '/search6'   # 기간 합계(서점별)와 판매 경로(PC·모바일·매장)
 READERS_PAGE = BASE + '/home/v3/stats/sec/statsAnalysisReaderOnline'
 READERS = READERS_PAGE + '/cntList'
 UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36'
@@ -152,6 +153,15 @@ class BnkClient:
             if not batch or page * PAGE_SIZE >= total or page >= MAX_PAGES:
                 return rows
             page += 1
+
+    def totals(self, start, end):
+        """기간 합계: 서점별 부수와 판매 경로(PC·모바일·서점 매장). 화면 '판매통계 현황' 맨 위 숫자와 같다."""
+        data = self._ajax(SALES_PAGE, SALES_TOTALS, self._query(start, end))
+        t, ch = (data.get('totalList') or [{}])[0], (data.get('saleTypeList') or [{}])[0]
+        out = {key: int(t.get(col) or 0) for key, col in STORES}
+        out.update(total=int(t.get('cTotal') or 0), pc=int(ch.get('cPc') or 0), mobile=int(ch.get('cMobile') or 0),
+                   offline=int(ch.get('cOff') or 0))
+        return out
 
     def readers(self, start, end):
         return parse_readers(self._ajax(READERS_PAGE, READERS, self._query(start, end)))

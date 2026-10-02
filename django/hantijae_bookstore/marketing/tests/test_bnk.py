@@ -160,6 +160,18 @@ class QueryTest(SimpleTestCase):
         data = {'ajaxResult': 'succ', 'bookList': [book_row('', '빈 ISBN', 1), book_row('97911901787', '짧음', 1)]}
         self.assertEqual(bnk.parse_sales(data), [])
 
+    def test_totals_reads_store_and_channel_sums(self):
+        data = {'ajaxResult': 'succ',
+                'totalList': [{'cTotal': 256, 'cKyobo': 123, 'cYes': 56, 'cAladin': 65, 'cYoung': 10, 'cLocal': 2}],
+                'saleTypeList': [{'cTotal': 256, 'cPc': 92, 'cMobile': 112, 'cOff': 50, 'cLocal': 2}]}
+        s = FakeSession(routes() | {('POST', bnk.SALES_TOTALS): Res(bnk.SALES_TOTALS, data=data)})
+        with client(s) as c:
+            got = c.totals(date(2026, 9, 1), date(2026, 9, 30))
+        self.assertEqual(got, {'kyobo': 123, 'yes24': 56, 'aladin': 65, 'ypbooks': 10, 'local': 2, 'total': 256,
+                               'pc': 92, 'mobile': 112, 'offline': 50})
+        post = next(x for x in s.calls if x[1] == bnk.SALES_TOTALS)
+        self.assertEqual((post[2]['txtFromDate'], post[2]['txtToDate']), ('20260901', '20260930'))
+
     def test_readers_are_sorted_shares(self):
         s = FakeSession(routes())
         with client(s) as c:
