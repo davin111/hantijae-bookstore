@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 from intake.models import WorkerState
-from marketing import (bnk, bnk_sales, briefing, funding, grants, kit, midweek, moments, news, notion_sync, placements,
-                       reviews, sales, selections, social)
+from marketing import (bnk, bnk_sales, briefing, funding, grants, instagram, kit, loans, midweek, moments, news,
+                       notion_sync, placements, reviews, sales, selections, social)
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
@@ -25,6 +25,8 @@ BNK_FAIL_ALERT_DAYS = 3
 GRANT_AT = (6, 40)   # 선정(06:10) 다음, 월요일 브리핑 만들기(07:00) 전. 한 번에 LLM 최대 3번(grants.JUDGE_PER_RUN)
 SELECTION_AT = (6, 10)   # 판매 지수(06:00) 다음. LLM을 쓰지 않아 07:00 브리핑 만들기 전에 끝난다
 REVIEW_AT = (4, 30)   # 새벽: 검색 200번 남짓과 판별 LLM으로 몇 분 워커를 붙잡는다(그동안 텔레그램 응답이 늦다)
+INSTAGRAM_AT = (4, 50)   # 서평 검색(04:30) 뒤, 계기 잡기(05:00) 전. 호출 몇 번뿐(일요일은 협력 계정 12곳 더)
+LOAN_AT, LOAN_WEEKDAY = (5, 40), 5   # 토요일 새벽: 정보나루 170권쯤 × 1초
 PLACEMENT_AT = (12, 0)   # [올렸어요] 초안이 올라간 곳 찾기. 운영진 개인 계정 수집(06:20~) 뒤. LLM 없음
 MISSED_NOTE = '⏭️ 이번 주 브리핑을 보내지 못했어요(항목 없음·모드·시간). /mk 로 확인하세요'
 
@@ -219,6 +221,16 @@ def _run_due(deps, now):
     if _hm(local) >= REVIEW_AT and WorkerState.get('marketing_last_review_scan') != day:
         WorkerState.put('marketing_last_review_scan', day)
         _guard(deps, 'review', now, lambda: reviews.run(deps, today, notify=lambda text: _notify_awake(deps, now, text)))
+
+    if _hm(local) >= INSTAGRAM_AT and WorkerState.get('marketing_last_instagram_scan') != day:
+        WorkerState.put('marketing_last_instagram_scan', day)
+        _guard(deps, 'instagram', now,
+               lambda: instagram.run(deps, today, notify=lambda text: _notify_awake(deps, now, text)))
+
+    if (local.weekday() == LOAN_WEEKDAY and _hm(local) >= LOAN_AT
+            and WorkerState.get('marketing_last_loan_scan') != day):
+        WorkerState.put('marketing_last_loan_scan', day)
+        _guard(deps, 'loan', now, lambda: loans.run(today, notify=lambda text: _notify_awake(deps, now, text)))
 
     if _hm(local) >= SALES_AT and WorkerState.get('marketing_last_sales_scan') != day:
         WorkerState.put('marketing_last_sales_scan', day)

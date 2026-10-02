@@ -1,13 +1,14 @@
 """주간 브리핑: 후보를 LLM에 한 번 보내 최대 4개를 고르게 하고, 코드로 다시 검증한다."""
 import re
 from datetime import datetime, timedelta
+from itertools import combinations
 
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
 from intake.llm import complete_json
-from marketing import bnk_sales, candidates, gnews, meta
+from marketing import bnk_sales, candidates, channels, gnews, meta, search
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM, build_briefing_user
 from marketing.sales import latest
@@ -130,6 +131,26 @@ def _reactions(draft, counts):
     return out
 
 
+MEASURE_MAX = 600   # Briefing.measure 칸 길이
+
+
+def _fit_measure(first, *lines):
+    """성과 줄 다음에 공식 채널·검색 줄을 measure 칸에 넣는다(앞 줄일수록 중요). 넘치면 뒤 줄부터 첫 '. ' 뒤(가장 큰 글·많이
+    찾은 말)를 빼고, 그래도 넘치면 뒤 줄부터 뺀다 — 앞 줄을 빼고 뒤 줄을 남기는 일은 없다. 반쯤 잘린 줄·빈 줄은 없다.
+    성과 줄만으로 넘치면 그 줄을 자른다."""
+    first = first[:MEASURE_MAX]
+    lines = [x for x in lines if x]
+    forms = [(x, x.split('. ', 1)[0]) for x in lines]
+    for keep in range(len(lines), -1, -1):                 # 앞에서부터 keep줄만 남긴다
+        for n_short in range(keep + 1):                    # 그중 몇 줄을 짧게
+            for short in combinations(range(keep - 1, -1, -1), n_short):   # 뒤 줄부터 짧게
+                parts = [first] + [forms[i][1] if i in short else forms[i][0] for i in range(keep)]
+                text = '\n'.join(p for p in parts if p)
+                if len(text) <= MEASURE_MAX:
+                    return text
+    return first
+
+
 def measure_line(today, counts=meta.post_counts):
     """게시하고 14~28일 지난 글 가운데 가장 최근 것의 판매 전후. 인과가 아니라 전후 비교다.
     전산망 실판매가 있으면 그것(전후 2주 부수), 없으면 알라딘 판매 지수. 올라간 곳(봇이 찾은 것)과 공식 글의 반응 수를 함께 적는다."""
@@ -161,12 +182,15 @@ def measure_line(today, counts=meta.post_counts):
     return ''
 
 
-def build_weekly(llm, today, now, posts, resolve=gnews.original_url):
-    items, dropped = compose(llm, candidates.gather(today, now, posts), today, candidates.social_context(now))
+def build_weekly(llm, today, now, posts, resolve=gnews.original_url, channel_line=channels.week_line, search_line=search.week_line):
+    line = channel_line(today)   # 지난주 공식 채널 한 줄: 브리핑 끝(measure)과 LLM '참고' 블록에
+    found = search_line(today)   # 지난 7일 구글 검색 한 줄
+    items, dropped = compose(llm, candidates.gather(today, now, posts), today,
+                             candidates.social_context(now) + [x for x in (line, found) if x])
     for cand, *_ in items:  # 방에 보일 링크만(최대 4개): 구글 뉴스 주소는 언론사 원래 주소로, 실패하면 그대로
         if cand.link:
             cand.link = resolve(cand.link)
     briefing = save_briefing(items, today)
-    briefing.measure = measure_line(today)[:300]
+    briefing.measure = _fit_measure(measure_line(today), line, found)
     briefing.save(update_fields=['measure'])
     return briefing, dropped

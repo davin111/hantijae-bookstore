@@ -85,7 +85,7 @@ class MomentScan(models.Model):
 
 class Briefing(models.Model):
     week_start = models.DateField(unique=True)
-    measure = models.CharField(max_length=300, blank=True)
+    measure = models.CharField(max_length=600, blank=True)
     chat_id = models.BigIntegerField(null=True, blank=True)
     message_id = models.BigIntegerField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
@@ -303,3 +303,16 @@ class BnkDay(models.Model):
     """전산망 하루를 마지막으로 읽은 날. 약 2일 늦게 들어오므로 월간 요약은 그 달 모든 날이 '그날+2일' 뒤에 읽혔을 때만 보낸다."""
     day = models.DateField(unique=True)
     read_on = models.DateField()
+
+
+class LoanSnapshot(models.Model):
+    """도서관 정보나루의 책 한 권 한 달 대출. 매주 최근 12개월을 다시 받아 덮어쓴다(늦게 들어온 달을 바로잡으려고)."""
+    book = models.ForeignKey(Book, related_name='loan_snapshots', on_delete=models.CASCADE)
+    month = models.DateField(help_text='그 달 1일')
+    loans = models.PositiveIntegerField()
+    ranking = models.PositiveIntegerField(null=True, blank=True, help_text='그 달 전국 대출 순위')
+    taken_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('book', 'month')
+        ordering = ('-month',)

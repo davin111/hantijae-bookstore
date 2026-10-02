@@ -24,7 +24,7 @@ def drop_origin_default(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('marketing', '0010_bnk_sales'),
+        ('marketing', '0011_loans'),
     ]
 
     operations = [

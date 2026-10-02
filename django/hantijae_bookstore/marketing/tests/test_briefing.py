@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 
 from django.test import TestCase
 
-from marketing.briefing import build_weekly, compose, measure_line, save_briefing
+from marketing.briefing import _fit_measure, build_weekly, compose, measure_line, save_briefing
 from marketing.candidates import Candidate
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM
@@ -182,14 +182,14 @@ class MeasureTest(TestCase):
                          '지난번 보낸 『나는 산속으로 더 깊이 들어간다』 글(한티재 페북 페이지) ― 판매 지수 455 → 520 (2주 뒤)')
 
     def test_build_weekly_clips_long_measure_line(self):
-        book = make_book(title='가' * 400)
+        book = make_book(title='가' * 800)
         p = Proposal.objects.create(kind=Proposal.KIT, book=book, headline='x')
         Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='b', status=Draft.POSTED,
                              posted_at=datetime(2026, 9, 10, 10, 0, tzinfo=KST))
         SalesSnapshot.objects.create(book=book, date=date(2026, 9, 10), sales_point=455)
         SalesSnapshot.objects.create(book=book, date=date(2026, 9, 25), sales_point=520)
         b, _ = build_weekly(FakeLLM({'items': []}), TODAY, datetime(2026, 9, 28, 7, 0, tzinfo=KST), posts=[])
-        self.assertEqual(len(b.measure), 300)
+        self.assertEqual(len(b.measure), 600)
 
     def test_measure_line_empty_before_two_weeks(self):
         book = make_book()
@@ -309,6 +309,85 @@ class BuildWeeklyTest(TestCase):
         b, _ = build_weekly(llm, TODAY, datetime(2026, 9, 28, 7, 0, tzinfo=KST), posts=[])
         p = b.items.get()
         self.assertEqual((len(p.headline), len(p.drafts.get().title)), (300, 300))
+
+    def test_channel_line_goes_to_measure_and_llm_context(self):
+        book = make_book(title='무지개를 변호하다', published=date(2026, 6, 1), isbn='979-11-00000-14-1', author=None)
+        Signal.objects.create(kind=Signal.REVIEW, key='review:c1', book=book, title='읽고', url='https://blog.naver.com/a/1',
+                              happens_on=date(2026, 9, 25), relevant=True, detail={'source': 'naver_blog', 'where': ''})
+        llm = FakeLLM({'items': []})
+        now = datetime(2026, 9, 28, 7, 0, tzinfo=KST)
+        briefing, _ = build_weekly(llm, TODAY, now, posts=[], channel_line=lambda today: '지난주 공식 채널: 페북 2건')
+        self.assertIn('지난주 공식 채널: 페북 2건', briefing.measure)
+        self.assertIn('지난주 공식 채널: 페북 2건', llm.calls[0][1])
+        self.assertIn('<참고: 운영진 개인 SNS 소식·지난주 공식 채널 현황(후보 아님)>', llm.calls[0][1])
+
+    def test_search_line_goes_to_measure_and_llm_context(self):
+        book = make_book(title='무지개를 변호하다', published=date(2026, 6, 1), isbn='979-11-00000-14-1', author=None)
+        Signal.objects.create(kind=Signal.REVIEW, key='review:c1', book=book, title='읽고', url='https://blog.naver.com/a/1',
+                              happens_on=date(2026, 9, 25), relevant=True, detail={'source': 'naver_blog', 'where': ''})
+        llm = FakeLLM({'items': []})
+        now = datetime(2026, 9, 28, 7, 0, tzinfo=KST)
+        briefing, _ = build_weekly(llm, TODAY, now, posts=[], search_line=lambda today: '지난 7일 구글 검색: 노출 3·클릭 1')
+        self.assertIn('지난 7일 구글 검색: 노출 3·클릭 1', briefing.measure)
+        self.assertIn('지난 7일 구글 검색: 노출 3·클릭 1', llm.calls[0][1])
+
+
+class FitMeasureTest(TestCase):
+    def test_fits_both_lines_when_possible(self):
+        first = 'ㄱ' * 100
+        line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「작은책」 22'
+        result = _fit_measure(first, line)
+        self.assertEqual(result, first + '\n' + line)
+        self.assertLessEqual(len(result), 600)
+
+    def test_drops_top_post_when_both_lines_too_long(self):
+        first = 'ㄱ' * 300
+        line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「' + 'ㄴ' * 280 + '」 22'
+        result = _fit_measure(first, line)
+        expected_line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1'
+        self.assertEqual(result, first + '\n' + expected_line)
+        self.assertLessEqual(len(result), 600)
+        self.assertNotIn('「', result)
+
+    def test_drops_channel_line_when_still_too_long(self):
+        first = 'ㄱ' * 560
+        line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「' + 'ㄴ' * 280 + '」 22'
+        result = _fit_measure(first, line)
+        self.assertEqual(result, first)
+        self.assertLessEqual(len(result), 600)
+
+    def test_old_behavior_when_no_channel_line(self):
+        first = 'ㄱ' * 700
+        result = _fit_measure(first, '')
+        self.assertEqual(result, 'ㄱ' * 600)
+        self.assertEqual(len(result), 600)
+
+    def test_short_both_lines_unchanged(self):
+        first = 'ㄱ' * 100
+        line = 'ㄴ' * 100
+        result = _fit_measure(first, line)
+        self.assertEqual(result, first + '\n' + line)
+        self.assertEqual(len(result), 201)  # 100 + newline + 100
+
+    def test_fit_measure_keeps_whole_lines_for_three(self):
+        first = 'ㄱ' * 400
+        channel = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 글 없음. 반응이 가장 큰 글: 페북 「' + 'ㄴ' * 120 + '」(반응 합계 22)'
+        found = '지난 7일 구글 검색: 노출 120·클릭 8. 많이 찾은 말: ' + 'ㄷ' * 150
+        text = _fit_measure(first, channel, found)
+        self.assertLessEqual(len(text), 600)
+        self.assertEqual(text.split('\n'), [first, '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 글 없음',
+                                           '지난 7일 구글 검색: 노출 120·클릭 8'])
+
+    def test_no_leading_blank_when_first_is_empty(self):
+        self.assertEqual(_fit_measure('', '지난주 공식 채널: 페북 2건', ''), '지난주 공식 채널: 페북 2건')
+        self.assertEqual(_fit_measure('', '', '지난 7일 구글 검색: 노출 3·클릭 1'), '지난 7일 구글 검색: 노출 3·클릭 1')
+
+    def test_channel_line_outranks_search_line(self):
+        first = 'ㄱ' * 545
+        channel = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 글 없음. 반응이 가장 큰 글: 페북 「' + 'ㄴ' * 100 + '」(반응 합계 22)'
+        found = '지난 7일 구글 검색: 노출 120·클릭 8. 많이 찾은 말: ' + 'ㄷ' * 100
+        result = _fit_measure(first, channel, found)
+        self.assertEqual(result.split('\n'), [first, '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 글 없음'])
 
 
 class PromptRulesTest(TestCase):

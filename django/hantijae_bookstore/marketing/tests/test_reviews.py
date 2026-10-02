@@ -269,6 +269,11 @@ class ScanTest(TestCase):
         self.assertEqual((fresh, llm.calls), ([], []))
         self.assertEqual(Signal.objects.get(url='https://cafe.naver.com/c/9').detail['verdict'], 'old')
 
+    def test_save_old_records_a_baseline(self):
+        post = Post('ig_tag', 'https://www.instagram.com/p/A/', '북클럽', '커밍아웃 스토리', date(2026, 1, 4))
+        s = reviews.save_old(self.book, post, reviews.signal_key(self.book, post))
+        self.assertEqual((s.kind, s.relevant, s.detail['verdict'], s.detail['source']), ('review', False, 'old', 'ig_tag'))
+
 
 @override_settings(MARKETING=CFG)
 class RunTest(TestCase):

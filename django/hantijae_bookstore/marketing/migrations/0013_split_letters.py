@@ -1,4 +1,4 @@
-# 옛 편지 나누기(데이터만). 칸은 0011에서 — MySQL은 DDL을 트랜잭션으로 묶지 못하니 칸 바꾸기와 데이터 바꾸기를 나눈다.
+# 옛 편지 나누기(데이터만). 칸은 0012에서 — MySQL은 DDL을 트랜잭션으로 묶지 못하니 칸 바꾸기와 데이터 바꾸기를 나눈다.
 
 import re
 
@@ -61,7 +61,7 @@ def backward(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('marketing', '0011_notion_copy'),
+        ('marketing', '0012_notion_copy'),
     ]
 
     operations = [

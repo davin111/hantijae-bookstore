@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone as dt_tz
 from django.db import IntegrityError
 from django.test import TestCase
 
-from marketing.models import BookProfile, Draft, HookDate, Proposal, SalesSnapshot, Signal
+from marketing.models import BookProfile, Briefing, Draft, HookDate, LoanSnapshot, Proposal, SalesSnapshot, Signal
 from marketing.tests.fakes import make_book
 
 
@@ -105,3 +105,14 @@ class SignalKindTest(TestCase):
     def test_review_kind(self):
         self.assertEqual(Signal.REVIEW, 'review')
         self.assertEqual(dict(Signal._meta.get_field('kind').choices)['review'], '독자 서평')
+
+
+class LoanSnapshotTest(TestCase):
+    def test_one_row_per_book_and_month(self):
+        book = make_book(title='무궁화호를 위하여', published=date(2026, 3, 16), isbn='979-11-92455-84-6', author=None)
+        LoanSnapshot.objects.create(book=book, month=date(2026, 8, 1), loans=42, ranking=47106)
+        with self.assertRaises(IntegrityError):
+            LoanSnapshot.objects.create(book=book, month=date(2026, 8, 1), loans=1)
+
+    def test_briefing_measure_holds_600(self):
+        self.assertEqual(Briefing._meta.get_field('measure').max_length, 600)
