@@ -102,5 +102,7 @@ class OriginDefaultTest(SimpleTestCase):
     def test_schema_and_letter_data_are_separate_migrations(self):
         ops = schema.Migration.operations
         self.assertEqual(ops[-1].code, schema.set_origin_default)
+        # MySQL은 DDL을 거래(transaction)로 되돌릴 수 없어 Django가 atomic 안의 ALTER를 막는다(2026-10-02 배포 실패)
+        self.assertIs(ops[-1].atomic, False)
         self.assertFalse(hasattr(schema, 'split_letter'))
         self.assertEqual(mig.Migration.dependencies, [('marketing', '0012_notion_copy')])

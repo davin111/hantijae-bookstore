@@ -58,5 +58,6 @@ class Migration(migrations.Migration):
             name='notion',
             field=models.JSONField(blank=True, default=dict, help_text='노션: heading(항목 제목 블록) 또는 headings(채널별), 페이지 칸'),
         ),
-        migrations.RunPython(set_origin_default, drop_origin_default),
+        # MySQL은 DDL을 되돌릴 수 없어 Django가 atomic 블록 안의 ALTER를 막는다 → 이 단계는 거래 밖에서(2026-10-02 배포 실패)
+        migrations.RunPython(set_origin_default, drop_origin_default, atomic=False),
     ]
