@@ -16,6 +16,7 @@ from intake.extraction import AmbiguousPressRelease, NoPressRelease, run_extract
 from intake.llm import LLMAuthError, LLMError
 from intake.models import IntakeSource, WorkerState
 from intake.notices import KST
+from intake.telegram_api import TelegramError
 from marketing import tasks as marketing_tasks
 
 log = logging.getLogger('intake')
@@ -102,11 +103,68 @@ def _fund_scan_due(now):
     return (now - datetime.fromisoformat(last)).total_seconds() >= settings.INTAKE.get('FUND_SCAN_SECONDS', 6 * 3600)
 
 
+TG_ALERT_AFTER = 3   # 한두 번 끊김은 다음 바퀴에 저절로 회복된다(10-01·10-02 확인) — 연속 이만큼일 때만 알린다
+OUTAGE, LAST_OUTAGE = 'telegram_poll_outage', 'telegram_poll_last_outage'
+
+
+def _kst_hm(iso):
+    return datetime.fromisoformat(iso).astimezone(KST).strftime('%H:%M')
+
+
+def _notify_admin_safely(deps, text):
+    """텔레그램이 끊긴 동안에는 알림도 실패한다. 그 예외로 워커가 죽지 않게 삼키고 성공 여부만 돌려준다."""
+    try:
+        deps.bot.notify_admin(text)
+        return True
+    except Exception:
+        log.exception('admin notice failed')
+        return False
+
+
+def _poll_failed(deps, now, error):
+    outage = WorkerState.get(OUTAGE) or {'since': now.isoformat(), 'fails': 0, 'alerted': False}
+    outage.update(fails=outage['fails'] + 1, error=str(error)[:300])
+    log.warning('telegram poll failed (%d in a row): %s', outage['fails'], error)
+    if outage['fails'] >= TG_ALERT_AFTER and not outage['alerted']:
+        # 보내기에 실패하면 alerted를 그대로 두어 다음 실패 때 다시 시도한다
+        outage['alerted'] = _notify_admin_safely(
+            deps, f"⚠️ 텔레그램 수신이 {outage['fails']}번 연속 실패했어요({_kst_hm(outage['since'])}부터). "
+                  f"마지막 오류: {outage['error']}")
+    WorkerState.put(OUTAGE, outage)
+
+
+def _poll_recovered(deps, now):
+    outage = WorkerState.get(OUTAGE)
+    if not outage:
+        return
+    WorkerState.put(LAST_OUTAGE, {'since': outage['since'], 'until': now.isoformat(), 'fails': outage['fails'],
+                                  'error': outage.get('error', '')})
+    WorkerState.put(OUTAGE, None)
+    if outage['fails'] >= TG_ALERT_AFTER:   # 끊김 알림을 (보내려고) 했으면 회복도 알린다
+        _notify_admin_safely(deps, f"✅ 텔레그램 다시 연결됐어요({_kst_hm(outage['since'])}~{_kst_hm(now.isoformat())}, "
+                                   f"{outage['fails']}번 실패)")
+
+
+def _poll_updates(deps, now):
+    """getUpdates. 연결 오류(TelegramError: 네트워크·타임아웃·텔레그램 쪽 오류)면 None — 연속 실패를 세어 묶어 알린다."""
+    try:
+        updates = deps.tg.get_updates(WorkerState.get('telegram_offset', 0) or 0, timeout=50)
+    except TelegramError as e:
+        _poll_failed(deps, now or timezone.now(), e)
+        return None
+    _poll_recovered(deps, now or timezone.now())
+    return updates
+
+
 def run_iteration(deps, now=None, sleep=time.sleep):
     # 장시간 도는 프로세스는 MySQL wait_timeout으로 끊긴 연결을 매 루프 정리해야 한다
     close_old_connections()
     try:
-        for update in deps.tg.get_updates(WorkerState.get('telegram_offset', 0) or 0, timeout=50):
+        updates = _poll_updates(deps, now)
+        if updates is None:
+            sleep(10)
+            return
+        for update in updates:
             uid = update['update_id']
             if WorkerState.get('telegram_inflight') == uid:
                 # 이 업데이트를 처리하다 워커가 죽었다(OOM 등). 같은 입력을 영원히 반복하지 않도록 건너뛴다.
@@ -140,5 +198,5 @@ def run_iteration(deps, now=None, sleep=time.sleep):
         run_pending(deps)
     except Exception as e:
         log.exception('worker iteration failed')
-        deps.bot.notify_admin(f'⚠️ 워커 오류: {type(e).__name__}: {e}')
+        _notify_admin_safely(deps, f'⚠️ 워커 오류: {type(e).__name__}: {e}')
         sleep(10)

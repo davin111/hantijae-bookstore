@@ -156,3 +156,82 @@ class MarketingHookTest(TestCase):
         with mock.patch('intake.pipeline.marketing_tasks.run_due') as run_due:
             pipeline.run_iteration(deps, now=now, sleep=lambda s: None)
         run_due.assert_called_once_with(deps, now)
+
+
+class TelegramPollOutageTest(TestCase):
+    """getUpdates 연결 오류는 연속 TG_ALERT_AFTER번째에만 알리고, 알린 끊김이 풀리면 '다시 연결됐어요'를 보낸다."""
+    T0 = datetime(2026, 10, 2, 21, 7, tzinfo=dt_timezone.utc)   # 10-03 06:07 KST
+
+    def setUp(self):
+        from intake.telegram_api import TelegramError
+        self.error = TelegramError('getUpdates: Read timed out')
+        self.bot = mock.Mock()
+        self.tg = mock.Mock()
+        self.slept = []
+        WorkerState.put('fund_autoscan', False)
+
+    def poll(self, minute, ok=False):
+        self.tg.get_updates.side_effect = None if ok else self.error
+        self.tg.get_updates.return_value = []
+        with mock.patch('intake.pipeline.marketing_tasks.run_due'), mock.patch('intake.pipeline.run_pending'):
+            pipeline.run_iteration(Deps(tg=self.tg, llm=None, bot=self.bot), now=self.T0 + timedelta(minutes=minute),
+                                   sleep=self.slept.append)
+
+    def sent(self):
+        return [c.args[0] for c in self.bot.notify_admin.call_args_list]
+
+    def test_one_or_two_failures_are_not_announced(self):
+        self.poll(0)
+        self.poll(1)
+        self.assertEqual(self.sent(), [])
+        self.assertEqual(WorkerState.get('telegram_poll_outage')['fails'], 2)
+        self.assertEqual(self.slept, [10, 10])
+
+    def test_third_consecutive_failure_is_announced_once(self):
+        for minute in range(5):
+            self.poll(minute)
+        self.assertEqual(len(self.sent()), 1)
+        self.assertIn('텔레그램', self.sent()[0])
+        self.assertIn('3번', self.sent()[0])
+        self.assertIn('06:07', self.sent()[0])
+
+    def test_recovery_after_announced_outage_says_reconnected_and_resets(self):
+        for minute in range(3):
+            self.poll(minute)
+        self.poll(4, ok=True)
+        self.assertEqual(len(self.sent()), 2)
+        self.assertIn('다시 연결', self.sent()[1])
+        self.assertIn('06:07~06:11', self.sent()[1])
+        self.assertIsNone(WorkerState.get('telegram_poll_outage'))
+        last = WorkerState.get('telegram_poll_last_outage')
+        self.assertEqual(last['fails'], 3)
+        self.assertEqual(last['since'], self.T0.isoformat())
+        self.assertEqual(last['until'], (self.T0 + timedelta(minutes=4)).isoformat())
+
+    def test_short_outage_recovers_silently_but_is_recorded(self):
+        self.poll(0)
+        self.poll(1, ok=True)
+        self.assertEqual(self.sent(), [])
+        self.assertIsNone(WorkerState.get('telegram_poll_outage'))
+        self.assertEqual(WorkerState.get('telegram_poll_last_outage')['fails'], 1)
+
+    def test_announcement_that_cannot_be_sent_is_retried_and_never_crashes(self):
+        # 텔레그램이 완전히 끊기면 알림도 못 간다 — 워커를 죽이지 말고 다음 실패 때 다시 시도한다
+        self.bot.notify_admin.side_effect = [self.error, None]
+        for minute in range(5):
+            self.poll(minute)
+        self.assertEqual(self.bot.notify_admin.call_count, 2)   # 3번째 실패(보내기 실패) · 4번째(성공) · 5번째는 없음
+        self.assertTrue(WorkerState.get('telegram_poll_outage')['alerted'])
+
+    def test_poll_failure_skips_the_rest_of_the_iteration(self):
+        with mock.patch('intake.pipeline.marketing_tasks.run_due') as run_due:
+            self.tg.get_updates.side_effect = self.error
+            pipeline.run_iteration(Deps(tg=self.tg, llm=None, bot=self.bot), now=self.T0, sleep=self.slept.append)
+        run_due.assert_not_called()
+
+    def test_other_errors_are_announced_at_once_even_if_sending_fails(self):
+        self.tg.get_updates.side_effect = RuntimeError('bug')
+        self.bot.notify_admin.side_effect = self.error
+        pipeline.run_iteration(Deps(tg=self.tg, llm=None, bot=self.bot), now=self.T0, sleep=self.slept.append)
+        self.bot.notify_admin.assert_called_once()
+        self.assertIn('워커 오류', self.bot.notify_admin.call_args.args[0])
