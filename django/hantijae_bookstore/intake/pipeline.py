@@ -16,6 +16,7 @@ from intake.extraction import AmbiguousPressRelease, NoPressRelease, run_extract
 from intake.llm import LLMAuthError, LLMError
 from intake.models import IntakeSource, WorkerState
 from intake.notices import KST
+from intake.outage import LAST_OUTAGE, OUTAGE, TG_ALERT_AFTER
 from intake.telegram_api import TelegramError
 from marketing import tasks as marketing_tasks
 from ops import health
@@ -104,18 +105,14 @@ def _fund_scan_due(now):
     return (now - datetime.fromisoformat(last)).total_seconds() >= settings.INTAKE.get('FUND_SCAN_SECONDS', 6 * 3600)
 
 
-TG_ALERT_AFTER = 3   # 한두 번 끊김은 다음 바퀴에 저절로 회복된다(10-01·10-02 확인) — 연속 이만큼일 때만 알린다
-OUTAGE, LAST_OUTAGE = 'telegram_poll_outage', 'telegram_poll_last_outage'
-
-
 def _kst_hm(iso):
     return datetime.fromisoformat(iso).astimezone(KST).strftime('%H:%M')
 
 
-def _notify_admin_safely(deps, text):
+def _notify_admin_safely(deps, text, html=False):
     """텔레그램이 끊긴 동안에는 알림도 실패한다. 그 예외로 워커가 죽지 않게 삼키고 성공 여부만 돌려준다."""
     try:
-        deps.bot.notify_admin(text)
+        deps.bot.notify_admin(text, html=html)
         return True
     except Exception:
         log.exception('admin notice failed')
@@ -175,7 +172,7 @@ def _morning_check(deps, now):
         _notify_admin_safely(deps, f'⚠️ 아침 상태 점검 오류: {type(e).__name__}: {e}')
         return
     if text:
-        deps.bot.notify_admin(text, html=True)
+        _notify_admin_safely(deps, text, html=True)   # 못 보내도 바퀴의 나머지(마케팅·신간 처리)는 돈다
 
 
 def run_iteration(deps, now=None, sleep=time.sleep):

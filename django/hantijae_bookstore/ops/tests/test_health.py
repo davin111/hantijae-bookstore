@@ -1,9 +1,10 @@
 from datetime import date, datetime, timedelta
+from unittest import mock
 
 from django.test import TestCase
 
 from intake.models import WorkerState
-from marketing.models import Briefing, SalesSnapshot, Signal
+from marketing.models import Briefing, Proposal, SalesSnapshot, Signal
 from marketing.tests.fakes import make_book
 from marketing.timeutil import KST
 from ops import health
@@ -142,6 +143,107 @@ class HealthTest(TestCase):
         put(telegram_poll_last_outage={'since': kst(2026, 10, 2, 6, 7).isoformat(),
                                        'until': kst(2026, 10, 2, 6, 8).isoformat(), 'fails': 1, 'error': 'x'})
         self.assertIn('10/2 06:07', self.rows()['telegram'].result)
+
+    # ---- 리뷰 반영: 오류는 판정하는 주기 안의 것만, 지난 일은 결과 칸으로 ----
+
+    def test_yesterdays_error_does_not_haunt_a_daily_task_that_ran_today(self):
+        put(marketing_last_review_scan='2026-10-03', marketing_error_review='2026-10-02')
+        self.assertNotEqual(self.rows()['review'].state, health.WARN)
+
+    def test_weekly_failure_is_worth_a_look_on_its_day_and_the_next_then_becomes_history(self):
+        put(marketing_last_loan_scan='2026-10-03', marketing_error_loan='2026-10-03')
+        self.assertEqual(self.rows(kst(2026, 10, 4, 9, 0))['loans'].state, health.WARN)
+        later = self.rows(kst(2026, 10, 6, 9, 0))['loans']
+        self.assertNotEqual(later.state, health.WARN)
+        self.assertIn('지난 일', later.result)
+        self.assertIn('marketing_error_loan', later.result)
+
+    def test_missed_briefing_is_not_repeated_all_week(self):
+        Briefing.objects.create(week_start=date(2026, 10, 5))
+        put(marketing_last_news_scan='2026-10-05', marketing_last_brief_week='2026-10-05',
+            marketing_brief_missed='2026-10-05')
+        self.assertEqual(self.rows(kst(2026, 10, 5, 21, 30))['brief_send'].state, health.CALM)  # 항목 없는 브리핑
+        b = Briefing.objects.get()
+        Proposal.objects.create(kind=Proposal.BRIEF_ITEM, briefing=b, headline='x')
+        self.assertEqual(self.rows(kst(2026, 10, 5, 21, 30))['brief_send'].state, health.WARN)
+        self.assertNotEqual(self.rows(kst(2026, 10, 7, 9, 0))['brief_send'].state, health.WARN)
+
+    def test_briefing_being_built_right_now_is_not_a_problem_yet(self):
+        put(marketing_last_news_scan='2026-10-05', marketing_last_brief_week='2026-10-05')
+        self.assertNotEqual(self.rows(kst(2026, 10, 5, 7, 5))['brief_build'].state, health.WARN)
+        self.assertEqual(self.rows(kst(2026, 10, 5, 8, 1))['brief_build'].state, health.WARN)
+
+    def test_missing_the_previous_cycle_too_is_worth_a_look_even_inside_the_grace(self):
+        put(marketing_last_review_scan='2026-10-01')
+        self.assertEqual(self.rows(kst(2026, 10, 3, 5, 0))['review'].state, health.WARN)
+
+    def test_bnk_login_block_is_shown_as_the_cause(self):
+        put(bnk_mode='on', bnk_login_blocked='2026-10-03', bnk_last_run='2026-10-02')
+        row = self.rows()['bnk']
+        self.assertEqual(row.state, health.WARN)
+        self.assertIn('/bnk on', row.reason)
+        self.assertNotIn('돌지 않았어요', row.reason)
+
+    def test_monthly_review_is_late_only_after_the_fifths_send_time(self):
+        put(bnk_mode='on', monthly_mode='live', bnk_last_monthly='2026-09')
+        self.assertEqual(self.rows(kst(2026, 11, 5, 9, 0))['monthly'].state, health.WAIT)
+        self.assertEqual(self.rows(kst(2026, 11, 5, 10, 31))['monthly'].state, health.WARN)
+
+    def test_partner_row_sees_the_sunday_instagram_error_and_token_line_appears_once(self):
+        put(marketing_last_instagram_scan='2026-10-04', marketing_error_instagram='2026-10-04')
+        with self.settings(MARKETING={'META_ACCESS_EXPIRES': '2026-10-08'}), \
+                mock.patch('marketing.meta.ig_configured', return_value=True):
+            rows = self.rows(kst(2026, 10, 4, 9, 0))
+        self.assertEqual(rows['partner'].state, health.WARN)
+        self.assertNotIn('토큰', rows['partner'].reason)
+        self.assertIn('토큰', rows['instagram'].reason)
+
+    def test_old_failed_sources_and_kits_of_books_out_of_the_window_do_not_warn_forever(self):
+        from intake.models import IntakeSource
+        put(drive_autoscan=True, last_drive_scan=(self.NOW - timedelta(minutes=5)).isoformat(),
+            marketing_last_kit_check=(self.NOW - timedelta(minutes=5)).isoformat(),
+            marketing_kit_failures={'999': {'day': '2026-07-01', 'count': 3}})
+        src = IntakeSource.objects.create(kind=IntakeSource.DRIVE, title='옛 실패', status=IntakeSource.FAILED)
+        IntakeSource.objects.filter(pk=src.pk).update(updated_at=self.NOW - timedelta(days=8))
+        rows = self.rows()
+        self.assertNotEqual(rows['drive'].state, health.WARN)
+        self.assertNotEqual(rows['kit'].state, health.WARN)
+
+    def test_notice_that_already_ended_is_not_counted(self):
+        from web.models import Notice
+        Notice.objects.create(message='끝난 알림', state=Notice.POSTED, starts_at=self.NOW - timedelta(days=9),
+                              ends_at=self.NOW - timedelta(days=1))
+        self.assertIn('게시 중 0건', self.rows()['notice'].result)
+
+    def test_worker_blames_telegram_when_polling_is_down(self):
+        since = (self.NOW - timedelta(minutes=45)).isoformat()
+        put(marketing_last_kit_check=(self.NOW - timedelta(minutes=45)).isoformat(),
+            telegram_poll_outage={'since': since, 'fails': 30, 'alerted': True, 'error': 'x'})
+        rows = health.evaluate(self.NOW)
+        worker = {r.key: r for r in rows}['worker']
+        self.assertIn('텔레그램', worker.reason)
+        self.assertNotIn('systemctl', worker.reason)
+        self.assertEqual(health.watch(rows)[0].key, 'telegram')
+
+    def test_one_broken_row_does_not_break_the_page(self):
+        put(marketing_last_sales_scan='2026-10-03', marketing_sales_fail_streak='망가진 값')
+        rows = self.rows()
+        self.assertEqual(rows['sales'].state, health.WARN)
+        self.assertIn('판정 오류', rows['sales'].reason)
+        self.assertIn('review', rows)
+
+    def test_late_rows_own_error_is_not_repeated_as_another_error(self):
+        put(marketing_last_review_scan='2026-10-02', marketing_error_review='2026-10-03')
+        rows = self.rows()
+        self.assertIn('marketing_error_review', rows['review'].reason)
+        self.assertNotIn('errors', rows)
+
+    def test_social_without_its_settings_names_the_cause(self):
+        put(marketing_social='on')
+        with self.settings(MARKETING={}):
+            row = self.rows()['social']
+        self.assertEqual(row.state, health.WARN)
+        self.assertIn('APIFY_TOKEN', row.reason)
 
     # ---- 화면에 나가는 값 ----
 

@@ -277,6 +277,17 @@ class MorningCheckTest(TestCase):
         self.run_at(self.MORNING, [self.fine])
         self.bot.notify_admin.assert_not_called()
 
+    def test_a_morning_note_that_cannot_be_sent_does_not_stop_the_loop(self):
+        from intake.telegram_api import TelegramError
+        self.bot.notify_admin.side_effect = TelegramError('sendMessage: timed out')
+        deps = Deps(tg=mock.Mock(get_updates=mock.Mock(return_value=[])), llm=None, bot=self.bot)
+        with mock.patch('intake.pipeline.health.evaluate', return_value=[self.warn]), \
+                mock.patch('intake.pipeline.marketing_tasks.run_due') as run_due, \
+                mock.patch('intake.pipeline.run_pending') as pending:
+            pipeline.run_iteration(deps, now=self.MORNING, sleep=lambda s: None)
+        run_due.assert_called_once()
+        pending.assert_called_once()
+
     def test_a_broken_check_is_reported_and_does_not_stop_the_loop(self):
         deps = Deps(tg=mock.Mock(get_updates=mock.Mock(return_value=[])), llm=None, bot=self.bot)
         with mock.patch('intake.pipeline.health.evaluate', side_effect=RuntimeError('boom')), \
