@@ -428,10 +428,16 @@ def _posts_section(p, topics):
     return '\n'.join(lines)
 
 
-def _ads_section(lines):
-    """첫 줄(건수·광고비)은 굵은 제목, 광고마다 한 줄. 판매 전후는 인과가 아니라 나란히 놓은 것."""
-    return '\n'.join([f'<b>💸 {h(lines[0])}</b>', *[f'· {h(x)}' for x in lines[1:]],
-                      f'<blockquote expandable>{h(ADS_SOURCE)}</blockquote>'])
+def _ads_section(items):
+    """첫 줄(건수·광고비)은 굵은 제목, 광고마다 한 줄 — 광고 이름에 그 게시물 링크. 판매 전후는 인과가 아니라 나란히 놓은 것."""
+    items = [x if isinstance(x, ads.MonthLine) else ads.MonthLine(x) for x in items]
+    lines = [f'<b>💸 {h(items[0].text)}</b>']
+    for x in items[1:]:
+        if x.name and x.text.startswith(x.name):
+            lines.append(f'· {ads.post_link(h(x.name), x.url)}{h(x.text[len(x.name):])}')
+        else:
+            lines.append(f'· {h(x.text)}')
+    return '\n'.join(lines + [f'<blockquote expandable>{h(ADS_SOURCE)}</blockquote>'])
 
 
 def _render(month_start, s, events_, topics, proposals, p, next_lines, ads_lines=()):
@@ -486,7 +492,7 @@ def build(llm, client, month_start, now, fetch_meta=meta.official_posts, fetch_b
     found = events(month_start, end)
     p = posts(month_start, end, fetch_meta, fetch_blog)
     nxt = next_month(end + timedelta(days=1))
-    ad_lines = ads.month_lines(month_start, end)
-    facts = {'sales': _sales_facts(s), 'posts': p['samples'], 'next': nxt, 'ads': ad_lines}
+    ad_items = ads.month_items(month_start, end)
+    facts = {'sales': _sales_facts(s), 'posts': p['samples'], 'next': nxt, 'ads': [x.text for x in ad_items]}
     ev, topics, proposals = compose(llm, f'{month_start.month}월', found, facts)
-    return render(month_start, s, ev, topics, proposals, p, nxt, ads_lines=ad_lines)
+    return render(month_start, s, ev, topics, proposals, p, nxt, ads_lines=ad_items)

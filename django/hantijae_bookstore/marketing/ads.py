@@ -3,8 +3,10 @@
 이름·지표 칸은 요청하지 않으며 어디에도 남기지 않는다. 광고 토큰은 60일 사용자 토큰(scripts/meta_ads_token.py로 갱신)."""
 import json
 import logging
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from html import escape
 from statistics import median
 from typing import Optional
 
@@ -295,6 +297,7 @@ CARD_FROM, CARD_UNTIL = (9, 30), (21, 0)
 BASELINE_MIN, BASELINE_SPEND = 3, 10000
 ORGANIC_DAYS, ORGANIC_MIN = 60, 3
 HEAD = 24
+SNIPPET = 20   # 같은 이름 광고를 가를 글 앞부분 글자 수
 CHANNEL_LABEL = {Ad.FACEBOOK: '페이스북', Ad.INSTAGRAM: '인스타그램'}
 CARD_NOTE = '판매는 광고 말고도 여러 까닭으로 움직여요. 전후를 나란히 놓은 거예요.'
 CARD_SOURCE = ('출처: Meta 광고 계정(한티재 페이지·인스타 게시물 광고만, 숫자는 Meta 집계), '
@@ -381,9 +384,32 @@ def due_cards(today):
     return out
 
 
-def _ad_block(ad):
+def _snippet(text):
+    """글 앞부분: SNIPPET자 안에서 낱말 경계로 자르고, 더 있으면 '…'."""
+    text = ' '.join((text or '').split())
+    if len(text) <= SNIPPET:
+        return text
+    cut = text[:SNIPPET + 1]
+    return (cut[:cut.rfind(' ')] if ' ' in cut else text[:SNIPPET]).rstrip() + '…'
+
+
+def post_link(html_text, url):
+    """HTML 글에 게시물 링크를 건다(http·https만). 주소가 없으면 그대로."""
+    if url and url.startswith(('https://', 'http://')):
+        return f'<a href="{escape(url, quote=True)}">{html_text}</a>'
+    return html_text
+
+
+def labels(ads_):
+    """광고마다 보일 이름. 같은 이름이 둘 이상이면 글 앞부분을 붙여 가른다."""
+    counts = Counter(name(a) for a in ads_)
+    return {a.pk: name(a) + (f' 「{_snippet(a.post_text)}」' if counts[name(a)] > 1 and a.post_text else '')
+            for a in ads_}
+
+
+def _ad_block(ad, label):
     days = AdDay.objects.filter(ad=ad, spend__gt=0).count()
-    lines = [f'<b>{h(name(ad))}</b> ({CHANNEL_LABEL[ad.channel]})',
+    lines = [f'{post_link(f"<b>{h(label)}</b>", ad.post_url)} ({CHANNEL_LABEL[ad.channel]})',
              f'{period(ad.first_day, ad.last_day)} · {days}일 · {ad.spend:,}원']
     if ad.reach and ad.spend:
         lines.append(f'· {ad.reach:,}명에게 보였어요 (1,000원에 {round(ad.reach * 1000 / ad.spend):,}명)')
@@ -435,11 +461,13 @@ def _baseline_line(ads_):
 
 
 def card_text(ads_, now, fetch=meta.channel_posts):
-    parts = ['<b>📣 광고 결과</b>'] + [_ad_block(a) for a in ads_]
+    shown = labels(ads_)
+    parts = ['<b>📣 광고 결과</b>'] + [_ad_block(a, shown[a.pk]) for a in ads_]
     sales = _sales_lines(ads_)
     tail = [x for x in [_organic_line(now, fetch), *sales, _baseline_line(ads_)] if x]
-    tail += [f'· {h(name(a))}: ' + ('아직 사이트 도서 목록에 없는 책이라 판매는 뺐어요' if a.book_title
-                                    else '어느 책 광고인지 몰라 판매는 뺐어요') for a in ads_ if not a.book_id]
+    tail += list(dict.fromkeys(   # 같은 이름은 한 번만
+        f'· {h(name(a))}: ' + ('아직 사이트 도서 목록에 없는 책이라 판매는 뺐어요' if a.book_title
+                              else '어느 책 광고인지 몰라 판매는 뺐어요') for a in ads_ if not a.book_id))
     if tail:
         parts.append('\n'.join(tail))
     if any('권 →' in x for x in sales):
@@ -515,23 +543,36 @@ def measure_note(ids):
     return f'(광고 {days}일 · {sum(a.spend for a in found):,}원 포함)'
 
 
+@dataclass(frozen=True)
+class MonthLine:
+    text: str        # 서식 없는 줄(LLM 자료·시험)
+    name: str = ''   # 줄 앞의 광고 이름 — 월간 돌아보기가 여기에 게시물 링크를 건다
+    url: str = ''
+
+
 def month_lines(start, end):
     """월간 돌아보기 '💸 광고' 칸(서식 없는 줄). 그 달 지출만 센다. 금액 큰 순 3줄, 나머지는 '외 n건'. 없으면 []."""
+    return [x.text for x in month_items(start, end)]
+
+
+def month_items(start, end):
+    """month_lines와 같은 줄에 광고 이름·게시물 주소를 곁들인 것."""
     rows = _spend_by_ad(start, end)
     if not rows:
         return []
-    lines = [f'광고 {len(rows)}건 · 광고비 {sum(t for _, _, t in rows):,}원']
+    lines = [MonthLine(f'광고 {len(rows)}건 · 광고비 {sum(t for _, _, t in rows):,}원')]
+    shown = labels([ad for ad, _, _ in rows[:3]])
     for ad, days, total in rows[:3]:
-        line = f'{name(ad)}: {days}일 · {total:,}원'
+        line = f'{shown[ad.pk]}: {days}일 · {total:,}원'
         if ad.reach:
             line += f' · 지금까지 {ad.reach:,}명에게 보였어요'
         s = sales_around(ad.book, ad.first_day, ad.last_day) if ad.book_id and ad.first_day else None
         if s and s.during is not None:
             line += f' · 전산망 판매 광고 전 {s.days}일 {s.before}권 → 광고 {s.days}일 {s.during}권'
-        lines.append(line)
+        lines.append(MonthLine(line, shown[ad.pk], ad.post_url))
     if len(rows) > 3:
         rest = rows[3:]
-        lines.append(f'외 {len(rest)}건 {sum(t for _, _, t in rest):,}원')
+        lines.append(MonthLine(f'외 {len(rest)}건 {sum(t for _, _, t in rest):,}원'))
     return lines
 
 
