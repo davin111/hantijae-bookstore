@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>한티재 서버 상태</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 「한티재 자동화 지도」 아티팩트(2026-10-03)와 같은 모양. 숫자는 모두 요청 때 DB에서 계산하고, 이 파일에는 규칙만 둔다(공개 저장소). */
+:root {
+  --paper: #F6F3EC; --raised: #FCFBF7; --ink: #22201C; --soft: #4A453E; --muted: #736C61;
+  --line: #E2DBCD; --line-strong: #CBC2B0; --accent: #2C4F6E; --accent-bg: #E3EAF1;
+  --ok: #2F6B4B; --ok-bg: #E3EEE6; --calm: #5E6B5F; --calm-bg: #ECEDE6;
+  --wait: #3F5F86; --wait-bg: #E3E9F2; --warn: #965607; --warn-bg: #F5E9D4;
+  --display: 'Gowun Batang', 'AppleMyungjo', 'Noto Serif KR', serif;
+  --body: 'IBM Plex Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --page: 1080px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #191816; --raised: #22201D; --ink: #ECE6DA; --soft: #CEC6B8; --muted: #A1998C;
+    --line: #35312B; --line-strong: #4C463E; --accent: #93B6DB; --accent-bg: #1D2732;
+    --ok: #86C9A2; --ok-bg: #1D2B23; --calm: #B4BCAF; --calm-bg: #262823;
+    --wait: #A0BCE0; --wait-bg: #1E2735; --warn: #E8B05A; --warn-bg: #33281A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #191816; --raised: #22201D; --ink: #ECE6DA; --soft: #CEC6B8; --muted: #A1998C;
+  --line: #35312B; --line-strong: #4C463E; --accent: #93B6DB; --accent-bg: #1D2732;
+  --ok: #86C9A2; --ok-bg: #1D2B23; --calm: #B4BCAF; --calm-bg: #262823;
+  --wait: #A0BCE0; --wait-bg: #1E2735; --warn: #E8B05A; --warn-bg: #33281A;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.65;
+  word-break: keep-all; overflow-wrap: anywhere; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: var(--page); margin: 0 auto; padding-inline: 24px; padding-block: 40px 72px; display: grid; gap: 56px; }
+@media (max-width: 640px) { .wrap { padding-inline: 16px; padding-block: 28px 56px; gap: 44px; } }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.2; }
+h2 { font-size: 23px; line-height: 1.3; }
+h3 { font-size: 16.5px; line-height: 1.4; }
+p { margin: 0; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--raised); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; white-space: nowrap; }
+a { color: var(--accent); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eyebrow { font-size: 12.5px; letter-spacing: 0.06em; color: var(--muted); }
+.section-head { display: grid; gap: 6px; max-width: 70ch; }
+.section-head p { color: var(--soft); }
+section { display: grid; gap: 20px; min-width: 0; }
+
+.masthead { display: grid; gap: 14px; border-bottom: 1px solid var(--line); padding-bottom: 28px; }
+.masthead .lead { max-width: 66ch; color: var(--soft); font-size: 16px; }
+.stamp { display: inline-flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; font-size: 13px; color: var(--muted); }
+.stamp strong { font-family: var(--mono); font-weight: 500; color: var(--ink); }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; line-height: 1; padding: 5px 9px 5px 8px; border-radius: 999px; white-space: nowrap; }
+.chip::before { content: ""; width: 8px; height: 8px; flex: none; }
+.s-ok { color: var(--ok); background: var(--ok-bg); }
+.s-ok::before { background: var(--ok); border-radius: 50%; }
+.s-calm { color: var(--calm); background: var(--calm-bg); }
+.s-calm::before { border: 1.5px solid var(--calm); border-radius: 50%; }
+.s-wait { color: var(--wait); background: var(--wait-bg); }
+.s-wait::before { border: 1.5px solid var(--wait); transform: rotate(45deg); width: 7px; height: 7px; }
+.s-warn { color: var(--warn); background: var(--warn-bg); }
+.s-warn::before { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid var(--warn); }
+.s-off { color: var(--muted); background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); }
+.s-off::before { width: 8px; height: 1.5px; background: var(--muted); }
+
+.tally { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tally button { font: inherit; cursor: pointer; border: 1px solid transparent; padding: 7px 12px 7px 10px; font-size: 13px; }
+.tally button[aria-pressed="true"] { border-color: currentColor; }
+.tally button.all { background: var(--raised); color: var(--ink); border-color: var(--line-strong); }
+.tally button.all::before { display: none; }
+.tally button.all[aria-pressed="true"] { border-color: var(--ink); }
+.tally .n { font-family: var(--mono); font-weight: 500; }
+.legend { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+.legend b { font-weight: 600; color: var(--soft); }
+
+.watch { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.watch ul { margin: 0; padding: 0; }
+.watch li { list-style: none; display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 6px 20px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.watch .when { display: grid; gap: 8px; align-content: start; }
+.watch .when .d { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.watch .what { display: grid; gap: 6px; min-width: 0; }
+.watch .what p { color: var(--soft); max-width: 72ch; }
+.watch .none { padding: 18px 0; color: var(--soft); border-bottom: 1px solid var(--line); }
+@media (max-width: 640px) { .watch li { grid-template-columns: 1fr; } .watch .when { grid-auto-flow: column; justify-content: start; align-items: center; gap: 10px; } }
+
+.sched-wrap { min-width: 0; }
+table.sched { width: 100%; border-collapse: collapse; font-size: 14px; }
+.sched caption { text-align: left; font-family: var(--display); font-weight: 700; font-size: 16.5px; padding: 0 0 10px; }
+.sched th { text-align: left; font-weight: 500; font-size: 12px; letter-spacing: 0.04em; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line-strong); }
+.sched th.group { padding-top: 28px; font-family: var(--display); font-size: 16.5px; color: var(--ink); letter-spacing: 0; }
+.sched td { padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.sched td.t { font-family: var(--mono); font-size: 13.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sched td.t small { display: block; font-family: var(--body); font-size: 12px; color: var(--muted); white-space: normal; }
+.sched td.job b { font-weight: 600; }
+.sched td.job .how { display: block; margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+.sched td.last { font-family: var(--mono); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sched td.res { color: var(--soft); min-width: 0; }
+.sched td.res .why { display: block; color: var(--warn); margin-top: 3px; }
+.sched tr[hidden] { display: none; }
+.sched .now-row td { padding: 6px 10px; border-bottom: 1px solid var(--accent); color: var(--accent); font-family: var(--mono); font-size: 12px; }
+@media (max-width: 760px) {
+  table.sched, .sched tbody, .sched tr, .sched td, .sched th.group { display: block; }
+  .sched thead { display: none; }
+  .sched tr { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .sched td { border: 0; padding: 0; }
+  .sched td.t { grid-column: 1; grid-row: 1; }
+  .sched td.st { grid-column: 2; grid-row: 1; justify-self: end; }
+  .sched td.job, .sched td.last, .sched td.res { grid-column: 1 / -1; }
+  .sched td.last::before { content: "마지막 "; font-family: var(--body); color: var(--muted); font-size: 12px; }
+  .sched .now-row, .sched .now-row td { display: block; padding: 0; }
+}
+
+.lanes { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.lane { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 8px 20px; padding: 16px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.lane > h3 { padding-top: 6px; font-size: 15.5px; }
+.lane > h3 small { display: block; font-family: var(--body); font-weight: 400; font-size: 12.5px; color: var(--muted); letter-spacing: 0; }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 6px; min-width: 0; }
+.node { display: inline-flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 4px; font-size: 13.5px; line-height: 1.35; border: 1px solid var(--line-strong); background: var(--raised); }
+.node small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.node.src { background: transparent; }
+.node.store { background: var(--accent-bg); border-color: transparent; color: var(--ink); }
+.node.store small { color: var(--soft); }
+.node.ai { border-style: dashed; border-color: var(--accent); background: transparent; }
+.node.ai::before { content: "AI"; font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--accent); letter-spacing: 0.04em; }
+.node.out { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.node.out small { color: var(--line-strong); }
+.stack { display: inline-flex; flex-direction: column; gap: 4px; }
+.arrow { color: var(--muted); font-size: 15px; padding: 0 2px; }
+.arrow.loop { color: var(--accent); }
+@media (max-width: 640px) { .lane { grid-template-columns: 1fr; } .lane > h3 { padding-top: 0; } }
+.keyrow { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.keyrow .node { font-size: 12px; padding: 3px 8px; }
+
+.method { font-size: 13.5px; color: var(--muted); display: grid; gap: 8px; max-width: 76ch; border-top: 1px solid var(--line); padding-top: 20px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="eyebrow">도서출판 한티재 · 텔레그램 워커 한 대 · 운영 서버</span>
+    <h1>한티재 서버 상태</h1>
+    <p class="lead">워커 하나가 약 1분마다 깨어나 일정표를 훑습니다. 이 페이지는 열 때마다 운영 DB를 읽어, 작업마다 이번 주기에 돌았는지, 실패 근거가 있는지, 새 기록이 쌓였는지를 다시 판정합니다. 읽기만 하는 페이지라 여기서 작업을 다시 돌리지는 않습니다.</p>
+    <div class="stamp"><span>확인 시각 <strong>{{ checked_at }}</strong></span><span>새로 고치면 다시 계산합니다</span></div>
+  </header>
+
+  <section aria-labelledby="h-summary">
+    <div class="section-head">
+      <h2 id="h-summary">한눈에</h2>
+      <p>작업마다 상태를 하나 붙였습니다. 칩을 누르면 아래 「봇의 하루」 표가 그 상태만 보여 줍니다.</p>
+    </div>
+    <div class="tally" role="group" aria-label="상태로 거르기">
+      <button type="button" class="chip all" data-filter="all" aria-pressed="true">전체 <span class="n">{{ total }}</span></button>
+      <button type="button" class="chip s-warn" data-filter="warn" aria-pressed="false">살펴볼 것 <span class="n">{{ counts.warn }}</span></button>
+      <button type="button" class="chip s-ok" data-filter="ok" aria-pressed="false">정상 <span class="n">{{ counts.ok }}</span></button>
+      <button type="button" class="chip s-calm" data-filter="calm" aria-pressed="false">새로 찾은 것 없음 <span class="n">{{ counts.calm }}</span></button>
+      <button type="button" class="chip s-wait" data-filter="wait" aria-pressed="false">첫 자동 실행 전 <span class="n">{{ counts.wait }}</span></button>
+      <button type="button" class="chip s-off" data-filter="off" aria-pressed="false">꺼짐 <span class="n">{{ counts.off }}</span></button>
+    </div>
+    <div class="legend">
+      <span><b>정상</b>: 이번 주기에 돌았고, 실패 근거가 없으며, 새 기록이 쌓였습니다.</span>
+      <span><b>새로 찾은 것 없음</b>: 실패 없이 돌았지만 결과가 0건입니다. 고장이 아니라 찾을 게 없었던 경우입니다.</span>
+      <span><b>첫 자동 실행 전</b>: 켜져 있지만 정해진 날이 아직 오지 않았습니다.</span>
+      <span><b>살펴볼 것</b>: 예정 시각에 여유 {{ grace_minutes }}분을 더해도 돌지 않았거나, 실패 카운터·오류 키가 남아 있습니다.</span>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-watch">
+    <div class="section-head">
+      <h2 id="h-watch">지금 볼 것</h2>
+      <p>살펴볼 것과, 곧 처음 도는 작업입니다.</p>
+    </div>
+    <div class="watch">
+      {% if not warn %}<p class="none">지금 살펴볼 것은 없습니다.</p>{% endif %}
+      <ul>
+        {% for r in warn %}
+        <li>
+          <div class="when"><span class="chip s-warn">살펴볼 것</span><span class="d">{{ r.last }}</span></div>
+          <div class="what"><h3>{{ r.label }}</h3><p>{{ r.reason }}</p></div>
+        </li>
+        {% endfor %}
+        {% for r in upcoming %}
+        <li>
+          <div class="when"><span class="chip s-wait">첫 자동 실행 전</span></div>
+          <div class="what"><h3>{{ r.label }}</h3><p>{{ r.result }}</p></div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-day" class="sched-wrap">
+    <div class="section-head">
+      <h2 id="h-day">봇의 하루</h2>
+      <p>시각 순서입니다. 「마지막」은 운영 DB에 적힌 마지막 실행이고, 「결과」는 그 작업이 남긴 기록을 직접 센 숫자입니다. 회색 글씨는 직접 확인할 때 볼 키나 명령입니다.</p>
+    </div>
+    <table class="sched" id="sched">
+      <caption>정해진 시각에 — 매일·요일마다</caption>
+      <thead>
+        <tr><th scope="col">시각</th><th scope="col">작업</th><th scope="col">마지막</th><th scope="col">결과</th><th scope="col">상태</th></tr>
+      </thead>
+      <tbody>
+        {% for r in daily %}
+        {% if forloop.counter0 == now_index %}<tr class="now-row" aria-hidden="true"><td colspan="5">— 지금 {{ now_hm }} —</td></tr>{% endif %}
+        {% include "ops/_row.html" %}
+        {% endfor %}
+        {% if now_index == daily|length %}<tr class="now-row" aria-hidden="true"><td colspan="5">— 지금 {{ now_hm }} —</td></tr>{% endif %}
+      </tbody>
+      <tbody>
+        <tr><th scope="rowgroup" colspan="5" class="group">하루 내내 — 주기적으로 또는 일이 생길 때</th></tr>
+        {% for r in always %}{% include "ops/_row.html" %}{% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section aria-labelledby="h-flow">
+    <div class="section-head">
+      <h2 id="h-flow">어디서 읽어 어디로 보내나</h2>
+      <p>한 줄이 한 갈래입니다. 왼쪽에서 바깥을 읽고, 가운데에 쌓고, AI가 판단한 뒤, 오른쪽 검은 칸으로 내보냅니다. 「후보 고르기」는 여러 줄에 똑같이 나오는 같은 깔때기입니다.</p>
+    </div>
+    <div class="keyrow" aria-hidden="true">
+      <span class="node src">바깥 출처</span><span class="node store">쌓는 곳</span><span class="node ai">판단</span><span class="node out">내보내는 곳</span>
+    </div>
+    <div class="lanes">
+      <div class="lane">
+        <h3>독자 반응<small>매일 새벽</small></h3>
+        <div class="flow">
+          <span class="stack">
+            <span class="node src">네이버·다음 블로그·카페<small>04:30 · 책 1/7씩</small></span>
+            <span class="node src">구글 알리미·유튜브<small>04:40</small></span>
+            <span class="node src">인스타 태그 · 협력 계정<small>04:50 · 협력은 일요일</small></span>
+          </span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node ai">서평인지 판별<small>새 글만</small></span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node store">신호 · 서평<small>Signal(review)</small></span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node store">후보 고르기</span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node out">월요일 브리핑</span>
+        </div>
+      </div>
+      <div class="lane">
+        <h3>저자·공공 소식<small>월요일 · 매일</small></h3>
+        <div class="flow">
+          <span class="stack">
+            <span class="node src">구글 뉴스 · 감시어<small>월 06:30</small></span>
+            <span class="node src">공공 선정 공고<small>매일 06:10 · AI 없이 ISBN·제목 대조</small></span>
+          </span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node ai">같은 사람·관련 있나<small>저자 소식만</small></span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node store">신호 · 저자 소식·선정</span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node store">후보 고르기</span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="stack">
+            <span class="node out">월요일 브리핑</span>
+            <span class="node out">사이트 알림 띠<small>선정이 ISBN으로 맞을 때</small></span>
+          </span>
+        </div>
+      </div>
+      <div class="lane">
+        <h3>판매·대출 숫자<small>매일 · 토요일</small></h3>
+        <div class="flow">
+          <span class="stack">
+            <span class="node src">알라딘 판매 지수<small>06:00</small></span>
+            <span class="node src">출판유통통합전산망<small>06:20 · 이틀 늦게 올라옴</small></span>
+            <span class="node src">도서관 정보나루<small>토 05:40 · 12달 대출</small></span>
+          </span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node store">숫자 기록<small>판매 지수·전산망·대출</small></span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node store">후보 고르기<small>판매 급등·대출 후보</small></span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="stack">
+            <span class="node out">월요일 브리핑<small>+ 지난 7일 판매 줄</small></span>
+            <span class="node out">월간 돌아보기<small>매달 3일 09:30</small></span>
+          </span>
+        </div>
+      </div>
+      <div class="lane">
+        <h3>한티재 안쪽 맥락<small>상시 · 매일 05:00</small></h3>
+        <div class="flow">
+          <span class="stack">
+            <span class="node src">검수 방 대화<small>실시간 · 가린 글만</small></span>
+            <span class="node src">노션 책 페이지 구역</span>
+            <span class="node src">사진 글자 · 유튜브 링크</span>
+            <span class="node src">운영진 개인 페북·인스타<small>Apify · 06:20</small></span>
+          </span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node store">대화 기록<small>90일 보관</small></span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node ai">계기 잡기 · SNS 판정<small>05:00</small></span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node store">신호 · 계기·운영진 SNS</span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="stack">
+            <span class="node out">주중 제안<small>화~토 09:30 · 7일 안 날짜만</small></span>
+            <span class="node out">월요일 브리핑</span>
+          </span>
+        </div>
+      </div>
+      <div class="lane">
+        <h3>사업 기회<small>매일 · 6시간마다</small></h3>
+        <div class="flow">
+          <span class="stack">
+            <span class="node src">지원사업 공고<small>06:40 · 출판진흥원</small></span>
+            <span class="node src">알라딘 북펀드·텀블벅<small>6시간마다</small></span>
+          </span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="stack">
+            <span class="node ai">한티재에 맞나<small>하루 최대 3건</small></span>
+            <span class="node store">펀딩 목록<small>한티재 것만 알림</small></span>
+          </span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="stack">
+            <span class="node out">지원사업 카드<small>신청하면 마감 이틀 전 알림</small></span>
+            <span class="node out">사이트 알림 띠 + 검수 방 카드</span>
+          </span>
+        </div>
+      </div>
+      <div class="lane">
+        <h3>신간 등록<small>10분마다</small></h3>
+        <div class="flow">
+          <span class="node src">드라이브 보도자료</span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node ai">서지·소개 뽑기</span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node store">신간 초안</span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node out">검수 방 카드</span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node out">사이트·노션에 공개</span>
+          <span class="arrow" aria-hidden="true">→</span>
+          <span class="node out">홍보 묶음<small>블로그·인스타·편지</small></span>
+        </div>
+      </div>
+      <div class="lane">
+        <h3>되먹임<small>운영진이 누르거나 답할 때</small></h3>
+        <div class="flow">
+          <span class="node src">초안에 답장 · [고치기]</span>
+          <span class="arrow loop" aria-hidden="true">→</span>
+          <span class="node ai">고쳐 쓰기</span>
+          <span class="arrow loop" aria-hidden="true">→</span>
+          <span class="node store">새 판 초안</span>
+          <span class="arrow" aria-hidden="true">·</span>
+          <span class="node src">[올렸어요]</span>
+          <span class="arrow loop" aria-hidden="true">→</span>
+          <span class="node store">게시 위치 찾기<small>매일 12:00</small></span>
+          <span class="arrow loop" aria-hidden="true">→</span>
+          <span class="node out">2주 뒤 반응 수<small>브리핑 끝 줄</small></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="method">
+    <p>판정 방법: 「마지막 실행」 키는 작업을 <em>시작하기 전에</em> 적혀서 '시도했다'는 뜻일 뿐입니다. 그래서 성공은 실패 카운터(<code>*_fail_*</code>)가 0인지, <code>marketing_error_*</code> 키가 오늘·어제 날짜가 아닌지, 새 행이 실제로 쌓였는지로 함께 봅니다.</p>
+    <p>정해진 시각에 여유 {{ grace_minutes }}분을 더한 때까지는 지난 주기 결과로 판단합니다(새벽 AI 작업이 워커를 몇 분씩 붙잡아 뒤 작업이 밀리기 때문입니다). 일정은 <code>marketing/tasks.py</code>의 <code>_run_due</code>, 판정은 <code>ops/health.py</code>에 있습니다. 관리자 방 <code>/status</code>도 같은 판정을 씁니다.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var rows = Array.prototype.slice.call(document.querySelectorAll('#sched tr[data-status]'));
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.tally button'));
+  var nowRows = Array.prototype.slice.call(document.querySelectorAll('#sched .now-row'));
+  function apply(filter) {
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.filter === filter)); });
+    rows.forEach(function (r) { r.hidden = !(filter === 'all' || r.dataset.status === filter); });
+    nowRows.forEach(function (r) { r.hidden = filter !== 'all'; });
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { apply(b.dataset.filter); }); });
+})();
+</script>
+</body>
+</html>

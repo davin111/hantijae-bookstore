@@ -1,0 +1,7 @@
+<tr data-status="{{ r.state }}">
+  <td class="t">{{ r.when }}{% if r.cadence %}<small>{{ r.cadence }}</small>{% endif %}</td>
+  <td class="job"><b>{{ r.label }}</b>{% if r.note %} · {{ r.note }}{% endif %}{% if r.how %}<span class="how">{% for k in r.how %}<code>{{ k }}</code>{% if not forloop.last %} · {% endif %}{% endfor %}</span>{% endif %}</td>
+  <td class="last">{{ r.last }}</td>
+  <td class="res">{{ r.result }}{% if r.reason %}<span class="why">{{ r.reason }}</span>{% endif %}</td>
+  <td class="st"><span class="chip s-{{ r.state }}">{{ r.state_label }}</span></td>
+</tr>
