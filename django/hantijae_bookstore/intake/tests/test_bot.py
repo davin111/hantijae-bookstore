@@ -111,6 +111,22 @@ class BotTest(TestCase):
         self.bot().handle_update(msg(-9, '/register@hantijae_bot letmein'))
         self.assertTrue(TelegramChat.objects.filter(chat_id=-9, kind=TelegramChat.REVIEWERS).exists())
 
+    def test_status_adds_what_needs_a_look_and_the_status_page(self):
+        WorkerState.put('marketing_mode', 'live')
+        WorkerState.put('review_fail_naver_blog', 1)
+        self.bot().handle_update(msg(ADMIN, '/status', chat_type='private'))
+        text = self.tg.texts()[-1]
+        self.assertIn('mode=', text)                 # 원래 줄은 그대로
+        self.assertIn('살펴볼 것', text)
+        self.assertIn('독자 서평', text)
+        self.assertIn('/ops/status', text)
+
+    def test_status_still_answers_when_the_health_check_breaks(self):
+        with mock.patch('intake.bot.health.evaluate', side_effect=RuntimeError('boom')):
+            self.bot().handle_update(msg(ADMIN, '/status', chat_type='private'))
+        self.assertIn('mode=', self.tg.texts()[-1])
+        self.assertIn('RuntimeError', self.tg.texts()[-1])
+
     def test_unregistered_chat_is_ignored(self):
         self.bot().handle_update(msg(-12345, '/status'))
         self.bot().handle_update(cb(-12345, 'pubok:1:1'))

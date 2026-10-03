@@ -235,3 +235,53 @@ class TelegramPollOutageTest(TestCase):
         pipeline.run_iteration(Deps(tg=self.tg, llm=None, bot=self.bot), now=self.T0, sleep=self.slept.append)
         self.bot.notify_admin.assert_called_once()
         self.assertIn('워커 오류', self.bot.notify_admin.call_args.args[0])
+
+
+class MorningCheckTest(TestCase):
+    """하루 한 번 08:30 KST 뒤 첫 바퀴: 살펴볼 것이 있을 때만 관리자 방에 한 메시지."""
+    MORNING = datetime(2026, 10, 2, 23, 30, tzinfo=dt_timezone.utc)   # 10-03 08:30 KST
+
+    def setUp(self):
+        from ops import health
+        self.warn = health.Row('review', '독자 서평', '04:30', state=health.WARN, reason='review_fail_naver_blog=2')
+        self.fine = health.Row('sales', '알라딘 판매 지수', '06:00', state=health.OK)
+        self.bot = mock.Mock()
+        WorkerState.put('fund_autoscan', False)
+
+    def run_at(self, now, rows):
+        deps = Deps(tg=mock.Mock(get_updates=mock.Mock(return_value=[])), llm=None, bot=self.bot)
+        with mock.patch('intake.pipeline.health.evaluate', return_value=rows), \
+                mock.patch('intake.pipeline.marketing_tasks.run_due'), mock.patch('intake.pipeline.run_pending'):
+            pipeline.run_iteration(deps, now=now, sleep=lambda s: None)
+
+    def morning_notes(self):
+        return [c for c in self.bot.notify_admin.call_args_list if '살펴볼 것' in c.args[0]]
+
+    def test_nothing_is_sent_before_half_past_eight(self):
+        self.run_at(self.MORNING - timedelta(minutes=1), [self.warn])
+        self.assertEqual(self.morning_notes(), [])
+        self.assertIsNone(WorkerState.get('ops_last_morning'))
+
+    def test_things_worth_a_look_are_sent_once_a_day(self):
+        self.run_at(self.MORNING, [self.warn, self.fine])
+        self.run_at(self.MORNING + timedelta(hours=2), [self.warn, self.fine])
+        notes = self.morning_notes()
+        self.assertEqual(len(notes), 1)
+        self.assertIn('독자 서평', notes[0].args[0])
+        self.assertNotIn('알라딘', notes[0].args[0])
+        self.assertIn('/ops/status', notes[0].args[0])
+        self.assertTrue(notes[0].kwargs.get('html'))
+        self.assertEqual(WorkerState.get('ops_last_morning'), '2026-10-03')
+
+    def test_a_quiet_morning_sends_nothing(self):
+        self.run_at(self.MORNING, [self.fine])
+        self.bot.notify_admin.assert_not_called()
+
+    def test_a_broken_check_is_reported_and_does_not_stop_the_loop(self):
+        deps = Deps(tg=mock.Mock(get_updates=mock.Mock(return_value=[])), llm=None, bot=self.bot)
+        with mock.patch('intake.pipeline.health.evaluate', side_effect=RuntimeError('boom')), \
+                mock.patch('intake.pipeline.marketing_tasks.run_due') as run_due, \
+                mock.patch('intake.pipeline.run_pending'):
+            pipeline.run_iteration(deps, now=self.MORNING, sleep=lambda s: None)
+        run_due.assert_called_once()
+        self.assertIn('아침 상태 점검', self.bot.notify_admin.call_args.args[0])

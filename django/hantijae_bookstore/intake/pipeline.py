@@ -18,6 +18,7 @@ from intake.models import IntakeSource, WorkerState
 from intake.notices import KST
 from intake.telegram_api import TelegramError
 from marketing import tasks as marketing_tasks
+from ops import health
 
 log = logging.getLogger('intake')
 
@@ -156,6 +157,27 @@ def _poll_updates(deps, now):
     return updates
 
 
+MORNING_AT = (8, 30)   # 조용한 시간(~08:00)이 끝나고, 새벽 마지막 일정(월 07:00 브리핑)에 여유 시간을 더한 뒤
+
+
+def _morning_check(deps, now):
+    """하루 한 번 아침 점검: 살펴볼 것이 있을 때만 관리자 방에 한 메시지. 마케팅 스위치와 상관없이 돈다
+    (꺼진 것도 상태의 일부). 실패해도 오늘은 다시 하지 않는다 — 먼저 적고, 바퀴의 나머지는 계속 돈다."""
+    local = now.astimezone(KST)
+    today = local.date().isoformat()
+    if (local.hour, local.minute) < MORNING_AT or WorkerState.get('ops_last_morning') == today:
+        return
+    WorkerState.put('ops_last_morning', today)
+    try:
+        text = health.morning_text(health.evaluate(now), settings.SITE_URL)
+    except Exception as e:
+        log.exception('morning check failed')
+        _notify_admin_safely(deps, f'⚠️ 아침 상태 점검 오류: {type(e).__name__}: {e}')
+        return
+    if text:
+        deps.bot.notify_admin(text, html=True)
+
+
 def run_iteration(deps, now=None, sleep=time.sleep):
     # 장시간 도는 프로세스는 MySQL wait_timeout으로 끊긴 연결을 매 루프 정리해야 한다
     close_old_connections()
@@ -194,6 +216,7 @@ def run_iteration(deps, now=None, sleep=time.sleep):
             except Exception as e:
                 log.exception('context purge failed')
                 deps.bot.notify_admin(f'⚠️ 대화 기록 정리 오류: {type(e).__name__}: {e}')
+        _morning_check(deps, now)
         marketing_tasks.run_due(deps, now)
         run_pending(deps)
     except Exception as e:

@@ -5,8 +5,9 @@
 「마지막 실행」 키는 작업을 시작하기 *전에* 적혀서 '시도했다'는 뜻일 뿐이다. 성공은 실패 카운터(*_fail_*),
 marketing_error_<이름>(실패한 날짜), 새로 쌓인 행으로 본다.
 화면에는 여기서 만든 문장만 나간다 — WorkerState 값을 통째로 내보내지 않는다(비밀처럼 보이는 키가 있다)."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from html import escape
 
 from django.db.models import Max, Sum
 
@@ -561,8 +562,22 @@ def evaluate(now):
     return rows + _other_errors(c)
 
 
+ROOT_CAUSES = ('worker', 'telegram')   # 이 둘이 멈추면 다른 작업도 줄줄이 늦는다 — 맨 앞에 둔다
+
+
 def watch(rows):
-    return [r for r in rows if r.state == WARN]
+    warn = [r for r in rows if r.state == WARN]
+    return sorted(warn, key=lambda r: r.key not in ROOT_CAUSES)
+
+
+def morning_text(rows, site_url):
+    """아침 알림(HTML 서식). 살펴볼 것이 없으면 None — 정상인 날은 아무것도 보내지 않는다."""
+    warn = watch(rows)
+    if not warn:
+        return None
+    lines = [f'<b>☀️ 아침 점검: 살펴볼 것 {len(warn)}개</b>']
+    lines += [f'· <b>{escape(r.label)}</b>: {escape(r.reason)}' for r in warn]
+    return '\n'.join(lines + [f'{site_url}/ops/status'])
 
 
 def summary_lines(rows):

@@ -126,6 +126,11 @@ class HealthTest(TestCase):
         put(marketing_last_kit_check=(self.NOW - timedelta(minutes=40)).isoformat())
         self.assertEqual(self.rows()['worker'].state, health.WARN)
 
+    def test_stopped_worker_is_listed_first_because_it_explains_the_rest(self):
+        put(marketing_last_review_scan='2026-10-01',
+            marketing_last_kit_check=(self.NOW - timedelta(hours=30)).isoformat())
+        self.assertEqual(health.watch(health.evaluate(self.NOW))[0].key, 'worker')
+
     def test_telegram_outage_is_worth_a_look_only_from_the_third_failure(self):
         since = (self.NOW - timedelta(minutes=2)).isoformat()
         put(telegram_poll_outage={'since': since, 'fails': 1, 'alerted': False, 'error': 'timeout'})

@@ -18,6 +18,7 @@ from intake.notion import fill_notion_row
 from intake.publish import PublishBlocked, publish
 from marketing import moments
 from marketing.bot import COMMANDS as MARKETING_COMMANDS, Marketing
+from ops import health
 from web.models import Notice
 
 log = logging.getLogger('intake')
@@ -226,6 +227,16 @@ class Bot:
         self.tg.send_message(chat['id'], '등록됐어요. 새 책 초안이 준비되면 여기로 알려 드릴게요.' if kind == TelegramChat.REVIEWERS
                              else '관리자 방으로 등록됐어요. /status 로 상태를 볼 수 있어요.')
 
+    @staticmethod
+    def _health_summary():
+        """서버 상태 페이지와 같은 판정에서 '살펴볼 것'만. 판정이 깨져도 /status 첫 줄은 나가게 감싼다."""
+        try:
+            lines = health.summary_lines(health.evaluate(timezone.now()))
+        except Exception as e:
+            log.exception('health summary failed')
+            lines = [f'⚠️ 상태 판정 오류: {type(e).__name__}: {e}']
+        return '\n'.join(lines + [f'{settings.SITE_URL}/ops/status'])
+
     def admin_command(self, chat_id, cmd, arg):
         if cmd == '/status':
             queued = IntakeSource.objects.filter(status=IntakeSource.QUEUED).count()
@@ -233,7 +244,8 @@ class Bot:
             asks = ReviewItem.objects.filter(status=ReviewItem.PENDING).count()
             text = (f"mode={WorkerState.get('mode', 'admin_only')} drive={WorkerState.get('drive_autoscan', False)} "
                     f"notion={WorkerState.get('notion_write', False)}\n대기 {queued}건 · 검수 중 {in_review}건 · "
-                    f"확인 부탁 {asks}건 · 마지막 드라이브 확인 {WorkerState.get('last_drive_scan', '-')}")
+                    f"확인 부탁 {asks}건 · 마지막 드라이브 확인 {WorkerState.get('last_drive_scan', '-')}\n"
+                    + self._health_summary())
         elif cmd == '/mode' and arg in ('live', 'admin_only'):
             WorkerState.put('mode', arg)
             text = f'mode={arg}'
