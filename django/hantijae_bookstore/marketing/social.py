@@ -399,17 +399,23 @@ def daily(deps, accounts, now):
     judge(deps, accounts, now)
 
 
-def check_health(deps, accounts, now):
-    """마지막 성공이 오래된 계정(페북 3일, 인스타 10일). 실행 실패·빈 결과·차단 등 어떤 경로로 멈추든 여기서 드러난다."""
+def stale_accounts(accounts, now):
+    """마지막 성공이 오래된 계정(페북 3일, 인스타 10일)을 '이름 플랫폼: 마지막 성공 MM-DD'로. 상태 페이지도 쓴다."""
     ok, since = WorkerState.get(OK_KEY) or {}, WorkerState.get(ON_SINCE_KEY)
-    lines = []
+    out = []
     for platform in (FACEBOOK, INSTAGRAM):
         for a in accounts:
             last = ok.get(f'{platform}:{a["role"]}')
             base = last or since
             if a.get(platform) and base and now - datetime.fromisoformat(base) > STALE_AFTER[platform]:
                 when = kst_now(datetime.fromisoformat(last)).strftime('%m-%d') if last else '없음'
-                lines.append(f'· {a.get("label") or a["role"]} {PLATFORM_KO[platform]}: 마지막 성공 {when}')
+                out.append(f'{a.get("label") or a["role"]} {PLATFORM_KO[platform]}: 마지막 성공 {when}')
+    return out
+
+
+def check_health(deps, accounts, now):
+    """마지막 성공이 오래된 계정. 실행 실패·빈 결과·차단 등 어떤 경로로 멈추든 여기서 드러난다."""
+    lines = [f'· {s}' for s in stale_accounts(accounts, now)]
     if lines:
         alert_once(deps, 'stale', kst_now(now).date().isoformat(),
                    '⚠️ SNS 수집이 한동안 성공하지 못했어요 — Apify 결과가 비었거나 막혔을 수 있어요\n'

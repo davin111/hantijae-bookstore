@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'web.apps.WebConfig',
     'context.apps.ContextConfig',
     'marketing.apps.MarketingConfig',
+    'ops.apps.OpsConfig',
 ]
 
 MIDDLEWARE = [

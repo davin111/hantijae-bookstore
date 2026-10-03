@@ -113,14 +113,18 @@ def scan(today, partners=False, books=None, get=requests.get):
     return report, fresh
 
 
-def _remind_expiry(today, notify):
-    cfg = getattr(settings, 'MARKETING', {})
-    value = cfg.get('META_ACCESS_EXPIRES') or EXPIRES_DEFAULT
+def expires_on():
+    """Meta 데이터 접근이 끝나는 날(설정 META_ACCESS_EXPIRES, 형식이 틀리면 기본값)."""
+    value = getattr(settings, 'MARKETING', {}).get('META_ACCESS_EXPIRES') or EXPIRES_DEFAULT
     try:
-        expires = date.fromisoformat(value)
+        return date.fromisoformat(value)
     except ValueError:
         log.warning('META_ACCESS_EXPIRES is not YYYY-MM-DD: %s', value)
-        expires = date.fromisoformat(EXPIRES_DEFAULT)
+        return date.fromisoformat(EXPIRES_DEFAULT)
+
+
+def _remind_expiry(today, notify):
+    expires = expires_on()
     if today >= expires - timedelta(days=REMIND_BEFORE) and WorkerState.get('meta_expiry_reminded') != expires.isoformat():
         WorkerState.put('meta_expiry_reminded', expires.isoformat())
         notify(f'⏰ Meta 인스타 데이터 접근이 {expires.month}월 {expires.day}일에 끝나요. 런북 '
