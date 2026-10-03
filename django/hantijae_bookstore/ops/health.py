@@ -190,9 +190,13 @@ def _scheduled(c, row, sched, key, judge, period=lambda due: due.date().isoforma
         row.state, row.result = WAIT, f'첫 실행 {_due_text(sched.next_due(c.local))}'
         return row
     since = due
-    if key and last != period(due):
+
+    def ran(p):   # ISO 날짜끼리는 글자 비교가 곧 날짜 비교. 예정보다 새 값이면 /grant now 같은 손 실행 — 돈 것으로 본다
+        return last is not None and str(last) >= p
+
+    if key and not ran(period(due)):
         prev = sched.last_due(due - timedelta(minutes=1))
-        if c.local < due + GRACE and prev is not None and last == period(prev):
+        if c.local < due + GRACE and prev is not None and ran(period(prev)):
             since = prev
         elif c.local < due + GRACE and prev is None:
             row.state, row.result = WAIT, f'첫 실행 {_due_text(due)}'
@@ -266,6 +270,8 @@ def _moments(c, row, since):
 def _midweek(c, row, since):
     made = Proposal.objects.filter(kind=Proposal.NOW, created_at__gte=since)
     n, sent = made.count(), made.filter(sent_at__isnull=False).count()
+    if n and sent == n:   # 다 보냈으면 그 전에 잠깐 실패한 보내기 오류는 지난 일
+        row.errors = tuple(e for e in row.errors if e != 'midweek_send')
     _verdict(row, [], n, f'만든 제안 {n}개 · 보냄 {sent}개 (7일 안 날짜가 잡힌 계기·2일 안 기념일만 대상이라 0개가 흔함)')
 
 
@@ -332,6 +338,7 @@ def _brief_send(c, row, due):
     b = Briefing.objects.filter(week_start=due.date()).first()
     if b and b.sent_at:
         row.last = _when(b.sent_at)
+        row.errors = ()   # 보냈으면 그 전에 잠깐 실패한 오류는 지난 일
         _verdict(row, [], True, f'보냄 {_when(b.sent_at)}')
         return row
     has_items = bool(b and b.items.exists())
@@ -359,6 +366,7 @@ def _monthly(c, row, blocked):
     row.last = sent or '—'
     send_at = datetime.combine(c.today.replace(day=5), time(9, 30), tzinfo=KST) + GRACE
     if sent == target:
+        row.errors = ()   # 보낸 뒤엔 더 시도하지 않는다 — 그 전 시도의 오류는 지난 일
         row.state, row.result = OK, f'{target} 보냄'
     elif c.local >= send_at or c.get('monthly_late_noted') == target:
         why = '전산망 계정 거부로 자동 로그인이 멈춰 있어요' if blocked else '전산망 판매를 다 읽지 못했을 수 있음'
@@ -392,10 +400,13 @@ def _drive(c, row):
     """폴더 수는 세지 않는다 — 기준선 등록 때 만든 행(BASELINE)이 섞여 있다. 실제로 만든 신간 초안과 최근 실패를 본다."""
     drafts = BookDraft.objects.filter(created_at__gte=c.now - RECENT).count()
     last_draft = BookDraft.objects.aggregate(d=Max('created_at'))['d']
-    failed = IntakeSource.objects.filter(status=IntakeSource.FAILED, updated_at__gte=c.now - RECENT).count()
+    failed = IntakeSource.objects.filter(status=IntakeSource.FAILED)
+    recent = failed.filter(updated_at__gte=c.now - RECENT).count()
+    older = failed.count() - recent   # 경고하지 않고 개수만 남긴다(지우는 명령이 없어 영영 울리게 되므로)
     late = _ticking(c, row, 'last_drive_scan', TICK_LIMIT)
-    problems = ([late] if late else []) + ([f'최근 7일 처리에 실패한 자료 {failed}건(관리자 방 /retry 번호)'] if failed else [])
-    _verdict(row, problems, drafts, f'최근 7일 신간 초안 {drafts}개 · 마지막 {_when(last_draft)}')
+    problems = ([late] if late else []) + ([f'최근 7일 처리에 실패한 자료 {recent}건(관리자 방 /retry 번호)'] if recent else [])
+    _verdict(row, problems, drafts, f'최근 7일 신간 초안 {drafts}개 · 마지막 {_when(last_draft)}'
+             + (f' · 7일 넘은 실패 자료 {older}건' if older else ''))
 
 
 def _kits(c, row):
@@ -495,6 +506,7 @@ def _guarded(row, fn):
     except Exception as e:
         log.exception('health row %s failed', row.key)
         row.state, row.reason = WARN, f'판정 오류({type(e).__name__}) — 서버 로그 확인'   # 값은 화면에 내지 않는다
+        row.stale_after = None   # 지금 나는 코드 오류다 — '지난 일'로 숨기지 않는다
         return row
 
 
@@ -634,7 +646,7 @@ def _finish(c, row):
 
 def _other_errors(c, rows):
     """줄에 묶이지 않은 marketing_error_* (예: run_due) — 오늘 것만, 놓치지 않게 따로 한 줄."""
-    known = {n for r in rows for n in r.errors}
+    known = {n for r in rows if r.state != OFF for n in r.errors}   # 꺼진 줄의 일부(예: 주중 제안 풀기)는 계속 돈다
     names = sorted(k[len('marketing_error_'):] for k in c.state if k.startswith('marketing_error_'))
     left = [f'marketing_error_{n}({c.get("marketing_error_" + n)})' for n in names
             if n not in known and c.day(f'marketing_error_{n}') == c.today]

@@ -245,6 +245,42 @@ class HealthTest(TestCase):
         self.assertEqual(row.state, health.WARN)
         self.assertIn('APIFY_TOKEN', row.reason)
 
+    # ---- 재검토 반영 ----
+
+    def test_monthly_review_sent_after_a_failed_try_is_fine(self):
+        put(bnk_mode='on', monthly_mode='live', bnk_last_monthly='2026-10', marketing_error_monthly='2026-11-03')
+        self.assertEqual(self.rows(kst(2026, 11, 12, 9, 0))['monthly'].state, health.OK)
+
+    def test_briefing_sent_after_a_failed_try_is_fine(self):
+        Briefing.objects.create(week_start=date(2026, 10, 5), sent_at=kst(2026, 10, 5, 9, 45))
+        put(marketing_error_brief_send='2026-10-05')
+        self.assertEqual(self.rows(kst(2026, 10, 6, 9, 0))['brief_send'].state, health.OK)
+
+    def test_a_broken_weekly_row_is_not_hidden_as_history(self):
+        put(marketing_last_news_scan='2026-10-05')
+        with mock.patch('ops.health._news', side_effect=RuntimeError('bug')):
+            row = self.rows(kst(2026, 10, 8, 9, 0))['news']
+        self.assertEqual(row.state, health.WARN)
+        self.assertIn('판정 오류', row.reason)
+
+    def test_errors_of_switched_off_rows_still_show_up(self):
+        put(midweek_mode='off', marketing_error_midweek='2026-10-03')
+        warn = health.watch(health.evaluate(self.NOW))
+        self.assertTrue(any('marketing_error_midweek' in r.reason for r in warn))
+
+    def test_manual_run_before_the_schedule_is_not_a_missed_run(self):
+        put(grant_mode='live', grant_last_scan='2026-10-03')
+        self.assertNotEqual(self.rows(kst(2026, 10, 3, 6, 0))['grant'].state, health.WARN)
+
+    def test_old_failed_sources_stay_visible_without_warning(self):
+        from intake.models import IntakeSource
+        put(drive_autoscan=True, last_drive_scan=(self.NOW - timedelta(minutes=5)).isoformat())
+        src = IntakeSource.objects.create(kind=IntakeSource.DRIVE, title='옛 실패', status=IntakeSource.FAILED)
+        IntakeSource.objects.filter(pk=src.pk).update(updated_at=self.NOW - timedelta(days=8))
+        row = self.rows()['drive']
+        self.assertNotEqual(row.state, health.WARN)
+        self.assertIn('실패', row.result)
+
     # ---- 화면에 나가는 값 ----
 
     def test_values_of_unlisted_state_keys_never_appear(self):
