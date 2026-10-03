@@ -11,7 +11,7 @@ from django.db.models import Max, Sum
 from books.models import Book
 from intake.llm import complete_json
 from intake.models import FundingCampaign, ReviewItem, TelegramChat, WorkerState
-from marketing import bnk_sales, meta
+from marketing import ads, bnk_sales, meta
 from marketing.candidates import sns_where
 from marketing.funding import ends_on
 from marketing.messages import TEXT_LIMIT, _clock, h
@@ -315,6 +315,7 @@ SALES_SOURCE = ('출처: 출판유통통합전산망 판매통계. 종이책만,
                 '전자책·오디오북, 쿠팡 등 다른 몰, 직접 판매·행사·단체 주문, 도서관 납품, 북펀드 후원은 들어 있지 않아요.')
 READER_SOURCE = "출처: 전산망 독자 분석(교보·알라딘·예스24 온라인 판매 기준, 비회원 구매는 '기타')"
 POSTS_SOURCE = '출처: 한티재 페이스북·인스타그램(Meta), 네이버 블로그 RSS, 봇 기록'
+ADS_SOURCE = '출처: Meta 광고 계정(한티재 페이지·인스타 게시물 광고만), 출판유통통합전산망 판매통계'
 
 
 def _line(item):
@@ -355,7 +356,7 @@ def _check(raw, items, facts):
         events.append((text, '·'.join(dict.fromkeys(i.source for i in used))))
         if len(events) == MAX_EVENTS:
             break
-    all_texts = [i.text for i in items] + [x for k in ('sales', 'posts', 'next') for x in facts.get(k) or []]
+    all_texts = [i.text for i in items] + [x for k in ('sales', 'posts', 'next', 'ads') for x in facts.get(k) or []]
     topics = _clean(raw.get('posts_topics'))
     if foreign_numbers(topics, facts.get('posts') or []):
         topics = ''
@@ -427,7 +428,13 @@ def _posts_section(p, topics):
     return '\n'.join(lines)
 
 
-def _render(month_start, s, events_, topics, proposals, p, next_lines):
+def _ads_section(lines):
+    """첫 줄(건수·광고비)은 굵은 제목, 광고마다 한 줄. 판매 전후는 인과가 아니라 나란히 놓은 것."""
+    return '\n'.join([f'<b>💸 {h(lines[0])}</b>', *[f'· {h(x)}' for x in lines[1:]],
+                      f'<blockquote expandable>{h(ADS_SOURCE)}</blockquote>'])
+
+
+def _render(month_start, s, events_, topics, proposals, p, next_lines, ads_lines=()):
     end = month_end(month_start)
     nxt = end + timedelta(days=1)
     sections = [f'<b>📅 {month_start.month}월 돌아보기</b> ({month_start.month}월 1일~{end.day}일)', _sales_section(s)]
@@ -437,6 +444,8 @@ def _render(month_start, s, events_, topics, proposals, p, next_lines):
         sections.append(f'<b>🗂 {month_start.month}월에 있었던 일</b> ({len(events_)}가지 · 눌러서 보기)\n<blockquote expandable>'
                         + '\n'.join(f'· {h(text)} ({h(src)})' for text, src in events_) + '</blockquote>')
     sections.append(_posts_section(p, topics))
+    if ads_lines:
+        sections.append(_ads_section(ads_lines))
     if next_lines:
         sections.append(f'<b>🗓 {nxt.month}월 준비</b>\n' + '\n'.join(f'· {h(x)}' for x in next_lines))
     if proposals:
@@ -444,7 +453,7 @@ def _render(month_start, s, events_, topics, proposals, p, next_lines):
     return '\n\n'.join(sections)
 
 
-def render(month_start, s, events_, topics, proposals, p, next_lines):
+def render(month_start, s, events_, topics, proposals, p, next_lines, ads_lines=()):
     """HTML(send_message html=True). 숫자 요약·다음 달·제안은 펼치고, 있었던 일·출처는 접는다(feedback-telegram-formatting).
     줄마다 자르고, 그래도 텔레그램 한 메시지(4096자)를 넘으면 접힌 있었던 일 → 다음 달 준비 순으로 뒤에서부터 뺀다
     (넘으면 서식 없는 글로 가면서 접기가 풀리고 끝의 제안이 잘린다)."""
@@ -452,7 +461,7 @@ def render(month_start, s, events_, topics, proposals, p, next_lines):
     next_lines = [clip(x, LINE_LIMIT) for x in next_lines]
     topics, proposals = clip(topics, TOPIC_LIMIT), [clip(x, PROPOSAL_LIMIT) for x in proposals]
     while True:
-        text = _render(month_start, s, events_, topics, proposals, p, next_lines)
+        text = _render(month_start, s, events_, topics, proposals, p, next_lines, ads_lines=ads_lines)
         if tg_len(text) <= TEXT_LIMIT or not (events_ or next_lines):
             return text
         if events_:
@@ -477,6 +486,7 @@ def build(llm, client, month_start, now, fetch_meta=meta.official_posts, fetch_b
     found = events(month_start, end)
     p = posts(month_start, end, fetch_meta, fetch_blog)
     nxt = next_month(end + timedelta(days=1))
-    facts = {'sales': _sales_facts(s), 'posts': p['samples'], 'next': nxt}
+    ad_lines = ads.month_lines(month_start, end)
+    facts = {'sales': _sales_facts(s), 'posts': p['samples'], 'next': nxt, 'ads': ad_lines}
     ev, topics, proposals = compose(llm, f'{month_start.month}월', found, facts)
-    return render(month_start, s, ev, topics, proposals, p, nxt)
+    return render(month_start, s, ev, topics, proposals, p, nxt, ads_lines=ad_lines)

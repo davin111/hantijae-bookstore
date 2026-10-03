@@ -329,3 +329,15 @@ def make_sale(day, total, book=None, isbn=None, title='책', **stores):
     from web.presenters import isbn13
     return BnkSale.objects.create(day=day, isbn=isbn or isbn13(book.isbn), book=book,
                                   title=book.title if book else title, total=total, **stores)
+
+
+def make_ad(ad_id='1', post_id='111_1', book=None, days=(), daily=5000, **fields):
+    """한티재 광고 하나와 일별 지출. days: 지출이 있었던 날짜들(처음·끝 지출일·합계를 거기서 채운다)."""
+    from marketing.models import Ad, AdDay
+    days = sorted(days)
+    ad = Ad.objects.create(ad_id=ad_id, channel=fields.pop('channel', Ad.FACEBOOK), post_id=post_id, book=book,
+                           first_day=days[0] if days else None, last_day=days[-1] if days else None,
+                           spend=fields.pop('spend', daily * len(days)), **fields)
+    for d in days:
+        AdDay.objects.create(ad=ad, day=d, spend=daily)
+    return ad

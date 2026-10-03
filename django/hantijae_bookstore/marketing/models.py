@@ -316,3 +316,46 @@ class LoanSnapshot(models.Model):
     class Meta:
         unique_together = ('book', 'month')
         ordering = ('-month',)
+
+
+class Ad(BaseModel):
+    """한티재 페이지·인스타 게시물 광고 하나(Meta 광고 계정, 읽기 전용, marketing/ads.py). 다른 광고는 저장하지 않는다.
+    합계는 광고 전체 기간 값이다. 도달은 중복 없이 센 사람 수라 일별(AdDay)을 더해 만들 수 없어 여기에만 둔다."""
+    FACEBOOK, INSTAGRAM = 'facebook', 'instagram'
+    PENDING, SENT, SKIPPED = 'pending', 'sent', 'skipped'
+    ad_id = models.CharField(max_length=40, unique=True)
+    channel = models.CharField(max_length=20, choices=((FACEBOOK, '페이스북'), (INSTAGRAM, '인스타그램')))
+    post_id = models.CharField(max_length=80, help_text='페북 글 번호(페이지_글) 또는 인스타 글 번호')
+    ig_media_id = models.CharField(max_length=40, blank=True, help_text='광고가 인스타에 쓴 글 번호(있으면)')
+    post_url = models.URLField(max_length=500, blank=True)
+    post_text = models.CharField(max_length=200, blank=True, help_text='글 앞부분')
+    posted_at = models.DateTimeField(null=True, blank=True)
+    book = models.ForeignKey(Book, null=True, blank=True, related_name='meta_ads', on_delete=models.SET_NULL)
+    first_day = models.DateField(null=True, blank=True, help_text='지출이 있었던 첫날(광고 계정 시간대)')
+    last_day = models.DateField(null=True, blank=True, help_text='지출이 있었던 끝날')
+    spend = models.IntegerField(default=0, help_text='원')
+    impressions = models.IntegerField(default=0)
+    reach = models.IntegerField(default=0, help_text='본 사람 수(중복 없음, 전체 기간)')
+    clicks = models.IntegerField(default=0, help_text="'더 보기'·사진 누름까지")
+    link_clicks = models.IntegerField(default=0)
+    reactions = models.IntegerField(default=0)
+    engagement = models.IntegerField(default=0)
+    totals_at = models.DateTimeField(null=True, blank=True, help_text='전체 합계를 마지막으로 읽은 때')
+    card = models.CharField(max_length=10, default=PENDING,
+                            choices=((PENDING, '보낼 차례'), (SENT, '보냄'), (SKIPPED, '안 보냄')))
+    card_sent_at = models.DateTimeField(null=True, blank=True)
+
+
+class AdDay(models.Model):
+    """광고 하나 × 하루. Meta가 최근 며칠 숫자를 고쳐서 매일 최근 28일을 날짜째 덮어쓴다. 도달은 두지 않는다(더할 수 없다)."""
+    ad = models.ForeignKey(Ad, related_name='days', on_delete=models.CASCADE)
+    day = models.DateField()
+    spend = models.IntegerField(default=0)
+    impressions = models.IntegerField(default=0)
+    clicks = models.IntegerField(default=0)
+    link_clicks = models.IntegerField(default=0)
+    reactions = models.IntegerField(default=0)
+    engagement = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = ('ad', 'day')

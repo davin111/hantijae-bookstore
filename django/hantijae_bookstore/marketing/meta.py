@@ -51,8 +51,9 @@ TAGS_PAGE, TAGS_PAGES = 10, 5   # /tags는 한 번에 10개 넘게 물으면 cod
 _USERNAME = re.compile(r'^[A-Za-z0-9._]{1,30}$')
 
 
-def _call(get, path, params, cfg):
-    token = cfg['META_PAGE_TOKEN']
+def _call(get, path, params, cfg, token=None):
+    """token이 없으면 페이지 토큰. 광고 성과(marketing.ads)는 광고 토큰을 준다 — appsecret_proof도 그 토큰으로 만든다."""
+    token = token or cfg['META_PAGE_TOKEN']
     try:
         res = get(f'{GRAPH}/{path}', params={**params, 'access_token': token,
                                              'appsecret_proof': proof(token, cfg['META_APP_SECRET'])}, timeout=20)
@@ -76,6 +77,23 @@ def _call(get, path, params, cfg):
 
 def _rows(get, path, params, cfg):
     return _call(get, path, params, cfg).get('data', [])
+
+
+PAGES_MAX = 50   # 여러 쪽 읽기의 안전 한도(광고 성과는 많아야 몇 쪽)
+
+
+def pages(get, path, params, cfg, token=None, max_pages=PAGES_MAX):
+    """모든 쪽의 data. next 주소는 부르지 않는다(토큰이 들어 있다) — cursors.after로 다음 쪽을 요청한다.
+    어느 쪽이든 실패하면 올린다(일부만 읽은 목록으로 판단하지 않게)."""
+    rows, after = [], None
+    for _ in range(max_pages):
+        data = _call(get, path, {**params, 'after': after} if after else params, cfg, token)
+        rows.extend(data.get('data') or [])
+        paging = data.get('paging') or {}
+        after = (paging.get('cursors') or {}).get('after')
+        if not paging.get('next') or not after:
+            return rows
+    raise MetaError(f'more than {max_pages} pages')
 
 
 def official_posts(since, get=requests.get):
@@ -218,6 +236,7 @@ class ChannelPost:
     reactions: int   # 페북 반응(좋아요 포함) · 인스타 좋아요
     comments: int
     shares: int = 0
+    id: str = ''   # 글 번호 — 광고한 글을 가릴 때(marketing.ads)
 
 
 def _count(d, name):
@@ -233,7 +252,7 @@ def channel_posts(since, until, get=requests.get):
     if cfg.get('META_PAGE_ID'):
         try:
             rows = _rows(get, f'{cfg["META_PAGE_ID"]}/posts',
-                         {'fields': 'message,created_time,permalink_url,shares,reactions.summary(total_count).limit(0),'
+                         {'fields': 'id,message,created_time,permalink_url,shares,reactions.summary(total_count).limit(0),'
                                     'comments.summary(total_count).limit(0)',
                           'since': int(since.timestamp()), 'until': int(until.timestamp()), 'limit': 50}, cfg)
             posts = []
@@ -242,20 +261,22 @@ def channel_posts(since, until, get=requests.get):
                 if at and since <= at < until:
                     posts.append(ChannelPost('facebook', at, r.get('message') or '', r.get('permalink_url') or '',
                                              _count(r, 'reactions'), _count(r, 'comments'),
-                                             int((r.get('shares') or {}).get('count') or 0)))
+                                             int((r.get('shares') or {}).get('count') or 0),
+                                             id=str(r.get('id') or '')))
             out['facebook'] = posts
         except Exception as e:  # 한 채널 실패는 '못 읽음'으로 두고 넘어간다(로그에는 종류·상태 코드만)
             log.warning('meta facebook week: %s', e if isinstance(e, MetaError) else type(e).__name__)
     if cfg.get('META_IG_USER_ID'):
         try:
             rows = _rows(get, f'{cfg["META_IG_USER_ID"]}/media',
-                         {'fields': 'caption,timestamp,permalink,like_count,comments_count', 'limit': 50}, cfg)
+                         {'fields': 'id,caption,timestamp,permalink,like_count,comments_count', 'limit': 50}, cfg)
             posts = []
             for r in rows:
                 at = parse_time(r.get('timestamp'))
                 if at and since <= at < until:
                     posts.append(ChannelPost('instagram', at, r.get('caption') or '', r.get('permalink') or '',
-                                             int(r.get('like_count') or 0), int(r.get('comments_count') or 0)))
+                                             int(r.get('like_count') or 0), int(r.get('comments_count') or 0),
+                                             id=str(r.get('id') or '')))
             out['instagram'] = posts
         except Exception as e:
             log.warning('meta instagram week: %s', e if isinstance(e, MetaError) else type(e).__name__)

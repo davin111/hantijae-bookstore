@@ -19,7 +19,7 @@ from books.models import Book
 from context.models import ContextEntry
 from intake.models import BookDraft, FundingCampaign, IntakeSource, WorkerState
 from intake.outage import LAST_OUTAGE, OUTAGE, TG_ALERT_AFTER
-from marketing.models import (BnkDay, Briefing, Draft, GrantCall, LoanSnapshot, Proposal, SalesSnapshot,
+from marketing.models import (Ad, AdDay, BnkDay, Briefing, Draft, GrantCall, LoanSnapshot, Proposal, SalesSnapshot,
                               SelectionAnnouncement, Signal, SocialRun)
 from marketing.timeutil import KST
 from web.models import Notice, StoreClick
@@ -321,6 +321,28 @@ def _grants(c, row, since):
     _verdict(row, [], n, f'새 공고 {n}건')
 
 
+def _ads(c, row, since):
+    """광고가 없는 날이 대부분이라 새 행이 아니라 ads_ok_on(끝까지 성공한 날)으로 판정한다."""
+    from marketing import ads
+    problems = []
+    if (c.day('ads_auth_alert_day') or date.min) >= since.date():
+        problems.append('광고 토큰·권한 오류(ads_auth_alert_day)')
+    expires = ads.expires_on()
+    if expires and expires - c.today <= timedelta(days=max(ads.REMIND_DAYS)):
+        problems.append(f'광고 토큰 만료 {_md(expires)} — 갱신')
+    if c.get('ads_card_mode', 'off') != 'off':
+        late = Ad.objects.filter(card=Ad.PENDING,
+                                 last_day__lte=c.today - timedelta(days=ads.CARD_WAIT_MAX + 1)).count()
+        if late:
+            problems.append(f'끝났는데 결과 카드를 못 보낸 광고 {late}개')
+    week = AdDay.objects.filter(day__gt=c.today - RECENT, spend__gt=0)   # 오늘과 앞 6일 = 7일
+    spend = week.aggregate(s=Sum('spend'))['s'] or 0
+    ok_on = c.get('ads_ok_on')
+    _verdict(row, problems, ok_on == since.date().isoformat(),
+             f'마지막 성공 {_when(ok_on)} · 지난 7일 광고 {week.values("ad").distinct().count()}개 {spend:,}원 · '
+             f'토큰 만료 {_md(expires) if expires else "—"}')
+
+
 def _brief_build(c, row, since):
     b = Briefing.objects.filter(week_start=since.date()).first()
     if b is None and c.local < since + GRACE:   # 키는 시작 전에 적힌다 — LLM으로 만드는 몇 분 동안은 아직 없다
@@ -519,7 +541,7 @@ def _cadence(sched):
 
 
 def _specs(c):
-    from marketing import instagram, meta, social
+    from marketing import ads, instagram, meta, social
     m_on = c.get('marketing_mode', 'off') != 'off'
     off = '마케팅 꺼짐(marketing_mode)'
 
@@ -567,6 +589,9 @@ def _specs(c):
         Spec('grant', '지원사업 공고', 'AI 판단 하루 최대 3건', ('grant_last_scan', '/grant'),
              Daily((6, 40)), 'grant_last_scan', _grants, ('grant', 'grant_send'),
              m_on and c.get('grant_mode', 'off') != 'off', why('grant_mode 꺼짐')),
+        Spec('ads', '광고 성과', 'Meta 광고 계정 · 한티재 게시물 광고만, 결과 카드 09:30~21:00',
+             ('marketing_last_ads_scan', 'ads_ok_on', '/ads'), Daily((6, 50)), 'marketing_last_ads_scan', _ads,
+             ('ads', 'ads_card'), m_on and ads.configured(), why('광고 토큰 설정 없음(META_ADS_TOKEN)')),
         Spec('brief_build', '월요일 브리핑 만들기', '', ('marketing_last_brief_week',),
              Daily((7, 0), weekdays=(0,), start=date(2026, 10, 4)), 'marketing_last_brief_week', _brief_build,
              ('brief',), m_on, off),

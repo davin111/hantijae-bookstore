@@ -147,3 +147,56 @@ class ReadTest(SimpleTestCase):
         get = FakeGraph(lambda path, params: (200, TAGS))
         self.assertEqual((meta.tagged_media(get=get), meta.business_media('hagobooks', get=get)), ([], None))
         self.assertEqual(get.calls, [])
+
+
+@override_settings(MARKETING=CFG)
+class TokenAndPagesTest(SimpleTestCase):
+    def test_call_uses_the_given_token_for_access_and_proof(self):
+        get = FakeGraph(lambda path, params: (200, {'id': 'act_1'}))
+        meta._call(get, 'act_1', {'fields': 'id'}, CFG, token='atok')
+        params = get.calls[0][1]
+        self.assertEqual((params['access_token'], params['appsecret_proof']), ('atok', meta.proof('atok', 'sec')))
+
+    def test_call_defaults_to_the_page_token(self):
+        get = FakeGraph(lambda path, params: (200, {}))
+        meta._call(get, '111', {}, CFG)
+        self.assertEqual(get.calls[0][1]['access_token'], 'ptok')
+
+    def test_pages_follow_the_after_cursor_and_never_call_the_next_url(self):
+        next_url = 'https://graph.facebook.com/v26.0/act_1/insights?access_token=SECRET&after=C1'
+
+        def route(path, params):
+            if params.get('after') == 'C1':
+                return 200, {'data': [{'ad_id': '2'}]}
+            return 200, {'data': [{'ad_id': '1'}], 'paging': {'cursors': {'after': 'C1'}, 'next': next_url}}
+
+        get = FakeGraph(route)
+        rows = meta.pages(get, 'act_1/insights', {'fields': 'ad_id'}, CFG, token='atok')
+        self.assertEqual([r['ad_id'] for r in rows], ['1', '2'])
+        self.assertEqual([p for p, _ in get.calls], ['act_1/insights', 'act_1/insights'])
+        self.assertTrue(all('SECRET' not in str(q) for _, q in get.calls))
+
+    def test_pages_raise_when_a_later_page_fails(self):
+        def route(path, params):
+            if params.get('after'):
+                return 500, {'error': {'code': 2, 'message': 'x'}}
+            return 200, {'data': [{'ad_id': '1'}], 'paging': {'cursors': {'after': 'C1'}, 'next': 'n'}}
+
+        with self.assertRaises(meta.MetaError):
+            meta.pages(FakeGraph(route), 'act_1/insights', {}, CFG)
+
+    def test_pages_stop_at_the_limit(self):
+        get = FakeGraph(lambda path, params: (200, {'data': [{}], 'paging': {'cursors': {'after': 'C'}, 'next': 'n'}}))
+        with self.assertRaises(meta.MetaError):
+            meta.pages(get, 'x', {}, CFG, max_pages=2)
+        self.assertEqual(len(get.calls), 2)
+
+    def test_channel_posts_keep_post_ids(self):
+        fb = {'data': [{'id': '111_10', 'message': '글', 'created_time': '2026-09-24T05:42:25+0000',
+                        'permalink_url': 'https://f/1'}]}
+        ig = {'data': [{'id': '901', 'caption': '글', 'timestamp': '2026-09-23T03:47:57+0000',
+                        'permalink': 'https://i/1'}]}
+        get = FakeGraph(lambda path, params: (200, fb if path == '111/posts' else ig))
+        got = meta.channel_posts(datetime(2026, 9, 21, tzinfo=timezone.utc), datetime(2026, 9, 28, tzinfo=timezone.utc),
+                                 get=get)
+        self.assertEqual((got['facebook'][0].id, got['instagram'][0].id), ('111_10', '901'))

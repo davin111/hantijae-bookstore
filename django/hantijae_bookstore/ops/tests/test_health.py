@@ -301,3 +301,41 @@ class HealthTest(TestCase):
     def test_summary_says_all_fine_when_nothing_needs_a_look(self):
         rows = [r for r in health.evaluate(self.NOW) if r.state != health.WARN]
         self.assertIn('모두 정상', health.summary_lines(rows)[0])
+
+    ADS = {'META_ADS_TOKEN': 'a', 'META_AD_ACCOUNT_ID': 'act_1', 'META_APP_SECRET': 's', 'META_PAGE_TOKEN': 'p',
+           'META_PAGE_ID': '111', 'META_IG_USER_ID': '222', 'META_ADS_EXPIRES': '2026-11-30'}
+
+    def test_ads_row_is_off_without_the_token(self):
+        self.assertEqual(self.rows()['ads'].state, health.OFF)
+
+    def test_ads_row_ok_after_a_successful_run_and_shows_the_expiry(self):
+        put(marketing_last_ads_scan='2026-10-03', ads_ok_on='2026-10-03')
+        with self.settings(MARKETING=self.ADS):
+            row = self.rows()['ads']
+        self.assertEqual(row.state, health.OK)
+        self.assertIn('토큰 만료 11/30', row.result)
+
+    def test_ads_row_warns_on_auth_error_and_near_expiry(self):
+        put(marketing_last_ads_scan='2026-10-03', ads_auth_alert_day='2026-10-03')
+        with self.settings(MARKETING={**self.ADS, 'META_ADS_EXPIRES': '2026-10-09'}):
+            row = self.rows()['ads']
+        self.assertEqual(row.state, health.WARN)
+        self.assertIn('광고 토큰·권한 오류', row.reason)
+        self.assertIn('광고 토큰 만료 10/9 — 갱신', row.reason)
+
+    def test_ads_row_counts_today_and_the_six_days_before_as_seven_days(self):
+        from marketing.tests.fakes import make_ad
+        make_ad(ad_id='1', post_id='111_1', days=[date(2026, 9, 26)], daily=5000)   # 7일 전 — 빠진다
+        make_ad(ad_id='2', post_id='111_2', days=[date(2026, 9, 27)], daily=3000)   # 6일 전 — 든다
+        put(marketing_last_ads_scan='2026-10-03', ads_ok_on='2026-10-03')
+        with self.settings(MARKETING=self.ADS):
+            self.assertIn('지난 7일 광고 1개 3,000원', self.rows()['ads'].result)
+
+    def test_ads_row_warns_on_a_late_card_only_when_cards_are_on(self):
+        from marketing.tests.fakes import make_ad
+        make_ad(days=[date(2026, 9, 21), date(2026, 9, 22)])   # 10/3 기준 11일 지남
+        put(marketing_last_ads_scan='2026-10-03', ads_ok_on='2026-10-03')
+        with self.settings(MARKETING=self.ADS):
+            self.assertNotEqual(self.rows()['ads'].state, health.WARN)
+            put(ads_card_mode='admin_only')
+            self.assertIn('결과 카드를 못 보낸 광고 1개', self.rows()['ads'].reason)

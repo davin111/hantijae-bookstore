@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from marketing.models import (BookProfile, Briefing, CopyNote, Draft, DraftMessage, FundingSnapshot, HookDate,
+from marketing.models import (Ad, BookProfile, Briefing, CopyNote, Draft, DraftMessage, FundingSnapshot, HookDate,
                               Proposal, SalesSnapshot, Signal, SignalEvidence, SocialPost, SocialRun, WatchQuery)
 
 
@@ -53,6 +53,14 @@ class SignalAdmin(admin.ModelAdmin):
     list_filter = ('kind', 'relevant', 'sensitive')
     search_fields = ('title',)
     inlines = (SignalEvidenceInline,)
+
+
+@admin.register(Ad)
+class AdAdmin(admin.ModelAdmin):
+    """책이 비었으면(어느 책 광고인지 못 정함) 여기서 고른다."""
+    list_display = ('last_day', 'channel', 'book', 'post_text', 'spend', 'reach', 'card')
+    list_filter = ('channel', 'card')
+    readonly_fields = ('ad_id', 'post_id', 'ig_media_id', 'totals_at', 'card_sent_at')
 
 
 for model in (BookProfile, Briefing, CopyNote, DraftMessage, FundingSnapshot, WatchQuery):

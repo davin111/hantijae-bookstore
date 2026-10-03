@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 from intake.models import WorkerState
-from marketing import (bnk, bnk_sales, briefing, funding, grants, instagram, kit, loans, mentions, midweek, moments,
-                       monthly, news, notion_sync, placements, reviews, sales, selections, social)
+from marketing import (ads, bnk, bnk_sales, briefing, funding, grants, instagram, kit, loans, mentions, midweek,
+                       moments, monthly, news, notion_sync, placements, reviews, sales, selections, social)
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
@@ -24,6 +24,7 @@ BNK_MONTH_DAY, BNK_MONTH_AT = 3, (9, 30)   # 전산망이 약 2일 늦어서 1�
 MONTHLY_LATE_DAY = 5   # 이날까지 지난달을 다 못 읽었으면 관리자에게 한 번 알린다
 BNK_FAIL_ALERT_DAYS = 3
 GRANT_AT = (6, 40)   # 선정(06:10) 다음, 월요일 브리핑 만들기(07:00) 전. 한 번에 LLM 최대 3번(grants.JUDGE_PER_RUN)
+ADS_AT = (6, 50)   # 지원사업(06:40) 다음, 월요일 브리핑 만들기(07:00) 전. Meta 호출 몇 번, LLM 없음
 SELECTION_AT = (6, 10)   # 판매 지수(06:00) 다음. LLM을 쓰지 않아 07:00 브리핑 만들기 전에 끝난다
 REVIEW_AT = (4, 30)   # 새벽: 검색 200번 남짓과 판별 LLM으로 몇 분 워커를 붙잡는다(그동안 텔레그램 응답이 늦다)
 WEB_AT = (4, 40)   # 서평(04:30)과 인스타(04:50) 사이: 알리미 피드 + 유튜브 약 25번
@@ -283,6 +284,10 @@ def _run_due(deps, now):
         WorkerState.put('grant_last_scan', day)
         _guard(deps, 'grant', now, lambda: _grant_scan(deps, today, now, started))
 
+    if _hm(local) >= ADS_AT and WorkerState.get('marketing_last_ads_scan') != day:
+        WorkerState.put('marketing_last_ads_scan', day)
+        _guard(deps, 'ads', now, lambda: ads.run(today, notify=lambda text: _notify_awake(deps, now, text)))
+
     # 운영진 개인 SNS: 06:20 뒤 시작, 진행 중인 실행 확인은 매 바퀴(시각·꺼짐은 social이 판단)
     _guard(deps, 'social', now, lambda: social.run_due(deps, now))
 
@@ -308,6 +313,8 @@ def _run_due(deps, now):
         _guard(deps, 'kit', now, lambda: _build_kits(deps, m, today))
     _guard(deps, 'kit_send', now, lambda: m.send_pending_kits(now))
     _guard(deps, 'grant_send', now, lambda: m.send_grants(_later(now, started)))
+    # 끝난 광고의 결과 카드: 하루 한 메시지, 09:30~21:00(시각·모드는 ads가 판단)
+    _guard(deps, 'ads_card', now, lambda: ads.send_due_cards(deps.bot, _later(now, started)))
     # 노션 '글 모음' 페이지를 만들지 못한 허브: 10분마다 다시(08~21시), 되면 텔레그램 허브에 노션 버튼을 덧단다
     _guard(deps, 'notion', now, lambda: notion_sync.retry_pending(deps.bot, getattr(deps, 'tg', None), _later(now, started)))
     # 버튼으로 '갱신 필요'가 된 노션 페이지: 매 바퀴 다시 적는다(방에 보내지 않으니 밤에도, 한 바퀴에 몇 장만)

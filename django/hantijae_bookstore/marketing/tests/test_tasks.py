@@ -84,6 +84,35 @@ class RunDueTest(TestCase):
         patcher = mock.patch('marketing.tasks.loans.run')
         self.loan_scan = patcher.start()
         self.addCleanup(patcher.stop)
+        patcher = mock.patch('marketing.tasks.ads.run')
+        self.ads_scan = patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('marketing.tasks.ads.send_due_cards', return_value=0)
+        self.ads_cards = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_ad_cards_are_checked_every_loop_unless_marketing_off(self, *_):
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 29, 10, 0, tzinfo=KST))
+        self.assertIs(self.ads_cards.call_args.args[0], deps.bot)
+        tasks.run_due(Deps('off'), datetime(2026, 9, 29, 10, 1, tzinfo=KST))
+        self.assertEqual(self.ads_cards.call_count, 1)
+
+    def test_ads_scan_once_per_day_after_0650_and_notes_wait_for_the_morning(self, *_):
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 29, 6, 49, tzinfo=KST))
+        self.ads_scan.assert_not_called()
+        tasks.run_due(deps, datetime(2026, 9, 29, 6, 50, tzinfo=KST))
+        tasks.run_due(deps, datetime(2026, 9, 29, 9, 0, tzinfo=KST))
+        self.assertEqual(self.ads_scan.call_count, 1)
+        self.assertEqual(self.ads_scan.call_args.args, (date(2026, 9, 29),))
+        self.ads_scan.call_args.kwargs['notify']('토큰 안내')
+        self.assertEqual(deps.bot.notes, [])   # 06:50 = 조용한 시간 → 08시 뒤에
+        self.assertIn('토큰 안내', WorkerState.get(tasks.ADMIN_QUEUE))
+
+    def test_off_mode_skips_ads_scan(self, *_):
+        tasks.run_due(Deps('off'), datetime(2026, 9, 29, 7, 0, tzinfo=KST))
+        self.ads_scan.assert_not_called()
 
     def test_social_step_runs_every_loop_unless_off(self, *_):
         tasks.run_due(Deps(), datetime(2026, 9, 29, 3, 0, tzinfo=KST))

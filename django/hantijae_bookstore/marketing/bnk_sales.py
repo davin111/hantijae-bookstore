@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from typing import List, Optional
 
 from django.db import transaction
-from django.db.models import Max, Sum
+from django.db.models import Max, Min, Sum
 
 from books.models import Book
 from intake.models import WorkerState
@@ -150,6 +150,22 @@ def missing_days(month_start):
 def month_ready(month_start):
     """그 달 모든 날을 '그날+2일' 뒤에 한 번 이상 읽었는가."""
     return not missing_days(month_start)
+
+
+def days_ready(start, end):
+    """start~end 모든 날을 '그날+2일' 뒤에 한 번 이상 읽었는가(월간 돌아보기와 같은 기준, 광고 결과 카드가 쓴다)."""
+    read = dict(BnkDay.objects.filter(day__range=(start, end)).values_list('day', 'read_on'))
+    days = (start + timedelta(days=i) for i in range((end - start).days + 1))
+    return all(d in read and read[d] >= d + timedelta(days=2) for d in days)
+
+
+def first_day():
+    """전산망 판매를 읽기 시작한 첫날. 이보다 이른 기간은 판매와 견줄 수 없다."""
+    return BnkDay.objects.aggregate(d=Min('day'))['d']
+
+
+def book_total(book, start, end):
+    return _sums(BnkSale.objects.filter(book=book, day__range=(start, end)))['total']
 
 
 def active(today):

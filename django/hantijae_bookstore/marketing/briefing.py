@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from intake.llm import complete_json
-from marketing import bnk_sales, candidates, channels, gnews, meta, search
+from marketing import ads, bnk_sales, candidates, channels, gnews, meta, search
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM, build_briefing_user
 from marketing.sales import latest
@@ -175,6 +175,9 @@ def measure_line(today, counts=meta.post_counts):
         line = f'지난번 {verb} 『{book.title}』 글{_where(d)} ― {sales}'
         for part in _reactions(d, counts):
             line += f', {part}'
+        note = ads.measure_note({p.get('id') for p in d.placements or []})
+        if note:   # 광고한 글이면 판매 전후·반응에 광고 몫이 섞인다
+            line += f' {note}'
         clicks = _store_click_count(book, day)
         if clicks > 0:
             line += f', 사이트 서점 버튼 {clicks}번'

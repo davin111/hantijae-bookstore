@@ -285,3 +285,24 @@ class BuildTest(TestCase):
         c = FakeBnkClient(readers=READERS, totals=TOTALS)
         self.assertEqual(monthly.build(FakeLLM({}), c, SEP, at(10, 3), fetch_meta=lambda s: {}, fetch_blog=lambda: []), '')
         self.assertEqual(c.asked, [])
+
+
+class AdsSectionTest(TestCase):
+    def test_ads_section_follows_posts_and_is_absent_without_ads(self):
+        lines = ['광고 1건 · 광고비 35,000원', '『산속』 글: 7일 · 35,000원 · 지금까지 7,000명에게 보였어요']
+        text = monthly.render(SEP, SALES, [], '', [], POSTS, [], ads_lines=lines)
+        self.assertIn('<b>💸 광고 1건 · 광고비 35,000원</b>\n· 『산속』 글: 7일', text)
+        self.assertLess(text.index('📣'), text.index('💸'))
+        self.assertIn(monthly.h(monthly.ADS_SOURCE), text)
+        self.assertNotIn('💸', monthly.render(SEP, SALES, [], '', [], POSTS, []))
+
+    def test_ad_numbers_may_appear_in_proposals(self):
+        from marketing.monthly import _check
+        raw = {'events': [], 'posts_topics': '', 'proposals': ['광고비 35,000원을 쓴 글처럼 북펀드 소식을 다시 올려 보세요']}
+        _, _, proposals = _check(raw, [], {'ads': ['광고 1건 · 광고비 35,000원']})
+        self.assertEqual(len(proposals), 1)
+
+    def test_user_message_lists_ads_only_when_there_are_some(self):
+        from marketing.prompts import build_monthly_user
+        self.assertIn('[광고]\n광고 1건', build_monthly_user('9월', [], {'ads': ['광고 1건 · 광고비 35,000원']}))
+        self.assertNotIn('[광고]', build_monthly_user('9월', [], {}))

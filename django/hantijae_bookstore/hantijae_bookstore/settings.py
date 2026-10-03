@@ -218,6 +218,9 @@ MARKETING = {
     'META_PAGE_ID': secret_info.get('META_PAGE_ID', ''),
     'META_IG_USER_ID': secret_info.get('META_IG_USER_ID', ''),
     'META_ACCESS_EXPIRES': secret_info.get('META_ACCESS_EXPIRES', ''),   # 인스타 데이터 접근 만료일(YYYY-MM-DD), 다시 발급하면 바꾼다
+    'META_ADS_TOKEN': secret_info.get('META_ADS_TOKEN', ''),   # 광고 성과 읽기(60일 사용자 토큰, scripts/meta_ads_token.py)
+    'META_AD_ACCOUNT_ID': secret_info.get('META_AD_ACCOUNT_ID', ''),
+    'META_ADS_EXPIRES': secret_info.get('META_ADS_EXPIRES', ''),   # 토큰·데이터 접근 가운데 이른 만료일(스크립트가 적는다)
     'KPIPA_BNK_ID': secret_info.get('KPIPA_BNK_ID', ''),   # 출판유통통합전산망(대표 계정, 대표 동의)
     'KPIPA_BNK_PASSWORD': secret_info.get('KPIPA_BNK_PASSWORD', ''),
     'KAKAO_REST_API_KEY': secret_info.get('KAKAO_REST_API_KEY', ''),

@@ -7,7 +7,7 @@ from marketing.candidates import Candidate
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM
 from intake.models import WorkerState
-from marketing.tests.fakes import FakeLLM, make_book, make_sale
+from marketing.tests.fakes import FakeLLM, make_ad, make_book, make_sale
 from marketing.timeutil import KST
 from web.models import Notice, StoreClick
 
@@ -144,6 +144,18 @@ class ComposeTest(TestCase):
 
 
 class MeasureTest(TestCase):
+    def test_measure_line_marks_an_advertised_post(self):
+        book = make_book()
+        p = Proposal.objects.create(kind=Proposal.NOW, book=book, headline='x')
+        Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body='b', status=Draft.POSTED,
+                             posted_at=datetime(2026, 9, 10, 10, 0, tzinfo=KST),
+                             placements=[{'kind': 'facebook', 'label': '한티재 페북 페이지', 'url': 'u', 'id': '111_9', 'at': ''}])
+        SalesSnapshot.objects.create(book=book, date=date(2026, 9, 10), sales_point=455)
+        SalesSnapshot.objects.create(book=book, date=date(2026, 9, 25), sales_point=520)
+        make_ad(post_id='111_9', days=[date(2026, 9, 11) + timedelta(days=i) for i in range(7)], daily=5000, spend=35000)
+        line = measure_line(TODAY, counts=lambda kind, post_id: {'reactions': 500, 'comments': 3, 'shares': 2})
+        self.assertTrue(line.endswith('페북 페이지 반응 500·댓글 3·공유 2 (광고 7일 · 35,000원 포함)'))
+
     def test_measure_line_compares_posting_day_and_two_weeks_later(self):
         book = make_book()
         p = Proposal.objects.create(kind=Proposal.KIT, book=book, headline='x')
@@ -333,6 +345,11 @@ class BuildWeeklyTest(TestCase):
 
 
 class FitMeasureTest(TestCase):
+    def test_fit_measure_drops_the_ad_note_with_the_top_post_first(self):
+        line = ('지난주 공식 채널: 페북 2건 반응 412. 광고하지 않은 글 중 반응이 가장 큰 글: 페북 「평소 글」(반응 합계 12). '
+                '지난주 광고: ' + '가' * 600)
+        self.assertEqual(_fit_measure('성과', line), '성과\n지난주 공식 채널: 페북 2건 반응 412')
+
     def test_fits_both_lines_when_possible(self):
         first = 'ㄱ' * 100
         line = '지난주 공식 채널: 페북 2건 반응 17·댓글 3·공유 2, 인스타 1건 좋아요 21·댓글 1. 반응이 가장 큰 글: 인스타 「작은책」 22'

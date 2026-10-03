@@ -15,7 +15,7 @@ from intake.models import TelegramChat, WorkerState
 from marketing import board
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
-from marketing import bnk, bnk_sales, grants, messages, midweek, moments, monthly, notion_sync, social
+from marketing import ads, bnk, bnk_sales, grants, messages, meta, midweek, moments, monthly, notion_sync, social
 from marketing.hooks import add_hook, upcoming
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, GrantCall, Proposal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
@@ -24,7 +24,7 @@ from marketing.timeutil import KST, in_quiet_hours, kst_now, kst_today, week_sta
 from web.blog import fetch_rss, parse_rss
 
 log = logging.getLogger('intake')
-COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch', '/moment', '/grant', '/bnk')
+COMMANDS = ('/brief', '/kit', '/mk', '/hook', '/quiet', '/watch', '/moment', '/grant', '/bnk', '/ads')
 MODES = ('off', 'admin_only', 'live')
 KIT_DAILY_CAP = 2
 REMIND_AT = (9, 30)   # 지원사업 마감 이틀 전 알림을 보내기 시작하는 시각(KST)
@@ -32,7 +32,7 @@ KIT_SEND_MAX_FAILURES = 3  # 이 횟수에 닿으면 관리자에게 알리고 �
 BUILDING = '만들고 있어요. 몇 분 걸려요.'
 USAGE = ('사용법: /mk off|admin_only|live · /mk social on|off · /brief [send] · /kit <제목 일부> · /kit send <번호> · '
          '/hook <MM-DD> <이름> | <책1>, <책2> · /hook list · /quiet <제목 일부> <YYYY-MM-DD> [이유] · /quiet list · '
-         '/watch <이름> [+ 좁히기 조건] · /watch list · /watch off <번호> · /moment · /grant · /bnk · /mk notion on|off')
+         '/watch <이름> [+ 좁히기 조건] · /watch list · /watch off <번호> · /moment · /grant · /bnk · /mk notion on|off · /ads')
 MOMENT_USAGE = ('사용법: /moment off|admin_only|live · /moment midweek off|admin_only|live · /moment now (지금 한 번, 몇 분) · '
                 '/moment list')
 
@@ -509,7 +509,7 @@ class Marketing:
         now = now or timezone.now()
         handler = {'/mk': self._mk, '/brief': self._brief, '/kit': self._kit, '/hook': self._hook,
                    '/quiet': self._quiet, '/watch': self._watch, '/moment': self._moment,
-                   '/grant': self._grant, '/bnk': self._bnk}[cmd]
+                   '/grant': self._grant, '/bnk': self._bnk, '/ads': self._ads}[cmd]
         self.tg.send_message(chat_id, handler(chat_id, (arg or '').strip(), now, kst_today(now)) or '완료')
 
     def _mk(self, chat_id, arg, now, today):
@@ -557,6 +557,22 @@ class Marketing:
             sent = self.send_grants(now)
             return '\n'.join(x for x in (f'새 글 {report.new}건', grants.digest(report), f'보낸 메시지 {sent}개') if x)
         return grants.status_text(today) + '\n' + grants.USAGE
+
+    def _ads(self, chat_id, arg, now, today):
+        parts = arg.split()
+        if len(parts) == 2 and parts[0] == 'card' and parts[1] in ads.CARD_MODES:
+            WorkerState.put('ads_card_mode', parts[1])
+            return f'ads_card_mode={parts[1]}'
+        if arg == 'now':
+            if not ads.configured():
+                return '광고 토큰 설정이 없어요(META_ADS_TOKEN 등)'
+            try:
+                report = ads.run(today, notify=lambda text: self.tg.send_message(chat_id, text))
+            except meta.MetaError as e:   # 문구에는 상태·코드만 있다(토큰 없음)
+                return f'광고 성과 조회 실패: {e}'
+            WorkerState.put('marketing_last_ads_scan', today.isoformat())
+            return ads.report_text(report) if report else '광고 성과를 읽지 못했어요 — 위 안내를 확인해 주세요'
+        return ads.status_text(today)
 
     def _bnk(self, chat_id, arg, now, today):
         parts = arg.split()

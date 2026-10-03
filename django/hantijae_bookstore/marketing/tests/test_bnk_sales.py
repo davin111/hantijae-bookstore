@@ -232,3 +232,23 @@ class MonthlyTest(Books, TestCase):
         self.assertTrue(text.startswith('bnk_mode=on\nbnk_last_run=None\n자동 로그인 멈춤=-\n가장 최근 판매일=2026-10-01\n'
                                         '최근 7일 합계=10권'))
         self.assertTrue(text.endswith(bnk_sales.USAGE))
+
+
+class AdRangeHelpersTest(TestCase):
+    def test_days_ready_needs_every_day_read_two_days_later(self):
+        from marketing import bnk_sales
+        from marketing.models import BnkDay
+        for i in range(5):
+            d = date(2026, 9, 20) + timedelta(days=i)
+            BnkDay.objects.create(day=d, read_on=d + timedelta(days=2 if i < 4 else 1))
+        self.assertTrue(bnk_sales.days_ready(date(2026, 9, 20), date(2026, 9, 23)))
+        self.assertFalse(bnk_sales.days_ready(date(2026, 9, 20), date(2026, 9, 24)))   # 마지막 날은 하루 뒤에만 읽음
+        self.assertFalse(bnk_sales.days_ready(date(2026, 9, 19), date(2026, 9, 21)))   # 9/19는 읽은 적 없음
+        self.assertEqual(bnk_sales.first_day(), date(2026, 9, 20))
+
+    def test_book_total_sums_one_book_in_the_range(self):
+        from marketing import bnk_sales
+        book = make_book()
+        make_sale(date(2026, 9, 23), 2, book)
+        make_sale(date(2026, 9, 30), 5, book)
+        self.assertEqual(bnk_sales.book_total(book, date(2026, 9, 22), date(2026, 9, 28)), 2)
