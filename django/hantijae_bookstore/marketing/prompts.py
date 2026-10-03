@@ -275,3 +275,16 @@ def build_monthly_user(month_label, items, facts):
     if facts.get('ads'):
         lines += ['', '[광고]', *facts['ads']]
     return '\n'.join(lines)
+
+
+AD_BOOK_SYSTEM = f"""당신은 도서출판 한티재가 광고한 페이스북·인스타 글이 어느 책 이야기인지 고르는 도우미입니다. {NO_WEB} 글은 쓰지 않습니다.
+'책 목록'에서 이 글이 소개하거나 홍보하는 책 하나의 번호를 고릅니다. 제목이 글에 없어도 지은이·주제·부제·펀딩 소식으로 분명하면 고릅니다.
+여러 책을 함께 다루는 행사·모집·서점 소식 글이거나 확실하지 않으면 고르지 않습니다(null).
+JSON 객체 하나만 출력하세요: {{"book": 번호 또는 null}}"""
+
+
+def build_ad_book_user(text, cands):
+    """cands: marketing.ad_books.Candidate 목록(번호는 1부터)."""
+    lines = ['[광고 글]', text, '', '[책 목록]']
+    lines += [f'{i}. {c.title}' + (f' — {c.about}' if c.about else '') for i, c in enumerate(cands, 1)]
+    return '\n'.join(lines)

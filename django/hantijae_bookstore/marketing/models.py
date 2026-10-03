@@ -331,6 +331,9 @@ class Ad(BaseModel):
     post_text = models.CharField(max_length=200, blank=True, help_text='글 앞부분')
     posted_at = models.DateTimeField(null=True, blank=True)
     book = models.ForeignKey(Book, null=True, blank=True, related_name='meta_ads', on_delete=models.SET_NULL)
+    book_title = models.CharField(max_length=200, blank=True,
+                                  help_text='사이트 도서 목록에 아직 없는 책 제목(북펀드 등). 사이트 책이 이어지면 비운다')
+    book_asked_at = models.DateTimeField(null=True, blank=True, help_text='AI에게 어느 책인지 물은 때(광고마다 한 번)')
     first_day = models.DateField(null=True, blank=True, help_text='지출이 있었던 첫날(광고 계정 시간대)')
     last_day = models.DateField(null=True, blank=True, help_text='지출이 있었던 끝날')
     spend = models.IntegerField(default=0, help_text='원')

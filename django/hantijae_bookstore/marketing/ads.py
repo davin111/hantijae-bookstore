@@ -14,7 +14,7 @@ from django.db.models import Count, Max, Min, Q, Sum
 from django.utils import timezone
 
 from intake.models import TelegramChat, WorkerState
-from marketing import bnk_sales, meta
+from marketing import ad_books, bnk_sales, meta
 from marketing.messages import h
 from marketing.models import Ad, AdDay
 from marketing.social_parse import parse_time
@@ -60,6 +60,7 @@ class Report:
     days: int = 0      # 덮어쓴 일별 줄
     unknown: int = 0   # 인스타 주인을 확인하지 못해 내일 다시 볼 광고
     unlisted: int = 0  # 광고 계정 목록에 없고(보관·삭제된 광고) 따로 읽어도 못 읽은 광고
+    linked: int = 0    # 책·책 제목을 새로 정한 광고(ad_books.relink)
 
 
 def _int(value):
@@ -128,21 +129,6 @@ def _post_info(channel, post_id, media, cfg, get):
     return None if retry else ('', '', None)
 
 
-def _book_for(ids, text):
-    """봇 초안의 게시 위치와 같은 글이면 그 책, 아니면 글 속 제목이 공개 도서 하나와 맞을 때 그 책, 아니면 None."""
-    from books.models import Book
-    from marketing.instagram import book_hits
-    from marketing.models import Draft
-    from marketing.review_filter import terms
-    ids = {i for i in ids if i}
-    for d in Draft.objects.filter(status=Draft.POSTED, proposal__book__isnull=False).select_related('proposal__book'):
-        if any(p.get('id') in ids for p in d.placements or []):
-            return d.proposal.book
-    books = Book.objects.filter(is_published=True).prefetch_related('authors__author')
-    hits = {t.book.pk: t.book for t in book_hits(text, [terms(b) for b in books])}
-    return next(iter(hits.values())) if len(hits) == 1 else None
-
-
 def _new_ads(get, cfg, ids, report):
     """DB에 없는 광고 번호 가운데 한티재 광고만 저장한다. 나머지는 버린다."""
     ids = sorted(ids)
@@ -177,8 +163,9 @@ def _new_ads(get, cfg, ids, report):
                 report.unknown += 1
                 continue
             text, url, at = info
+            book, title = ad_books.match((post_id, media), text)   # 책 찾기는 자르기 전 원문으로
             Ad.objects.create(ad_id=ad_id, channel=channel, post_id=post_id, ig_media_id=media, post_url=url,
-                              post_text=text[:200], posted_at=at, book=_book_for((post_id, media), text))
+                              post_text=text[:200], posted_at=at, book=book, book_title=title)
             report.new += 1
 
 
@@ -274,9 +261,10 @@ def remind_expiry(today, notify):
     notify(f"⏰ 광고 성과 토큰이 {expires.month}월 {expires.day}일에 끝나요. Claude에게 '광고 토큰 갱신해 줘'라고 말해 주세요")
 
 
-def run(today, notify, get=requests.get):
+def run(today, notify, get=requests.get, llm=None):
     """워커가 매일 06:50에 부른다. 권한 오류는 하루 한 번 원인별로 알리고 None. 끝까지 성공하면 ads_ok_on.
-    광고가 없는 날이 대부분이라 상태 페이지는 새 행이 아니라 ads_ok_on으로 성공을 판정한다."""
+    광고가 없는 날이 대부분이라 상태 페이지는 새 행이 아니라 ads_ok_on으로 성공을 판정한다.
+    수집 뒤 책이 빈 광고를 다시 맞춘다(ad_books.relink — llm이 있으면 글자로 못 찾은 글을 광고마다 한 번 묻는다)."""
     if not configured():
         return None
     remind_expiry(today, notify)
@@ -288,6 +276,7 @@ def run(today, notify, get=requests.get):
             notify(TOKEN_NOTE if e.code in meta.TOKEN_CODES else ROLE_NOTE)
         return None
     WorkerState.put('ads_ok_on', today.isoformat())
+    report.linked = ad_books.relink(llm).linked
     return report
 
 
@@ -322,9 +311,11 @@ def card_target(bot, marketing_mode):
 
 
 def name(ad):
-    """'『책』 글' 또는 '「글 앞부분」 글'(서식 없음)."""
+    """'『책』 글' 또는 '「글 앞부분」 글'(서식 없음). 사이트에 아직 없는 책(북펀드)은 그 제목으로."""
     if ad.book_id:
         return f'『{ad.book.title}』 글'
+    if ad.book_title:
+        return f'『{ad.book_title}』 글'
     text = ad.post_text or ''
     head = text if len(text) <= HEAD else text[:HEAD].rstrip() + '…'
     return f'「{head}」 글' if head else '광고한 글'
@@ -442,7 +433,8 @@ def card_text(ads_, now, fetch=meta.channel_posts):
     parts = ['<b>📣 광고 결과</b>'] + [_ad_block(a) for a in ads_]
     sales = _sales_lines(ads_)
     tail = [x for x in [_organic_line(now, fetch), *sales, _baseline_line(ads_)] if x]
-    tail += [f'· {h(name(a))}: 어느 책 광고인지 몰라 판매는 뺐어요' for a in ads_ if not a.book_id]
+    tail += [f'· {h(name(a))}: ' + ('아직 사이트 도서 목록에 없는 책이라 판매는 뺐어요' if a.book_title
+                                    else '어느 책 광고인지 몰라 판매는 뺐어요') for a in ads_ if not a.book_id]
     if tail:
         parts.append('\n'.join(tail))
     if any('권 →' in x for x in sales):
@@ -544,7 +536,8 @@ USAGE = '사용법: /ads · /ads now (지금 읽기) · /ads card off|admin_only
 def report_text(report):
     line = f'기간에 돈 광고 {report.found}개 중 한티재 광고 {report.ours}개(새로 {report.new}개) · 일별 {report.days}줄'
     line += f' · 인스타 글 주인을 확인하지 못한 광고 {report.unknown}개(내일 다시)' if report.unknown else ''
-    return line + (f' · 목록에 없어 따로 못 읽은 광고 {report.unlisted}개' if report.unlisted else '')
+    line += f' · 목록에 없어 따로 못 읽은 광고 {report.unlisted}개' if report.unlisted else ''
+    return line + (f' · 책을 새로 정한 광고 {report.linked}개' if report.linked else '')
 
 
 def saved_text():

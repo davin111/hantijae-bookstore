@@ -567,7 +567,7 @@ class Marketing:
             if not ads.configured():
                 return '광고 토큰 설정이 없어요(META_ADS_TOKEN 등)'
             try:
-                report = ads.run(today, notify=lambda text: self.tg.send_message(chat_id, text))
+                report = ads.run(today, notify=lambda text: self.tg.send_message(chat_id, text), llm=self.llm)
             except meta.MetaError as e:   # 문구에는 상태·코드만 있다(토큰 없음)
                 return f'광고 성과 조회 실패: {e}'
             WorkerState.put('marketing_last_ads_scan', today.isoformat())

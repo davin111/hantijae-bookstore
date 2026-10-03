@@ -110,6 +110,11 @@ class RunDueTest(TestCase):
         self.assertEqual(deps.bot.notes, [])   # 06:50 = 조용한 시간 → 08시 뒤에
         self.assertIn('토큰 안내', WorkerState.get(tasks.ADMIN_QUEUE))
 
+    def test_ads_scan_gets_the_workers_ai_for_book_linking(self, *_):
+        deps = Deps()
+        tasks.run_due(deps, datetime(2026, 9, 29, 7, 0, tzinfo=KST))
+        self.assertIs(self.ads_scan.call_args.kwargs['llm'], deps.llm)
+
     def test_off_mode_skips_ads_scan(self, *_):
         tasks.run_due(Deps('off'), datetime(2026, 9, 29, 7, 0, tzinfo=KST))
         self.ads_scan.assert_not_called()

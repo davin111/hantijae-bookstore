@@ -604,6 +604,11 @@ class AdsCommandTest(TestCase):
         with mock.patch('marketing.ads.collect', side_effect=meta.MetaError('HTTP 500 code 2', 2)):
             self.assertEqual(self.reply('now'), '광고 성과 조회 실패: HTTP 500 code 2')
 
+    def test_now_passes_the_bots_ai_for_book_linking(self):
+        with mock.patch('marketing.ads.run', return_value=ads.Report()) as run:
+            self.reply('now')
+        self.assertIs(run.call_args.kwargs['llm'], self.m.llm)
+
     @override_settings(MARKETING={})
     def test_now_without_config(self):
         self.assertIn('설정이 없어요', self.reply('now'))

@@ -286,7 +286,8 @@ def _run_due(deps, now):
 
     if _hm(local) >= ADS_AT and WorkerState.get('marketing_last_ads_scan') != day:
         WorkerState.put('marketing_last_ads_scan', day)
-        _guard(deps, 'ads', now, lambda: ads.run(today, notify=lambda text: _notify_awake(deps, now, text)))
+        _guard(deps, 'ads', now, lambda: ads.run(today, notify=lambda text: _notify_awake(deps, now, text),
+                                               llm=deps.llm))
 
     # 운영진 개인 SNS: 06:20 뒤 시작, 진행 중인 실행 확인은 매 바퀴(시각·꺼짐은 social이 판단)
     _guard(deps, 'social', now, lambda: social.run_due(deps, now))
