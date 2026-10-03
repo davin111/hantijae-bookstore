@@ -61,6 +61,7 @@ class Report:
     unknown: int = 0   # 인스타 주인을 확인하지 못해 내일 다시 볼 광고
     unlisted: int = 0  # 광고 계정 목록에 없고(보관·삭제된 광고) 따로 읽어도 못 읽은 광고
     linked: int = 0    # 책·책 제목을 새로 정한 광고(ad_books.relink)
+    book_failed: int = 0   # 책 확인 AI 연결 오류(다음에 다시)
 
 
 def _int(value):
@@ -276,7 +277,11 @@ def run(today, notify, get=requests.get, llm=None):
             notify(TOKEN_NOTE if e.code in meta.TOKEN_CODES else ROLE_NOTE)
         return None
     WorkerState.put('ads_ok_on', today.isoformat())
-    report.linked = ad_books.relink(llm).linked
+    try:   # 책 다시 맞추기가 실패해도 수집은 성공으로 둔다(상태 페이지·카드가 수집 성공에 기대므로)
+        linked = ad_books.relink(llm)
+        report.linked, report.book_failed = linked.linked, linked.failed
+    except Exception as e:
+        log.warning('ads relink: %s', type(e).__name__)
     return report
 
 
@@ -537,7 +542,8 @@ def report_text(report):
     line = f'기간에 돈 광고 {report.found}개 중 한티재 광고 {report.ours}개(새로 {report.new}개) · 일별 {report.days}줄'
     line += f' · 인스타 글 주인을 확인하지 못한 광고 {report.unknown}개(내일 다시)' if report.unknown else ''
     line += f' · 목록에 없어 따로 못 읽은 광고 {report.unlisted}개' if report.unlisted else ''
-    return line + (f' · 책을 새로 정한 광고 {report.linked}개' if report.linked else '')
+    line += f' · 책을 새로 정한 광고 {report.linked}개' if report.linked else ''
+    return line + (' · 책 확인 AI 연결 오류(다음에 다시)' if report.book_failed else '')
 
 
 def saved_text():

@@ -14,13 +14,15 @@ from marketing.text import loose_key
 
 log = logging.getLogger('intake')
 MIN_KEY = 3   # 이보다 짧은 제목은 글 속 흔한 말과 겹친다(instagram.MIN_TITLE_KEY와 같다)
+ASK_PER_RUN = 5   # 한 번 실행에 AI에게 묻는 광고 수(워커가 한 스레드라 텔레그램 응답이 늦어지지 않게)
 _BRACKET = re.compile(r'[<《『〈「]([^<>《》『』〈〉「」]+)[>》』〉」]')
+_SUBTITLE = re.compile(r'\s+[-–—:]\s+|:\s+')
 
 
 def funding_book_title(title):
     """펀딩 제목에서 책 제목만: '<프루동 평전> 국내 최초 번역 출판' → '프루동 평전', '농부, 짠한 형 - 두물머리 …' → '농부, 짠한 형'."""
     m = _BRACKET.search(title or '')
-    return (m.group(1) if m else (title or '').split(' - ')[0]).strip()
+    return (m.group(1) if m else _SUBTITLE.split(title or '', maxsplit=1)[0]).strip()
 
 
 @dataclass(frozen=True)
@@ -37,13 +39,16 @@ def candidates():
     books = list(Book.objects.filter(is_published=True).prefetch_related('authors__author').order_by('-published_date'))
     out = [Candidate(b, b.title, ' · '.join(x for x in (b.subtitle or '', ', '.join(
         ba.author.name for ba in b.authors.all())) if x)) for b in books]
-    seen = {loose_key(b.title) for b in books}
+    site = {k for k in (loose_key(b.title) for b in books) if len(k) >= MIN_KEY}
+    seen = set()
     for f in FundingCampaign.objects.filter(is_ours=True).order_by('-id'):
         title = funding_book_title(f.title)
         key = loose_key(title)
-        if len(key) >= MIN_KEY and key not in seen:
-            seen.add(key)
-            out.append(Candidate(None, title, f'{f.title} (북펀드)'))
+        # 사이트 제목과 겹치면(같거나 서로 들어 있으면) 그 책은 사이트 책으로 본다 — 한 글이 두 후보에 걸리지 않게
+        if len(key) < MIN_KEY or key in seen or any(k in key or key in k for k in site):
+            continue
+        seen.add(key)
+        out.append(Candidate(None, title[:200], f'{f.title} (북펀드)'))
     return out
 
 
@@ -69,7 +74,7 @@ def match(ids, text, cands=None):
     for c in candidates() if cands is None else cands:
         key = loose_key(c.title)
         if len(key) >= MIN_KEY and key in k:
-            hits[key] = c
+            hits[c.book.pk if c.book is not None else key] = c   # 같은 제목 책이 둘이면 정하지 않는다
     if len(hits) != 1:
         return None, ''
     c = next(iter(hits.values()))
@@ -77,56 +82,80 @@ def match(ids, text, cands=None):
 
 
 def ask(llm, text, cands):
-    """AI에게 후보 번호 하나를 묻는다. 고르지 않았거나(null) 목록 밖 번호면 None. AI 오류는 그대로 올린다(호출부가 다음에 다시)."""
+    """AI에게 후보 번호 하나와 그 제목을 묻는다. 번호와 제목이 맞으면 그 후보, 번호만 어긋났으면 제목이 같은 후보,
+    고르지 않았거나(null) 어느 쪽도 맞지 않으면 None. AI 오류는 그대로 올린다(호출부가 판단)."""
     from intake.llm import complete_json
     from marketing.prompts import AD_BOOK_SYSTEM, build_ad_book_user
     raw = complete_json(llm, AD_BOOK_SYSTEM, build_ad_book_user(text, cands))
-    n = raw.get('book') if isinstance(raw, dict) else None
-    if isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= len(cands):
+    if not isinstance(raw, dict):
+        return None
+    n, title = raw.get('book'), loose_key(str(raw.get('title') or ''))
+    if isinstance(n, str) and n.strip().isdigit():
+        n = int(n)
+    if isinstance(n, bool) or not isinstance(n, int):
+        return None
+    if 1 <= n <= len(cands) and (not title or loose_key(cands[n - 1].title) == title):
         return cands[n - 1]
-    return None
+    same = [c for c in cands if title and loose_key(c.title) == title]
+    return same[0] if len(same) == 1 else None
 
 
 @dataclass
 class Relinked:
     linked: int = 0    # 책이나 책 제목이 새로 정해진 광고
     asked: int = 0     # AI에게 물은 광고
-    failed: int = 0    # AI 오류(다음에 다시 묻는다)
+    failed: int = 0    # AI 연결 오류(이번 실행은 거기서 그만 묻고, 다음에 다시)
     changed: List[int] = field(default_factory=list)   # 바뀐 광고 pk
 
 
+def _site_book_for_title(title, cands):
+    """이미 정한 책 제목(북펀드·AI)과 같은 제목의 사이트 책이 생겼으면 그 책(하나일 때만)."""
+    key = loose_key(title)
+    books = {c.book.pk: c.book for c in cands if c.book is not None and loose_key(c.title) == key}
+    return next(iter(books.values())) if len(books) == 1 else None
+
+
 def relink(llm=None):
-    """책이 빈 광고를 다시 맞춘다. 글자 맞추기는 매번(사이트에 새로 올라온 책·북펀드), AI는 광고마다 한 번(book_asked_at).
-    글 내용을 못 읽은 광고는 건너뛴다. 글자 맞추기가 못 찾았다고 이미 정한 책 제목을 지우지는 않는다."""
+    """책이 빈 광고를 다시 맞춘다. 글자 맞추기는 매번(사이트에 새로 올라온 책·북펀드), 이미 정한 책 제목은 같은 제목의 사이트 책이
+    생기면 그 책으로. 그래도 없고 제목도 없는 글은 AI에게 광고마다 한 번(book_asked_at), 한 실행에 ASK_PER_RUN개까지 묻는다.
+    AI 연결 오류가 나면 이번 실행은 거기서 그만 묻는다(다음에 다시). 답이 끝내 JSON이 아니면 물은 것으로 친다.
+    글 내용을 못 읽은 광고는 건너뛴다. 저장은 그사이 운영자가 책을 고르지 않았을 때만 한다."""
+    from intake.llm import LLMInvalidJSON
     result = Relinked()
     todo = list(Ad.objects.filter(book__isnull=True).exclude(post_text=''))
     if not todo:
         return result
     cands = candidates()
+    ai_on = llm is not None
     for ad in todo:
         book, title = match((ad.post_id, ad.ig_media_id), ad.post_text, cands)
-        fields = []
-        if book is None and not title and llm is not None and ad.book_asked_at is None:
+        if book is None and not title and ad.book_title:
+            book = _site_book_for_title(ad.book_title, cands)
+        changes = {}
+        if (book is None and not title and not ad.book_title and ai_on and ad.book_asked_at is None
+                and result.asked < ASK_PER_RUN):
             result.asked += 1
             try:
                 picked = ask(llm, ad.post_text, cands)
-            except Exception as e:   # 연결 오류·답 모양 오류: 글 내용은 로그에 남기지 않는다
+            except LLMInvalidJSON:   # 이 글에 대한 답이 끝내 모양을 못 갖춤 — 매일 다시 묻지 않는다
+                log.warning('ads book ask: answer was not JSON')
+                picked = None
+            except Exception as e:   # 연결 오류: 글 내용은 로그에 남기지 않는다
                 log.warning('ads book ask: %s', type(e).__name__)
                 result.failed += 1
+                ai_on = False
                 continue
-            ad.book_asked_at = timezone.now()
-            fields.append('book_asked_at')
+            changes['book_asked_at'] = timezone.now()
             if picked is not None:
                 book, title = (picked.book, '') if picked.book is not None else (None, picked.title)
         if book is not None:
-            ad.book, ad.book_title = book, ''
-            fields += ['book', 'book_title']
+            changes.update(book=book, book_title='')
         elif title and title != ad.book_title:
-            ad.book_title = title
-            fields.append('book_title')
-        if 'book' in fields or 'book_title' in fields:
+            changes['book_title'] = title[:200]
+        if not changes:
+            continue
+        saved = Ad.objects.filter(pk=ad.pk, book__isnull=True).update(updated_at=timezone.now(), **changes)
+        if saved and ('book' in changes or 'book_title' in changes):
             result.linked += 1
             result.changed.append(ad.pk)
-        if fields:
-            ad.save(update_fields=fields + ['updated_at'])
     return result
