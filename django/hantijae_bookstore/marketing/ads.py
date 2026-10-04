@@ -261,7 +261,8 @@ def remind_expiry(today, notify):
         return
     for d in due:
         WorkerState.put(f'ads_expiry_reminded_{d}', expires.isoformat())
-    notify(f"⏰ 광고 성과 토큰이 {expires.month}월 {expires.day}일에 끝나요. Claude에게 '광고 토큰 갱신해 줘'라고 말해 주세요")
+    ends = '끝났어요' if today > expires else '끝나요'   # 만료 뒤 첫 실행이면 지난 일로
+    notify(f"⏰ 광고 성과 토큰이 {expires.month}월 {expires.day}일에 {ends}. Claude에게 '광고 토큰 갱신해 줘'라고 말해 주세요")
 
 
 def run(today, notify, get=requests.get, llm=None):

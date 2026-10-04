@@ -492,7 +492,11 @@ def build(llm, client, month_start, now, fetch_meta=meta.official_posts, fetch_b
     found = events(month_start, end)
     p = posts(month_start, end, fetch_meta, fetch_blog)
     nxt = next_month(end + timedelta(days=1))
-    ad_items = ads.month_items(month_start, end)
+    try:
+        ad_items = ads.month_items(month_start, end)
+    except Exception:   # 광고 칸 하나 때문에 돌아보기 전체가 멈추지 않게
+        log.warning('monthly: ads failed', exc_info=True)
+        ad_items = []
     facts = {'sales': _sales_facts(s), 'posts': p['samples'], 'next': nxt, 'ads': [x.text for x in ad_items]}
     ev, topics, proposals = compose(llm, f'{month_start.month}월', found, facts)
     return render(month_start, s, ev, topics, proposals, p, nxt, ads_lines=ad_items)

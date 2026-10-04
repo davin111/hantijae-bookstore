@@ -311,6 +311,11 @@ class RunTest(TestCase):
         ads.run(date(2026, 11, 30), self.notes.append, get=Graph())
         self.assertEqual(len(self.notes), 1)
 
+    def test_first_run_after_expiry_says_it_has_ended(self):
+        ads.run(date(2026, 12, 1), self.notes.append, get=Graph())
+        self.assertEqual(len(self.notes), 1)
+        self.assertIn('11월 30일에 끝났어요', self.notes[0])
+
     def test_reminder_goes_out_even_when_collecting_fails(self):
         ads.run(date(2026, 11, 23), self.notes.append, get=FakeGraph(lambda p, q: err(190)))
         self.assertTrue(any('11월 30일' in n for n in self.notes))

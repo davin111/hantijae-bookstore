@@ -287,6 +287,16 @@ class BuildTest(TestCase):
         self.assertEqual(c.asked, [])
 
 
+    def test_an_ads_error_leaves_out_only_the_ads_section(self):
+        with mock.patch('marketing.monthly.bnk_sales.month_ready', return_value=True), \
+                mock.patch('marketing.monthly.ads.month_items', side_effect=RuntimeError('boom')), \
+                self.assertLogs('intake', 'WARNING') as logs:
+            text = monthly.build(FakeLLM({}), None, SEP, at(10, 3), fetch_meta=lambda s: {}, fetch_blog=lambda: [])
+        self.assertTrue(text.startswith('<b>📅 9월 돌아보기</b>'))
+        self.assertNotIn('💸', text)
+        self.assertTrue(any('monthly: ads failed' in line for line in logs.output))
+
+
 class AdsSectionTest(TestCase):
     def test_ads_section_follows_posts_and_is_absent_without_ads(self):
         lines = ['광고 1건 · 광고비 35,000원', '『산속』 글: 7일 · 35,000원 · 지금까지 7,000명에게 보였어요']
