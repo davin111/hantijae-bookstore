@@ -407,9 +407,10 @@ class CardTest(TestCase):
         [card] = self.tg.sent('send')
         self.assertEqual((card['chat'], card['html']), (GROUP, True))
         for part in ('📣 광고 결과', '『나는 산속으로 더 깊이 들어간다』 글', '(페이스북)', '9월 22일~28일 · 7일 · 35,000원',
-                     '7,000명에게 보였어요 (1,000원에 200명)', '글을 누른 횟수 1,200번, 그중 링크 50번', '반응 500',
+                     '7,000명에게 보였어요 (1,000원에 200명)', '광고에 붙은 링크·버튼을 누른 횟수 50번', '반응(좋아요 등) 500',
                      '광고 없는 평소 페북 글은 보통 반응 18', '광고 전 7일 0권 → 광고 7일 3권', ads.CARD_NOTE):
             self.assertIn(part, card['text'])
+        self.assertNotIn('1,200', card['text'])   # Meta '클릭(전체)'은 싣지 않는다
         ad.refresh_from_db()
         self.assertEqual((ad.card, ad.card_sent_at), (Ad.SENT, at(10, 1)))
 

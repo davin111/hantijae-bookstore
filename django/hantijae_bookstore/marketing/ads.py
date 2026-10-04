@@ -414,8 +414,9 @@ def _ad_block(ad, label):
              f'{period(ad.first_day, ad.last_day)} · {days}일 · {ad.spend:,}원']
     if ad.reach and ad.spend:
         lines.append(f'· {ad.reach:,}명에게 보였어요 (1,000원에 {round(ad.reach * 1000 / ad.spend):,}명)')
-    lines.append(f'· 글을 누른 횟수 {ad.clicks:,}번, 그중 링크 {ad.link_clicks:,}번')
-    lines.append(f'· 반응 {ad.reactions:,}')
+    # Meta '클릭(전체)'은 좋아요 등도 세고 링크 클릭과 세는 방식이 달라(링크 클릭이 더 큰 광고도 있음) 싣지 않는다
+    lines.append(f'· 광고에 붙은 링크·버튼을 누른 횟수 {ad.link_clicks:,}번')
+    lines.append(f'· 반응(좋아요 등) {ad.reactions:,}')
     return '\n'.join(lines)
 
 
