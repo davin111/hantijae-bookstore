@@ -300,7 +300,6 @@ class BuildTest(TestCase):
         self.assertEqual(monthly.build(FakeLLM({}), c, SEP, at(10, 3), fetch_meta=lambda s: {}, fetch_blog=lambda: []), '')
         self.assertEqual(c.asked, [])
 
-
     def test_an_ads_error_leaves_out_only_the_ads_section(self):
         with mock.patch('marketing.monthly.bnk_sales.month_ready', return_value=True), \
                 mock.patch('marketing.monthly.ads.month_items', side_effect=RuntimeError('boom')), \
