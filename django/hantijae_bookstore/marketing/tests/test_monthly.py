@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from unittest import mock
 
 from django.test import TestCase
@@ -6,7 +6,7 @@ from django.test import TestCase
 from intake.models import FundingCampaign, ReviewItem
 from marketing import monthly
 from marketing.meta import OfficialPost
-from marketing.models import Draft, FundingSnapshot, GrantCall, HookDate, Proposal, Signal
+from marketing.models import BnkDay, Draft, FundingSnapshot, GrantCall, HookDate, Proposal, Signal
 from marketing.messages import TEXT_LIMIT
 from marketing.tests.fakes import FakeBnkClient, make_book, make_call, make_sale
 from marketing.text import tg_len
@@ -56,6 +56,14 @@ class SalesTest(Books):
                                                             ('다른 책', 3)])
         self.assertEqual(got['top'][0][2], {'교보': 5, '예스24': 28, '알라딘': 2, '영풍': 1, '지역서점': 0})
         self.assertEqual((got['channels'], got['readers']), ({'pc': 20, 'mobile': 17, 'offline': 7}, READERS))
+
+    def test_last_year_same_month_only_when_that_month_was_fully_read(self):
+        make_sale(date(2025, 9, 10), 12, book=self.bap)
+        make_sale(date(2025, 10, 1), 9, book=self.bap)   # 다음 달은 빼야 한다
+        self.assertIsNone(monthly.sales(SEP, SEP_END, None)['last_year'])
+        for i in range(30):
+            BnkDay.objects.create(day=date(2025, 9, 1) + timedelta(days=i), read_on=date(2026, 10, 4))
+        self.assertEqual(monthly.sales(SEP, SEP_END, None)['last_year'], {'label': '작년 9월', 'total': 12})
 
     def test_site_lookups_that_fail_leave_those_lines_out(self):
         with self.assertLogs('intake', 'WARNING'):
@@ -272,6 +280,12 @@ class RenderTest(TestCase):
         self.assertIn(f'({len(shown)}가지 · 눌러서 보기)', text)
         self.assertTrue(all(tg_len(line) <= monthly.LINE_LIMIT + 20 for line in shown))
         self.assertTrue(text.endswith('<b>2.</b> 둘째 제안'))
+
+    def test_last_year_goes_next_to_the_total_and_into_the_facts(self):
+        s = {**SALES, 'last_year': {'label': '작년 9월', 'total': 52}}
+        self.assertIn('<b>📈 판매 44권 · 3종</b> · 작년 9월 52권\n', monthly.render(SEP, s, [], '', [], POSTS, []))
+        self.assertIn('작년 9월 합계 52권', monthly._sales_facts(s))
+        self.assertNotIn('작년', monthly.render(SEP, {**SALES, 'last_year': None}, [], '', [], POSTS, []))
 
     def test_missing_site_lookups_and_empty_sections_are_left_out(self):
         bare = {**SALES, 'channels': None, 'readers': None}

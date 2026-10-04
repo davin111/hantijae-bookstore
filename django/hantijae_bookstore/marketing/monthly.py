@@ -71,6 +71,15 @@ def _weeks(start, end):
     return out
 
 
+def _last_year(start):
+    """작년 같은 달 판매 {'label': '작년 9월', 'total': n}. 그 달 모든 날을 다 읽지 못했으면 None(그 줄을 뺀다)."""
+    prev = start.replace(year=start.year - 1)
+    if not bnk_sales.month_ready(prev):
+        return None
+    qs = BnkSale.objects.filter(day__range=(prev, month_end(prev)))
+    return {'label': f'작년 {prev.month}월', 'total': bnk_sales._sums(qs)['total']}
+
+
 def sales(start, end, client):
     """지난달 판매(전산망). 판매 경로·구매자는 그때 사이트에서 읽고, 못 읽거나 client가 없으면 None(그 줄을 뺀다)."""
     qs = BnkSale.objects.filter(day__range=(start, end))
@@ -95,7 +104,7 @@ def sales(start, end, client):
             log.warning('monthly: readers failed', exc_info=True)
     return {'total': sums['total'], 'stores': {bnk_sales.STORE_LABEL[k]: sums[k] for k in bnk_sales.STORE_KEYS},
             'weeks': _weeks(start, end), 'kinds': qs.values('isbn').distinct().count(), 'top': top,
-            'channels': channels, 'readers': readers}
+            'channels': channels, 'readers': readers, 'last_year': _last_year(start)}
 
 
 # ---- 있었던 일 후보 ----
@@ -388,7 +397,8 @@ def compose(llm, month_label, items, facts):
 # ---- HTML ----
 
 def _sales_section(s):
-    lines = [f'<b>📈 판매 {s["total"]}권 · {s["kinds"]}종</b>',
+    ly = s.get('last_year')
+    lines = [f'<b>📈 판매 {s["total"]}권 · {s["kinds"]}종</b>' + (f' · {ly["label"]} {ly["total"]}권' if ly else ''),
              '· ' + ' · '.join(f'{k} {v}' for k, v in s['stores'].items())]
     if s['channels']:
         c = s['channels']
@@ -479,6 +489,8 @@ def render(month_start, s, events_, topics, proposals, p, next_lines, ads_lines=
 def _sales_facts(s):
     lines = [f'합계 {s["total"]}권, {s["kinds"]}종', '서점별 ' + ', '.join(f'{k} {v}' for k, v in s['stores'].items()),
              '7일씩 ' + ', '.join(f'{label} {n}권' for label, n in s['weeks'])]
+    if s.get('last_year'):
+        lines.append(f'{s["last_year"]["label"]} 합계 {s["last_year"]["total"]}권')
     return lines + [f'『{t}』 {n}권' for t, n, _ in s['top']]
 
 
