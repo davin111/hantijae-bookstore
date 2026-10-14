@@ -291,10 +291,13 @@ def _editor(c, row):
 
 
 def _peers(c, row, since):
+    from marketing.peers import SOURCES
     sources = (c.get('peer_scan_state') or {}).get('sources', {})
     problems = [name for name, value in sources.items() if value.get('failure_count', 0) > 0]
-    if not sources:
-        problems.append('출처별 확인 결과 없음')
+    for source in SOURCES:
+        success = _parse((sources.get(source.key) or {}).get('success_at'))
+        if source.key not in problems and (not success or not success.tzinfo or success < since):
+            problems.append(f'{source.key} 이번 주기 확인 미완료')
     checked = sum(value.get('checked', 0) for value in sources.values())
     backlog = sum(value.get('backlog', 0) for value in sources.values())
     _verdict(row, problems, checked, f'출처 {len(sources)}곳 · 확인 {checked}건 · 다음 확인 대기 {backlog}건')
