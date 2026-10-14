@@ -13,6 +13,14 @@ from marketing.tests.test_content_supplements import CARDS
 
 
 class RecruitmentCardReviewTest(TestCase):
+    def test_recruitment_invitation_is_shown_once_when_model_already_includes_it(self):
+        from marketing.kit import RECRUIT_FIELDS, _recruit_body
+        book = make_book()
+        cta = '이 글에 댓글로 읽고 싶은 이유를 한 줄 남겨 주세요.'
+        raw = '\n'.join(['책 이야기입니다.', cta, *RECRUIT_FIELDS])
+        body = _recruit_body(raw, book, ['책 이야기입니다.'])
+        self.assertEqual(body.count(cta), 1)
+
     def test_book_page_count_is_not_an_approved_recruitment_condition(self):
         book = make_book(page_count=132)
         output = {'recruit': {'body': '서평단을 모십니다', 'cards': [

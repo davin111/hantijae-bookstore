@@ -78,7 +78,7 @@ def _recruit_body(raw, book, allowed):
                           *RECRUIT_FIELDS, '', '#한티재의책'])
     # 같은 숫자가 책 쪽수에 있더라도 모집 인원으로 승인된 것은 아니다.
     # 모집 조건·혜택은 모델 문장을 쓰지 않고 정해진 빈칸으로만 안내한다.
-    conditions = re.compile(r'모집|신청|마감|발표|서평|기간|인원|선착순|증정|추첨|당첨|제공|선물|선정')
+    conditions = re.compile(r'모집|신청|마감|발표|서평|기간|인원|선착순|증정|추첨|당첨|제공|선물|선정|댓글')
     lines = [line for line in body.splitlines()
              if not conditions.search(line) and book.title not in line]
     body = '\n'.join(lines).strip()

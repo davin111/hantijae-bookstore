@@ -50,6 +50,17 @@ class EditorCallbackTest(TestCase):
         self.assertEqual(latest_a.status, Draft.POSTED)
         self.assertEqual((latest_b.status, self.a.status), (Draft.DRAFT, Draft.DRAFT))
 
+    def test_notion_revision_relabels_only_its_authors_previous_box(self):
+        from marketing import notion_blocks as nb
+        b = self.notion_edit_a_after_b()
+        self.a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertEqual(self.host.notion.text_of(self.a.notion['box']), nb.BOX_LABEL)
+        latest_a = self.post('A', 4, parent=self.a)
+        ns.append_version(self.host.notion, latest_a)
+        self.assertEqual(self.host.notion.text_of(self.a.notion['box']), nb.OLD_BOX_LABEL)
+        self.assertEqual(self.host.notion.text_of(b.notion['box']), nb.BOX_LABEL)
+
     def test_posted_button_preserves_a_notion_edit_and_global_version_order(self):
         b = self.notion_edit_a_after_b()
         self.m.handle_callback(f'mk:p:{self.a.pk}', GROUP, cbq(), '검수자')

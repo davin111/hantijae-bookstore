@@ -258,7 +258,7 @@ def append_version(client, draft, request=''):
     hid = _heading_id(p, draft.channel if p.kind == Proposal.KIT else None)
     if not hid:
         return False
-    prev = next((x for x in Draft.objects.filter(proposal=p, channel=draft.channel, version__lt=draft.version)
+    prev = next((x for x in drafts_for(p, draft.channel, draft=draft).filter(version__lt=draft.version)
                  .order_by('-version', '-id') if (x.notion or {}).get('box')), None)
     res = client.append_children(hid, nb.version_blocks(draft.version, request))
     _fill_box(client, draft, res[-1]['id'])
