@@ -26,7 +26,20 @@ class NotionClient:
 
     def query_by_title(self, data_source_id, text):
         body = {'filter': {'property': '제목', 'title': {'contains': text}}, 'page_size': 50}
-        return self._call('POST', f'/data_sources/{data_source_id}/query', json=body).get('results', [])
+        return self._query_pages(data_source_id, body)
+
+    def query_all_pages(self, data_source_id):
+        """같은 표의 행을 끝까지 읽는다. 중간 실패 때는 부분 결과를 돌려주지 않는다."""
+        return self._query_pages(data_source_id, {'page_size': 100})
+
+    def _query_pages(self, data_source_id, body):
+        out = []
+        while True:
+            res = self._call('POST', f'/data_sources/{data_source_id}/query', json=body)
+            out += res.get('results', [])
+            if not res.get('has_more'):
+                return out
+            body = {**body, 'start_cursor': res['next_cursor']}
 
     def select_options(self, data_source_id, prop):
         schema = self._call('GET', f'/data_sources/{data_source_id}').get('properties', {})
@@ -44,13 +57,7 @@ class NotionClient:
         body = {'page_size': 100, 'filter': {'or': [
             {'property': '발행일', 'date': {'on_or_after': published_after}},
             {'property': '발행일', 'date': {'is_empty': True}}]}}
-        out = []
-        while True:
-            res = self._call('POST', f'/data_sources/{data_source_id}/query', json=body)
-            out += res.get('results', [])
-            if not res.get('has_more'):
-                return out
-            body['start_cursor'] = res['next_cursor']
+        return self._query_pages(data_source_id, body)
 
     def children(self, block_id, timeout=30):
         """블록의 바로 아래 블록들(페이지 넘김 포함)."""
@@ -99,12 +106,14 @@ def _text(v):
     return {'rich_text': [{'type': 'text', 'text': {'content': v}}]}
 
 
-def _match_row(rows, book_title):
+def _match_row(rows, book_title, exact_only=False):
     """(행, 'exact'|'prefix') 또는 (None, None). 노션엔 작업 제목(앞부분)만 적힌 행이 많아 유일한 접두 일치도 허용한다."""
     key = normalize_key(book_title)
     exact = [r for r in rows if normalize_key(_title(r)) == key]
     if len(exact) == 1:
         return exact[0], 'exact'
+    if exact_only:
+        return None, None
     prefix = [r for r in rows if normalize_key(_title(r)) and
               (key.startswith(normalize_key(_title(r))) or normalize_key(_title(r)).startswith(key))]
     return (prefix[0], 'prefix') if len(prefix) == 1 and not exact else (None, None)
@@ -114,6 +123,11 @@ def fill_notion_row(client, data_source_id, book, isbn_addon, site_url):
     first_word = book.title.split()[0].strip(',.') if book.title.split() else book.title
     rows = client.query_by_title(data_source_id, first_word)
     row, how = _match_row(rows, book.title)
+    if row is None:
+        # 원문 contains 검색은 띄어쓰기·자모 분리 차이를 놓친다. 같은 표 전체에서
+        # 유일한 정규화 정확 일치만 보완하고, 접두 일치 범위는 넓히지 않는다.
+        rows = client.query_all_pages(data_source_id)
+        row, how = _match_row(rows, book.title, exact_only=True)
     if row is None:
         return {'page_id': None, 'filled': [], 'note': f"노션에서 '{book.title}' 행을 하나로 특정하지 못했어요 ({len(rows)}개 후보)"}
     candidates = {

@@ -1,4 +1,5 @@
 from datetime import date
+import unicodedata
 from unittest import mock
 
 import requests
@@ -26,6 +27,9 @@ class FakeNotion:
 
     def query_by_title(self, ds, text):
         return [r for r in self.rows if text in r['properties']['제목']['title'][0]['plain_text']]
+
+    def query_all_pages(self, ds):
+        return self.rows
 
     def select_options(self, ds, prop):
         return self.options
@@ -72,6 +76,76 @@ class FillNotionTest(TestCase):
         self.assertIn('접두 일치', r['note'])
         self.assertIn('사그라다 파밀리아', r['note'])
 
+    def test_finds_unique_normalized_title_when_literal_search_misses(self):
+        pairs = [('한국탈핵', '한국 탈핵'),
+                 ('기후정의의 말들', unicodedata.normalize('NFD', '기후정의의 말들')),
+                 ('연대와 환대', unicodedata.normalize('NFD', '연대') + '와 환대')]
+        for title, stored in pairs:
+            with self.subTest(title=title):
+                self.book.title = title
+                fake = FakeNotion([page('target', stored)])
+                self.assertEqual(fake.query_by_title('ds', title.split()[0]), [])
+                result = notion.fill_notion_row(fake, 'ds', self.book, '04300', 'https://x')
+                self.assertEqual(result['page_id'], 'target')
+                self.assertEqual(len(fake.updates), 1)
+
+    def test_fallback_does_not_guess_typo_prefix_or_duplicate(self):
+        cases = [('한국탈핵', ['한국 탈핵', '한국 탈핵']),
+                 ('한국탈핵', ['한국 탈핵 이야기']),
+                 ('래디컬 데모크라시', ['래디컬 데모크러시'])]
+        for title, stored in cases:
+            with self.subTest(title=title, stored=stored):
+                self.book.title = title
+                fake = FakeNotion([page(str(i), t) for i, t in enumerate(stored)])
+                with mock.patch.object(fake, 'query_all_pages', wraps=fake.query_all_pages) as query:
+                    result = notion.fill_notion_row(fake, 'ds', self.book, '', 'https://x')
+                query.assert_called_once_with('ds')
+                self.assertIsNone(result['page_id'])
+                self.assertEqual(fake.updates, [])
+
+    def test_successful_literal_search_does_not_read_whole_catalog(self):
+        for stored in [self.book.title, '사그라다 파밀리아']:
+            with self.subTest(stored=stored):
+                fake = FakeNotion([page('target', stored)])
+                with mock.patch.object(fake, 'query_all_pages', side_effect=AssertionError('unexpected read')):
+                    self.assertEqual(notion.fill_notion_row(fake, 'ds', self.book, '', 'https://x')['page_id'],
+                                     'target')
+
+    def test_fallback_keeps_existing_values_including_addon_leading_zero(self):
+        self.book.title = '연대와 환대'
+        fake = FakeNotion([page('target', unicodedata.normalize('NFD', '연대') + '와 환대',
+                               ISBN={'type': 'rich_text', 'rich_text': [{'plain_text': '979-11-92455-59-4'}]},
+                               부가기호={'type': 'rich_text', 'rich_text': [{'plain_text': '04300'}]},
+                               가격={'type': 'number', 'number': 10000})])
+        notion.fill_notion_row(fake, 'ds', self.book, '03300', 'https://x')
+        self.assertTrue(fake.updates)
+        for prop in ['ISBN', '부가기호', '가격']:
+            self.assertNotIn(prop, fake.updates[0][1])
+
+    def test_fallback_reads_duplicate_on_later_page_before_writing(self):
+        self.book.title = '한국탈핵'
+        session = FakeSession([{'results': []},
+                               {'results': [page('p1', '한국 탈핵')], 'has_more': True, 'next_cursor': 'next'},
+                               {'results': [page('p2', '한국 탈핵')], 'has_more': False}])
+        client = notion.NotionClient('t', session=session)
+        result = notion.fill_notion_row(client, 'ds', self.book, '', 'https://x')
+        self.assertIsNone(result['page_id'])
+        self.assertEqual([method for method, _, _ in session.calls], ['POST', 'POST', 'POST'])
+
+    def test_fallback_page_failure_cannot_write_from_partial_results(self):
+        self.book.title = '한국탈핵'
+        for status in [403, 429, 500]:
+            with self.subTest(status=status):
+                session = mock.Mock()
+                session.request.side_effect = [
+                    _Res(200, {'results': []}),
+                    _Res(200, {'results': [page('p1', '한국 탈핵')], 'has_more': True, 'next_cursor': 'next'}),
+                    _Res(status, {}), _Res(status, {})]
+                client = notion.NotionClient('t', session=session)
+                with mock.patch('intake.notion.time.sleep'), self.assertRaises(requests.HTTPError):
+                    notion.fill_notion_row(client, 'ds', self.book, '', 'https://x')
+                self.assertTrue(all(call.args[0] == 'POST' for call in session.request.call_args_list))
+
 
 class FakeSession:
     def __init__(self, pages):
@@ -91,6 +165,26 @@ class FakeSession:
 
 
 class NotionReadTest(TestCase):
+    def test_title_query_follows_cursor_and_keeps_filter(self):
+        rows = [page(str(i), f'책 {i}') for i in range(50)]
+        s = FakeSession([{'results': rows, 'has_more': True, 'next_cursor': 'c1'},
+                         {'results': [page('target', '책 이름')], 'has_more': False}])
+        result = notion.NotionClient('t', session=s).query_by_title('ds', '책')
+        self.assertEqual(len(result), 51)
+        self.assertEqual(result[-1]['id'], 'target')
+        self.assertEqual(s.calls[1][2]['json']['filter'], {'property': '제목', 'title': {'contains': '책'}})
+        self.assertEqual(s.calls[1][2]['json']['start_cursor'], 'c1')
+
+    def test_query_all_pages_has_no_publication_filter(self):
+        rows = [{'id': str(i)} for i in range(100)]
+        s = FakeSession([{'results': rows, 'has_more': True, 'next_cursor': 'c1'},
+                         {'results': [{'id': 'last'}], 'has_more': False}])
+        result = notion.NotionClient('t', session=s).query_all_pages('ds')
+        self.assertEqual(len(result), 101)
+        self.assertEqual(result[-1]['id'], 'last')
+        self.assertNotIn('filter', s.calls[0][2]['json'])
+        self.assertEqual(s.calls[1][2]['json']['start_cursor'], 'c1')
+
     def test_query_pages_follows_cursor_with_date_filter(self):
         s = FakeSession([{'results': [{'id': 'a'}], 'has_more': True, 'next_cursor': 'c1'},
                          {'results': [{'id': 'b'}], 'has_more': False}])
