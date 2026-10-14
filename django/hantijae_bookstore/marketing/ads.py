@@ -12,6 +12,7 @@ from typing import Optional
 
 import requests
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Count, Max, Min, Q, Sum
 from django.utils import timezone
 
@@ -410,7 +411,7 @@ def labels(ads_):
 
 def _ad_block(ad, label):
     days = AdDay.objects.filter(ad=ad, spend__gt=0).count()
-    lines = [f'{post_link(f"<b>{h(label)}</b>", ad.post_url)} ({CHANNEL_LABEL[ad.channel]})',
+    lines = [f'{post_link(f"<b>{h(label)}</b>", ad.post_url)} (원본 글: {CHANNEL_LABEL[ad.channel]})',
              f'{period(ad.first_day, ad.last_day)} · {days}일 · {ad.spend:,}원']
     if ad.reach and ad.spend:
         lines.append(f'· {ad.reach:,}명에게 보였어요 (1,000원에 {round(ad.reach * 1000 / ad.spend):,}명)')
@@ -420,15 +421,27 @@ def _ad_block(ad, label):
     return '\n'.join(lines)
 
 
-def _sales_lines(ads_):
-    """책마다 한 번: 그 책 광고들의 처음~끝."""
+def _sales_spans(ads_):
+    """카드에 쓰는 실제 판매 비교 기간: 같은 책의 광고들은 처음~끝으로 합친다."""
     spans = {}
     for ad in ads_:
         if ad.book_id:
             book, first, last = spans.get(ad.book_id, (ad.book, ad.first_day, ad.last_day))
             spans[ad.book_id] = (book, min(first, ad.first_day), max(last, ad.last_day))
+    return spans.values()
+
+
+def card_sales_ready(ads_, today):
+    if bnk_sales.mode() != 'on':
+        return True
+    return all(today >= last + timedelta(days=CARD_WAIT_MAX) or sales_around(book, first, last) is not None
+               for book, first, last in _sales_spans(ads_))
+
+
+def _sales_lines(ads_):
+    """책마다 한 번: 그 책 광고들의 처음~끝."""
     out = []
-    for book, first, last in spans.values():
+    for book, first, last in _sales_spans(ads_):
         s = sales_around(book, first, last)
         if s is None:
             continue
@@ -464,7 +477,8 @@ def _baseline_line(ads_):
 
 def card_text(ads_, now, fetch=meta.channel_posts):
     shown = labels(ads_)
-    parts = ['<b>📣 광고 결과</b>'] + [_ad_block(a, shown[a.pk]) for a in ads_]
+    parts = ['<b>📣 광고 결과</b>\n성과는 모든 게재 위치 합계예요. 괄호는 원본 글이 있는 곳이에요.']
+    parts += [_ad_block(a, shown[a.pk]) for a in ads_]
     sales = _sales_lines(ads_)
     tail = [x for x in [_organic_line(now, fetch), *sales, _baseline_line(ads_)] if x]
     tail += list(dict.fromkeys(   # 같은 이름은 한 번만
@@ -479,17 +493,23 @@ def card_text(ads_, now, fetch=meta.channel_posts):
 
 
 def send_due_cards(bot, now, fetch=meta.channel_posts):
-    """하루 한 메시지(광고 최대 CARD_MAX개), 09:30~21:00. 보낸 뒤에만 '보냄'으로 적는다(실패하면 다음 바퀴에 다시)."""
+    """신규 카드는 하루 한 메시지. 등록된 카드의 연장분은 기존 메시지를 갱신한다. 09:30~21:00."""
+    from marketing import ad_cards
+
     if card_mode() == 'off':   # 꺼져 있으면 bot도 건드리지 않는다
         return 0
     local = kst_now(now)
     today = local.date()
-    if not CARD_FROM <= (local.hour, local.minute) < CARD_UNTIL or WorkerState.get('ads_card_day') == today.isoformat():
+    if not CARD_FROM <= (local.hour, local.minute) < CARD_UNTIL:
         return 0
     if WorkerState.get('ads_ok_on') != today.isoformat():   # 오늘 수집이 안 됐으면 낡은 숫자 때문에 진행 중인 광고가 끝난 것처럼 보인다
         return 0
     chat = card_target(bot, bot.marketing.mode())
     if chat is None:
+        return 0
+    if ad_cards.refresh_due(bot, chat, now, fetch):
+        return 1
+    if WorkerState.get('ads_card_day') == today.isoformat():
         return 0
     skip_stale(today)
     ads_ = due_cards(today)
@@ -502,9 +522,12 @@ def send_due_cards(bot, now, fetch=meta.channel_posts):
     if last_try and timedelta(0) <= now - last_try < timedelta(minutes=CARD_RETRY_MINUTES):
         return 0
     WorkerState.put('ads_card_last_try', now.isoformat())
-    bot.tg.send_message(chat, card_text(ads_, now, fetch), html=True)
-    Ad.objects.filter(pk__in=[a.pk for a in ads_]).update(card=Ad.SENT, card_sent_at=now)
-    WorkerState.put('ads_card_day', today.isoformat())
+    body = ad_cards.checked_text(card_text(ads_, now, fetch))
+    sent = bot.tg.send_message(chat, body, html=True)
+    with transaction.atomic():
+        ad_cards.remember(chat, sent['message_id'], ads_, body, now)
+        Ad.objects.filter(pk__in=[a.pk for a in ads_]).update(card=Ad.SENT, card_sent_at=now)
+        WorkerState.put('ads_card_day', today.isoformat())
     return 1
 
 

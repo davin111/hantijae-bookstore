@@ -406,7 +406,7 @@ class CardTest(TestCase):
         self.assertEqual(self.send(at(10, 1)), 1)
         [card] = self.tg.sent('send')
         self.assertEqual((card['chat'], card['html']), (GROUP, True))
-        for part in ('📣 광고 결과', '『나는 산속으로 더 깊이 들어간다』 글', '(페이스북)', '9월 22일~28일 · 7일 · 35,000원',
+        for part in ('📣 광고 결과', '『나는 산속으로 더 깊이 들어간다』 글', '(원본 글: 페이스북)', '9월 22일~28일 · 7일 · 35,000원',
                      '7,000명에게 보였어요 (1,000원에 200명)', '광고에 붙은 링크·버튼을 누른 횟수 50번', '반응(좋아요 등) 500',
                      '광고 없는 평소 페북 글은 보통 반응 18', '광고 전 7일 0권 → 광고 7일 3권', ads.CARD_NOTE):
             self.assertIn(part, card['text'])

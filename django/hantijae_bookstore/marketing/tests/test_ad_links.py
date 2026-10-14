@@ -18,14 +18,14 @@ class CardLinkTest(TestCase):
     def test_heading_links_to_the_post(self):
         ad = make_ad(book=make_book(), days=SEPT, post_url='https://www.facebook.com/hantijae/posts/1?a=1&b=2')
         self.assertIn('<a href="https://www.facebook.com/hantijae/posts/1?a=1&amp;b=2">'
-                      '<b>『나는 산속으로 더 깊이 들어간다』 글</b></a> (페이스북)', card(ad))
+                      '<b>『나는 산속으로 더 깊이 들어간다』 글</b></a> (원본 글: 페이스북)', card(ad))
 
     def test_no_link_without_a_url_or_with_an_odd_scheme(self):
         plain = make_ad(ad_id='1', post_id='111_1', days=SEPT, post_text='북토크 안내')
         odd = make_ad(ad_id='2', post_id='111_2', days=SEPT, post_text='모집 안내', post_url='javascript:alert(1)')
         text = card(plain, odd)
         self.assertNotIn('<a ', text)
-        self.assertIn('<b>「북토크 안내」 글</b> (페이스북)', text)
+        self.assertIn('<b>「북토크 안내」 글</b> (원본 글: 페이스북)', text)
 
     def test_two_ads_with_the_same_name_get_the_start_of_their_posts(self):
         a = make_ad(ad_id='1', post_id='111_1', days=SEPT, book_title='농부, 짠한 형',
@@ -38,7 +38,7 @@ class CardLinkTest(TestCase):
 
     def test_a_single_ad_has_no_snippet(self):
         ad = make_ad(days=SEPT, book_title='농부, 짠한 형', post_text='한티재에서 준비하고 있는 다음 책', post_url='https://f/1')
-        self.assertIn('<b>『농부, 짠한 형』 글</b></a> (페이스북)', card(ad))
+        self.assertIn('<b>『농부, 짠한 형』 글</b></a> (원본 글: 페이스북)', card(ad))
 
 
 class MonthLinkTest(TestCase):
