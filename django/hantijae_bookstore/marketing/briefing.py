@@ -11,6 +11,7 @@ from intake.llm import complete_json
 from marketing import ads, bnk_sales, candidates, channels, gnews, meta, search
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM, build_briefing_user
+from marketing.supplements import normalize_extra
 from marketing.sales import latest
 from marketing.text import fix_title_marks, foreign_numbers
 from marketing.timeutil import KST, week_start
@@ -70,10 +71,14 @@ def compose(llm, cands, today, context=(), midweek=False):
             dropped.append(f'{cand.id}: 같은 책이 이미 있음')
             continue
         used_books |= ids
-        channel = d.get('channel') if d.get('channel') in CHANNELS else Draft.INSTAGRAM
+        channel = (Draft.BLOG if cand.facts.get('expected_channel') == Draft.BLOG else
+                   d.get('channel') if d.get('channel') in CHANNELS else Draft.INSTAGRAM)
+        if channel != Draft.LETTER:
+            places = []
+        supplements = normalize_extra(d, cand.allowed_texts() + [today.isoformat()], cand.memorial) if channel != Draft.LETTER else {}
         items.append((cand, headline, reason,
                       {'channel': channel, 'title': fix_title_marks(str(d.get('title', '')).strip()), 'body': body,
-                       'places': places}))  # 보낼 곳은 올릴 글이 아니다 — Draft.extra에 따로(복사하기 좋게, 2026-09-30)
+                       'places': places, 'extra': supplements}))  # 보조물은 올릴 글에 섞지 않는다
         if len(items) == MAX_ITEMS:
             break
     return items, dropped
@@ -90,13 +95,15 @@ def save_briefing(items, today):
         for rank, (cand, headline, reason, d) in enumerate(items, 1):
             more_ids = [s.pk for s in cand.more_signals]
             extra = {'signals': more_ids} if more_ids else {}
+            if cand.memorial:
+                extra['memorial'] = True
             if cand.link:  # 브리핑 메시지에 '기사 원문: 주소'처럼 붙인다
                 extra.update(link=cand.link, link_label=candidates.LINK_LABEL.get(cand.kind, '링크'))
             p = Proposal.objects.create(kind=Proposal.BRIEF_ITEM, book=cand.books[0] if cand.books else None,
                                         signal=cand.signal, briefing=briefing, candidate_key=cand.id,
                                         headline=headline[:300], reason=reason, rank=rank, extra=extra)
             Draft.objects.create(proposal=p, channel=d['channel'], title=d['title'][:300], body=d['body'],
-                                 extra={'places': d['places']} if d.get('places') else {})
+                                 extra={**d.get('extra', {}), **({'places': d['places']} if d.get('places') else {})})
             used = ([cand.signal.pk] if cand.signal else []) + more_ids
             if used:
                 Signal.objects.filter(pk__in=used).update(used_at=timezone.now())

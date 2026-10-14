@@ -96,7 +96,10 @@ def check_event(raw, post):
         on = None
     if not (on or name):
         return None
-    return {'on': on.isoformat() if on else '', 'name': name, 'place': place}
+    event = {'on': on.isoformat() if on else '', 'name': name, 'place': place}
+    if 'onsite' in raw:
+        event['onsite'] = raw['onsite'] is True
+    return event
 
 
 def clean_verdict(raw, post, keys):
@@ -189,6 +192,10 @@ def attach(post, v, now, role_labels):
     """관련 글을 신호에 잇는다: 같은 사건 신호 → 같은 묶음 신호 → 새 신호."""
     sig = same_subject(v, now) or Signal.objects.filter(key=_key(post.group_key)).first()
     if sig:
+        ev = v['event'] or {}
+        old_ev = sig.detail.get('event') or {}
+        if 'onsite' in ev and ev.get('on') == old_ev.get('on'):
+            sig.detail = {**sig.detail, 'event': {**old_ev, 'onsite': ev['onsite']}}
         add_source(sig, post, role_labels)
     else:
         sig = _new_signal(post, v, role_labels)

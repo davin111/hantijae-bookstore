@@ -28,15 +28,18 @@ log = logging.getLogger('intake')
 KIND_LABEL = {'hook': '기념일', 'fund': '진행 중 펀딩', 'news': '저자 소식', 'surge': '판매 지수 급등',
               'blog': '네이버 블로그 글 없음', 'noreview': '리뷰 없음', 'selection': '공공 선정',
               'sns_event': '다가오는 행사', 'sns_after': '행사 후기', 'sns_repost': '공식 채널로 옮겨 싣기',
-              'sns_press': '서평·기사 모음', 'moment': '대화 속 계기', 'review': '새 독자 서평', 'loan': '도서관 대출'}
+              'sns_press': '서평·기사 모음', 'moment': '대화 속 계기', 'review': '새 독자 서평', 'loan': '도서관 대출',
+              'onsite_today': '오늘 현장', 'onsite_after': '어제 현장 후기', 'reprint': '중쇄 소식',
+              'editor': '편집 일기 질문', 'peer_event': '함께 참여할 공개 자리',
+              'series_week': '이번 주 한티재', 'series_reread': '다시 읽는 한티재'}
 LINK_LABEL = {'news': '기사 원문', 'fund': '펀딩 페이지', 'review': '서평 글'}  # 브리핑 메시지에서 링크 앞에 붙는 말
 # 판매 지수 급등의 원인 가설로 붙일 만한 대화 속 계기
-ROOM_TALK_TYPES = ('group', 'stock', 'author', 'media', 'issue', 'selection')
+ROOM_TALK_TYPES = ('group', 'stock', 'reprint', 'author', 'media', 'issue', 'selection')
 # 새 계기가 없는 후보는 같은 책을 3주 안에 다시 제안하지 않는다
 NEEDS_REST = ('blog', 'noreview', 'surge', 'loan')
 # 책 없이도 브리핑에 올릴 수 있는 후보(사이트에 아직 없는 신간·행사, 펀딩)
 SNS_KINDS = ('sns_event', 'sns_after', 'sns_repost', 'sns_press')
-BOOKLESS_OK = ('fund',) + SNS_KINDS
+BOOKLESS_OK = ('fund', 'editor', 'onsite_today', 'onsite_after', 'peer_event', 'series_week') + SNS_KINDS
 
 
 @dataclass

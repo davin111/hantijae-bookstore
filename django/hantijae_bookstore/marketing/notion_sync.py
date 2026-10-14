@@ -113,11 +113,39 @@ def target_of(proposal):
     return kit_target(proposal, proposal.notion.get('hub_text', ''), day)
 
 
-def newest(proposal, channel=None):
+def drafts_for(proposal, channel=None, draft=None):
+    """편집 게시글을 지정하면 같은 작성자·질문의 판만 돌려준다."""
     qs = Draft.objects.filter(proposal=proposal)
     if channel:
         qs = qs.filter(channel=channel)
-    return qs.order_by('-version', '-id').first()
+    if draft is not None and draft.channel == Draft.EDITOR and (draft.extra or {}).get('form') == 'post':
+        # 편집 일기는 같은 채널 안에도 여러 작성자의 독립된 글이 있다.
+        qs = qs.filter(channel=Draft.EDITOR, extra__form='post')
+        author = (draft.extra or {}).get('author')
+        if not author:
+            # 미식별 작성자를 한 사람으로 합치지 않는다. 연결된 부모·후속판만 따른다.
+            root, visited = draft, {draft.pk}
+            while root.parent_id and root.parent_id not in visited:
+                parent = root.parent
+                if (parent.proposal_id != proposal.pk or parent.channel != Draft.EDITOR
+                        or (parent.extra or {}).get('form') != 'post' or (parent.extra or {}).get('author')):
+                    break
+                root = parent
+                visited.add(root.pk)
+            descendants = {root.pk}
+            for row in qs.order_by('version', 'id'):
+                if row.parent_id in descendants and not (row.extra or {}).get('author'):
+                    descendants.add(row.pk)
+            return qs.filter(pk__in=descendants)
+        qs = qs.filter(extra__author=author)
+        question_id = (draft.extra or {}).get('question_id')
+        if question_id:
+            qs = qs.filter(extra__question_id=question_id)
+    return qs
+
+
+def newest(proposal, channel=None, draft=None):
+    return drafts_for(proposal, channel, draft=draft).order_by('-version', '-id').first()
 
 
 def _heading_id(proposal, channel):
@@ -190,7 +218,8 @@ def ensure_page(client, t, now):
 
 def _progress_states(t, states):
     """'진행' 칸에 셀 상태: [올렸어요]가 있는 글만(신간 묶음의 서점 링크 공지·짧은 소개는 올림이 될 수 없다)."""
-    return [s for (_, ch, _), s in zip(t.sections, states) if ch not in messages.NO_POST_BUTTON]
+    return [s for (p, ch, _), s in zip(t.sections, states)
+            if ch not in messages.NO_POST_BUTTON and board.has_post(p, ch)]
 
 
 def refresh(client, t):
@@ -280,9 +309,9 @@ def _needs_append(d):
     return any((x.notion or {}).get('box') for x in Draft.objects.filter(proposal_id=d.proposal_id, channel=d.channel))
 
 
-def current(client, proposal, channel, host=None, now=None):
+def current(client, proposal, channel, host=None, now=None, draft=None):
     """(최신 판, 알림). 알림: '' | 'notion'(노션에서 고친 글) | 'empty'(상자가 비었거나 없어짐). client가 None이면 읽지 않는다."""
-    d = newest(proposal, channel)
+    d = newest(proposal, channel, draft=draft)
     if client is None or d is None:
         return d, ''
     if not (d.notion or {}).get('box'):
@@ -305,7 +334,8 @@ def current(client, proposal, channel, host=None, now=None):
     if nb.normalize(title) == nb.normalize(d.title) and nb.normalize(body) == nb.normalize(d.body):
         return d, ''
     new = Draft.objects.create(proposal=proposal, channel=d.channel, title=title[:300], body=body,
-                               version=d.version + 1, parent=d, origin=Draft.NOTION, extra=d.extra, notion=d.notion)
+                               version=newest(proposal, d.channel).version + 1,
+                               parent=d, origin=Draft.NOTION, extra=d.extra, notion=d.notion)
     return new, 'notion'
 
 

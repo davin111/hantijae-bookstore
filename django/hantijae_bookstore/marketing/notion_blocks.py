@@ -3,8 +3,9 @@
 글 하나 = 문단 블록 하나(줄바꿈·빈 줄은 블록 안에서): 노션 앱은 블록 여러 개에 걸친 글자 선택이 불편하고,
 블록 하나 안에서는 '전체 선택'이 된다(2026-09-30 스파이크). 읽을 때는 엔터로 나뉜 블록도 줄바꿈으로 잇는다.
 """
-from marketing.messages import OPEN, POSTED, SKIPPED
+from marketing.messages import OPEN, POSTED, SKIPPED, source_lines
 from marketing.models import Draft
+from marketing.supplements import supplement_text
 
 RICH_LIMIT = 2000  # 노션 rich_text 한 조각(UTF-16 단위)
 DB_TITLE = '홍보 비서 글 모음'
@@ -119,15 +120,16 @@ def _letter_lines(draft):
 
 def item_memo(proposal, draft):
     lines = [proposal.reason] if proposal.reason else []
-    extra = proposal.extra or {}
-    if extra.get('link'):
-        lines.append(f"{extra.get('link_label') or '링크'}: {extra['link']}")
+    lines += source_lines(proposal)
     lines.append(f'어떤 글: {draft.label}')
-    return '\n'.join(lines + _letter_lines(draft))
+    supplement = supplement_text(draft)
+    return '\n'.join(lines + _letter_lines(draft) + ([supplement] if supplement else []))
 
 
 def kit_memo(draft):
-    return '\n'.join(([KIT_MEMO[draft.channel]] if draft.channel in KIT_MEMO else []) + _letter_lines(draft))
+    lines = ([KIT_MEMO[draft.channel]] if draft.channel in KIT_MEMO else []) + _letter_lines(draft)
+    supplement = supplement_text(draft)
+    return '\n'.join(lines + ([supplement] if supplement else []))
 
 
 def plain(block):

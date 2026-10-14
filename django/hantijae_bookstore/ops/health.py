@@ -275,6 +275,45 @@ def _midweek(c, row, since):
     _verdict(row, [], n, f'만든 제안 {n}개 · 보냄 {sent}개 (7일 안 날짜가 잡힌 계기·2일 안 기념일만 대상이라 0개가 흔함)')
 
 
+def _editor(c, row):
+    state = c.get('marketing_editor_state') or {}
+    status = state.get('status')
+    row.last = _when(state.get('checked_at'))
+    row.result = state.get('reason') or '이번 구간은 아직 확인 전'
+    if status in ('rss_failed', 'rss_partial', 'expired', 'failed'):
+        row.state, row.reason = WARN, row.result
+    elif status in ('posted', 'waiting', 'deferred'):
+        row.state = CALM
+    elif status == 'sent':
+        row.state = OK
+    else:
+        row.state = WAIT
+
+
+def _peers(c, row, since):
+    sources = (c.get('peer_scan_state') or {}).get('sources', {})
+    problems = [name for name, value in sources.items() if value.get('failure_count', 0) > 0]
+    if not sources:
+        problems.append('출처별 확인 결과 없음')
+    checked = sum(value.get('checked', 0) for value in sources.values())
+    backlog = sum(value.get('backlog', 0) for value in sources.values())
+    _verdict(row, problems, checked, f'출처 {len(sources)}곳 · 확인 {checked}건 · 다음 확인 대기 {backlog}건')
+
+
+def _series(c, row):
+    state = c.get('series_state') or {}
+    row.last = _when(state.get('checked_at'))
+    status = state.get('status')
+    labels = {'no_news': '확인된 새 소식이 없어 이번 주 초안 생략',
+              'source_failed': '자료 수집 실패로 소식 유무 판단 보류',
+              'generated': '연재 후보 확인, 실제 발송은 주중 제안 기록 확인',
+              'already_sent': '이번 주 연재 제안 발송 확인', 'sent': '연재 제안 검수방 발송 완료'}
+    row.result = labels.get(status, '금요일 후보 확인 전')
+    row.state = WARN if status == 'source_failed' else CALM if status == 'no_news' else OK if status in ('sent', 'already_sent') else WAIT
+    if row.state == WARN:
+        row.reason = row.result
+
+
 def _loans(c, row, since):
     n = LoanSnapshot.objects.filter(taken_at__gte=since).values('book').distinct().count()
     _verdict(row, [], n, f'대출 기록 {n}권')
@@ -565,8 +604,12 @@ def _specs(c):
         Spec('moment', '계기 잡기', '대화·노션·사진·링크에서 계기 추리기', ('moment_last_run', '/moment'),
              Daily((5, 0)), 'moment_last_run', _moments, ('moment',),
              m_on and c.get('moment_mode', 'off') != 'off', why('moment_mode 꺼짐')),
-        Spec('midweek', '주중 제안', '05:30 만들기 · 09:30~21:00 보내기', ('midweek_last_build',),
-             Daily((5, 30), weekdays=(1, 2, 3, 4, 5)), 'midweek_last_build', _midweek, ('midweek', 'midweek_send'),
+        Spec('peer', '참고 출판사', '9개 인스타·5개 네이버 RSS, 짧은 요약과 링크', ('peer_last_scan', 'peer_scan_state'),
+             Daily((4, 55)), 'peer_last_scan', _peers, ('peer',),
+             m_on and c.get('peer_mode') == 'live', why('peer_mode 꺼짐')),
+        Spec('midweek', '주중 제안', '05:30 만들기 · 현장 당일 08:30 / 그 밖에는 09:30~21:00 보내기', ('midweek_last_build',),
+             Daily((5, 30), weekdays=(1, 2, 3, 4, 5, 6) if c.get('dated_mode') == 'live' else (1, 2, 3, 4, 5)),
+             'midweek_last_build', _midweek, ('midweek', 'midweek_send'),
              m_on and c.get('midweek_mode', 'off') != 'off', why('midweek_mode 꺼짐')),
         Spec('loans', '도서관 대출', '정보나루 12달', ('marketing_last_loan_scan', '로그 loans:'),
              Daily((5, 40), weekdays=(5,), start=date(2026, 10, 3)), 'marketing_last_loan_scan', _loans, ('loan',),
@@ -647,6 +690,14 @@ def _always_rows(c):
         bool(c.get('drive_autoscan', False)), 'drive_autoscan 꺼짐')
     add('kit', '신간 홍보 묶음', '10분마다', '08~21시에 보냄, 하루 2장까지', ('marketing_last_kit_check', '/mk'), _kits,
         m_on, '마케팅 꺼짐(marketing_mode)', ('kit', 'kit_send'))
+    add('editor', '편집 일기 확인', '매월 1~15일 / 16일~말일', '게시 확인·미답 대기·실제 검수방 발송을 구분',
+        ('marketing_editor_state', '/moment editor'), _editor,
+        m_on and c.get('midweek_mode', 'off') != 'off' and c.get('editor_mode') == 'live',
+        '편집 일기 또는 주중 제안 꺼짐')
+    add('series', '네이버 블로그 연재', '금요일 주중 제안', '소식 없는 주 생략 · 계기 있는 구간책 격주',
+        ('series_state', '/mk series'), _series,
+        m_on and c.get('midweek_mode', 'off') != 'off' and c.get('series_mode') == 'live',
+        '연재 또는 주중 제안 꺼짐')
     add('fund', '북펀드 감지', '6시간마다', '알라딘 북펀드·텀블벅', ('last_fund_scan', 'fund_error_day', '/fund'), _fund,
         bool(c.get('fund_autoscan', True)), 'fund_autoscan 꺼짐')
     add('notion', '노션 글 모음', '매 바퀴', '브리핑·초안을 노션에도', ('marketing_notion',), _notion,

@@ -10,6 +10,7 @@ from intake.models import WorkerState
 from marketing.hooks import upcoming
 from marketing.models import BookProfile, Draft, Proposal
 from marketing.prompts import KIT_SYSTEM, build_kit_user
+from marketing.supplements import clean, factual, normalize_extra, normalize_hashtags, recruit_cards
 from marketing.text import fix_title_marks, foreign_numbers, title_key, unverified_quotes
 from web.presenters import UNTRUSTED_SHORTLINK, authors_of, credit_line, store_links
 
@@ -62,11 +63,56 @@ def _clean(value):
     return fix_title_marks(str(value or '').strip())
 
 
+RECRUIT_FIELDS = ('[모집 인원]', '[신청 마감]', '[발표]', '[서평 올릴 곳]', '[서평 기간]')
+
+
+def _recruit_body(raw, book, allowed):
+    """운영진이 아직 결정하지 않은 모집 조건은 반드시 빈칸으로 둔다."""
+    import re
+    body = clean(raw)
+    if not body:
+        return ''
+    if not all(field in body for field in RECRUIT_FIELDS) or not factual(body, allowed):
+        return '\n'.join([f'『{book.title}』 서평단을 모십니다.', '',
+                          '이 글에 댓글로 읽고 싶은 이유를 한 줄 남겨 주세요.', '',
+                          *RECRUIT_FIELDS, '', '#한티재의책'])
+    # 같은 숫자가 책 쪽수에 있더라도 모집 인원으로 승인된 것은 아니다.
+    # 모집 조건·혜택은 모델 문장을 쓰지 않고 정해진 빈칸으로만 안내한다.
+    conditions = re.compile(r'모집|신청|마감|발표|서평|기간|인원|선착순|증정|추첨|당첨|제공|선물|선정')
+    lines = [line for line in body.splitlines()
+             if not conditions.search(line) and book.title not in line]
+    body = '\n'.join(lines).strip()
+    tags = normalize_hashtags(re.findall(r'#[\w가-힣]+', body), allowed)
+    body = re.sub(r'#[\w가-힣]+', '', body).strip()
+    return '\n\n'.join(p for p in [f'『{book.title}』 서평단을 모십니다.', body,
+                                    '이 글에 댓글로 읽고 싶은 이유를 한 줄 남겨 주세요.',
+                                    '\n'.join(RECRUIT_FIELDS), ' '.join(tags)] if p)
+
+
+def _editor_questions(raw, allowed):
+    if not isinstance(raw, list):
+        return ''
+    questions = []
+    for value in raw:
+        text = clean(value)
+        if (text and len(text) <= 200 and text not in questions and factual(text, allowed)
+                and (text.endswith(('?', '？', '은', '는')))):
+            questions.append(text)
+    if len(questions) < 2:
+        return ''
+    return '\n'.join(['편집 후기 질문', *[f'{i}. {q}' for i, q in enumerate(questions[:3], 1)], '',
+                      '이 메시지에 답장으로 생각나는 대로 짧게 적어 주시면, 네이버 블로그 「편집 일기」 글로 다듬어 드릴게요.',
+                      '여러 번 나눠 답장하셔도 돼요.'])
+
+
 def build_kit(book, llm, posts, today):
     exists = blog_has(book, posts)
     hooks = [f'{on.month}월 {on.day}일 {h.name}' + (' (추모 성격)' if h.memorial else '')
              for h, on in upcoming(today, 45) if book in h.books.all()]
     out = complete_json(llm, KIT_SYSTEM, build_kit_user(book, credit_line(authors_of(book)), today, exists, hooks))
+    source = '\n'.join([book.description or '', book.short_description or ''])
+    allowed = [source, book.title, book.subtitle or '', str(book.page_count), str(book.full_price),
+               book.published_date.isoformat(), credit_line(authors_of(book)), '200자 소개']
     with transaction.atomic():  # 도중에 실패하면 반쯤 저장된 묶음이 나가지 않게 통째로 되돌린다
         p = Proposal.objects.create(kind=Proposal.KIT, book=book, headline=f'『{book.title}』 홍보 자료'[:300],
                                     caution=_clean(out.get('caution')),
@@ -74,10 +120,12 @@ def build_kit(book, llm, posts, today):
         blog_body = _clean(out.get('blog_body'))
         if not exists and blog_body:
             Draft.objects.create(proposal=p, channel=Draft.BLOG, title=_clean(out.get('blog_title'))[:300],
-                                 body=blog_body)
+                                 body=blog_body, extra=normalize_extra({'cards': out.get('blog_cards'),
+                                                                       'cross': out.get('blog_cross')}, allowed))
         insta = _clean(out.get('instagram'))
         if insta:
-            Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body=insta)
+            Draft.objects.create(proposal=p, channel=Draft.INSTAGRAM, body=insta,
+                                 extra=normalize_extra({'cards': out.get('instagram_cards')}, allowed))
         Draft.objects.create(proposal=p, channel=Draft.LINKS, body=links_text(book))
         liners = [x for x in (_clean(v) for v in (out.get('one_liners') or [])) if x and len(x) <= 20][:3]
         summary = _clean(out.get('summary_200'))
@@ -93,13 +141,18 @@ def build_kit(book, llm, posts, today):
         elif places:  # 보낼 글 없이 알릴 곳만 있으면 목록을 글로 둔다
             Draft.objects.create(proposal=p, channel=Draft.LETTER,
                                  body='\n'.join(['알리면 좋을 곳', *[f'· {x}' for x in places]]))
-        source = '\n'.join([book.description or '', book.short_description or ''])
+        recruit = out.get('recruit') if isinstance(out.get('recruit'), dict) else {}
+        recruit_body = _recruit_body(recruit.get('body'), book, allowed)
+        if recruit_body:
+            Draft.objects.create(proposal=p, channel=Draft.RECRUIT, body=recruit_body,
+                                 extra={'cards': recruit_cards(recruit.get('cards'), allowed)})
+        questions = _editor_questions(out.get('editor_questions'), allowed)
+        if questions:
+            Draft.objects.create(proposal=p, channel=Draft.EDITOR, body=questions, extra={'form': 'questions'})
         notes = []
         bad = [q for d in p.drafts.all() for q in unverified_quotes(d.body, source)]
         if bad:
             notes.append('원문과 다른 인용이 있어요. 책에서 확인해 주세요: ' + ' / '.join(f'"{q}"' for q in bad))
-        allowed = [source, book.title, book.subtitle or '', str(book.page_count), str(book.full_price),
-                   book.published_date.isoformat(), '200자 소개']
         nums = foreign_numbers(' '.join(f'{d.title} {d.body} {" ".join(d.places)}'
                                         for d in p.drafts.exclude(channel=Draft.LINKS)), allowed)
         if nums:

@@ -2,7 +2,7 @@
 import io
 import logging
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
 from django.db.models import Q
@@ -15,9 +15,10 @@ from intake.models import TelegramChat, WorkerState
 from marketing import board
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
-from marketing import ads, bnk, bnk_sales, grants, messages, meta, midweek, moments, monthly, notion_sync, social
+from marketing import ads, bnk, bnk_sales, dated, editor, grants, messages, meta, midweek, moments, monthly, notion_sync, peers, series, social
+from marketing.supplements import rewrite_extra
 from marketing.hooks import add_hook, upcoming
-from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, GrantCall, Proposal, WatchQuery
+from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, GrantCall, HookDate, Proposal, Signal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
 from marketing.text import fix_title_marks, is_acknowledgement, title_key
 from marketing.timeutil import KST, in_quiet_hours, kst_now, kst_today, week_start
@@ -216,12 +217,16 @@ class Marketing:
         def is_quiet(i):
             return bool(i.book_id and i.book_id in quiet_books)
         shown = [i for i in items if not is_quiet(i)]  # 보류 중인 책 항목은 상태와 무관하게 메시지에서 뺀다
-        if not shown:  # 전부 보류 중이거나 애초에 항목이 없으면 지금의 '항목 없음' 경로와 같다
+        onsite_line = dated.monday_line(today, now) if midweek.target(self.host, self.mode()) is not None else ''
+        peer_lines = peers.briefing_lines(today, now)
+        if not shown and not onsite_line and not peer_lines:
             return False
         # 이미 ACTED로 확정된 항목은 메시지에서는 빠지지만(위) 상태는 그대로 둔다(운영진 결정 보존)
         to_skip = [i for i in items if is_quiet(i) and i.status != Proposal.ACTED]
         grant_lines = self._grant_briefing_lines(today)
         sales_line = self._bnk_sales_line(today)
+        sales_line = '\n'.join(x for x in (onsite_line, sales_line,
+                                 '다른 출판사는 요즘\n' + '\n'.join(peer_lines) if peer_lines else '') if x)
         states = [board.item_state(p) for p in shown]  # 관리자 방 사본에서 이미 누른 결정도 버튼에 보인다
         url = (briefing.notion or {}).get('url', '')
         if record:  # 상황판·노션이 같은 항목을 그리게, 보낼 항목 순서를 먼저 적는다
@@ -309,11 +314,55 @@ class Marketing:
         chat = midweek.target(self.host, self.mode())
         if chat is None or in_quiet_hours(now):
             return False
+        today, room = kst_today(now), midweek.to_room(self.mode())
+        if (kst_now(now).hour, kst_now(now).minute) < midweek.send_at(today):
+            return False
+        if Proposal.objects.filter(kind=Proposal.NOW, chat_id=chat, sent_at__gte=self._day_start(now)).exists():
+            return False
         items = list(Proposal.objects.filter(kind=Proposal.NOW, sent_at__isnull=True, created_at__gte=self._day_start(now))
+                     .exclude(status__in=(Proposal.SKIPPED, Proposal.ACTED))
                      .order_by('rank', 'id'))
+        if room:
+            previews = (Proposal.objects.filter(kind=Proposal.NOW, extra__has_key='content_preview_at')
+                        .filter(Q(candidate_key__startswith='onsite:') | Q(candidate_key__startswith='reprint:') |
+                                Q(candidate_key__startswith='peer:') | Q(candidate_key__startswith='series:'))
+                        .exclude(extra__has_key='content_room_sent_at')
+                        .exclude(status__in=(Proposal.SKIPPED, Proposal.ACTED)))
+            items += list(previews)
+        pending = editor.pending(today, room=room) if WorkerState.get('editor_mode') == 'live' else []
+        by_id = {p.id: p for p in [*items, *pending]}
+        items = list(by_id.values())
+        items = [p for p in items if not (p.book_id and BookProfile.objects.filter(
+            book_id=p.book_id, quiet_until__gte=today).exists())]
+        def source_still_live(p):
+            if p.candidate_key.startswith('peer:'):
+                if not peers.can_send(p, today, now):
+                    return False
+            if p.candidate_key.startswith('series:'):
+                if not series.can_send(p, today, now):
+                    return False
+            ids = ([p.signal_id] if p.signal_id else []) + (p.extra or {}).get('more_signal_ids', [])
+            if Signal.objects.filter(pk__in=ids).filter(Q(sensitive=True) | Q(relevant=False) | Q(detail__status='cancelled')).exists():
+                return False
+            return not BookProfile.objects.filter(book_id__in=(p.extra or {}).get('book_ids', []), quiet_until__gte=today).exists()
+        items = [p for p in items if source_still_live(p)]
+        date_keys = {c.id for c in dated.items(today, now, reserved_ids=[p.signal_id for p in items if p.signal_id],
+                                              include_preview=not room)}
+        items = [p for p in items if not p.candidate_key.startswith(('onsite:', 'reprint:')) or p.candidate_key in date_keys]
+        diary_items = [p for p in items if p.candidate_key.startswith('editor:')]
+        if diary_items:
+            posts = self.blog_posts() if WorkerState.get('editor_mode') == 'live' else None
+            items = [p for p in items if p not in diary_items or (WorkerState.get('editor_mode') == 'live'
+                     and editor.can_send(p, today, posts, now))]
         if midweek.to_room(self.mode()) and WorkerState.get('moment_mode', 'off') != 'live':
             # 만든 뒤 모드가 바뀐 경우: 계기 항목은 계기 잡기가 live일 때만 검수 방에 간다(남은 것은 다음 날 풀림)
             items = [p for p in items if not p.candidate_key.startswith('moment:')]
+        def priority(p):
+            key = p.candidate_key
+            return (0 if key.startswith('onsite:') and key.endswith(':today') else
+                    1 if key.startswith('onsite:') else 2 if key.startswith('editor:') else
+                    3 if key.startswith('reprint:') else 4, p.rank, p.id)
+        items = sorted(items, key=priority)[:midweek.MAX_ITEMS]
         if not items:
             return False
         url = self._notion_page(notion_sync.now_target(items, messages.plain(messages.midweek_text(items, guide=False)),
@@ -322,6 +371,15 @@ class Marketing:
                                     buttons=messages.midweek_buttons(items, [board.item_state(p) for p in items], url))
         Proposal.objects.filter(pk__in=[p.id for p in items]).update(chat_id=chat, message_id=sent['message_id'],
                                                                      sent_at=now, status=Proposal.SHOWN)
+        for p in items:
+            p.extra = {**(p.extra or {}), ('content_room_sent_at' if room else 'content_preview_at'): now.isoformat()}
+            p.save(update_fields=['extra'])
+            if p.candidate_key.startswith('editor:'):
+                editor.mark_sent(p, room=room, now=now)
+            if p.candidate_key.startswith('series:'):
+                state = WorkerState.get('series_state') or {}
+                state.update(status='sent' if room else 'preview', sent_at=now.isoformat(), room=room)
+                WorkerState.put('series_state', state)
         self._midweek_week_notice(now)
         return True
 
@@ -334,6 +392,10 @@ class Marketing:
             self.host.notify_admin('ℹ️ 이번 주 주중 제안이 두 번째예요. 너무 잦으면 /moment midweek 로 조정하세요')
 
     def _send_draft(self, draft, chat_id, reply_to=None, quote=None, quote_entities=None):
+        supplement = messages.supplement_text(draft)
+        if supplement:
+            sent = self.tg.send_message(chat_id, supplement, reply_to=reply_to, quote=quote, quote_entities=quote_entities)
+            DraftMessage.objects.create(draft=draft, chat_id=chat_id, message_id=sent['message_id'])
         places = messages.places_text(draft)
         if places:  # 편지: 보낼 곳을 먼저 짧게(올릴 글이 아니라 본문에서 뺐다). 여기에 단 답장도 편지 고치기로 간다
             sent = self.tg.send_message(chat_id, places, reply_to=reply_to, quote=quote, quote_entities=quote_entities)
@@ -359,9 +421,9 @@ class Marketing:
             qs = qs.filter(channel=channel)
         return qs.order_by('-version', '-id').first()
 
-    def _current(self, proposal, channel):
+    def _current(self, proposal, channel, draft=None):
         """(보낼·기록할·고칠 최신 판, 알림). 노션이 켜져 있으면 📝 상자를 읽어 고친 글을 새 판으로 받는다."""
-        return notion_sync.current(self._notion(), proposal, channel, host=self.host, now=timezone.now())
+        return notion_sync.current(self._notion(), proposal, channel, host=self.host, now=timezone.now(), draft=draft)
 
     def _after_status(self, proposal):
         """버튼을 누른 뒤 허브 버튼(진행 상황판)을 다시 그린다. 실패해도 버튼 처리는 끝난 것으로 둔다.
@@ -413,7 +475,11 @@ class Marketing:
             d = Draft.objects.filter(pk=pk).select_related('proposal').first()
             if not d:
                 return ''
-            cur, _ = self._current(d.proposal, d.channel)  # 올린 글 = 그 순간의 최신 판(노션 포함, 2026-09-30 사용자)
+            if d.channel == Draft.EDITOR and (d.extra or {}).get('form') == 'questions':
+                return '질문에 답하시면 올릴 글을 다듬어 드릴게요'
+            cur, _ = self._current(d.proposal, d.channel, draft=d)  # 편집 일기는 누른 작성자의 최신 판(노션 포함)
+            if cur.channel == Draft.EDITOR and (cur.extra or {}).get('form') == 'questions':
+                return '질문에 답하시면 올릴 글을 다듬어 드릴게요'
             Draft.objects.filter(pk=cur.pk).update(status=Draft.POSTED, posted_at=timezone.now(), posted_by=actor[:100])
             Proposal.objects.filter(pk=d.proposal_id).update(status=Proposal.ACTED)
             self._after_status(d.proposal)
@@ -425,7 +491,7 @@ class Marketing:
             if not d:
                 return ''
             # 누른 판만이 아니라 그 글의 아직 안 올린 판 모두(상황판 이름이 판마다 흔들리지 않게)
-            Draft.objects.filter(proposal_id=d.proposal_id, channel=d.channel, status=Draft.DRAFT).update(status=Draft.SKIPPED)
+            notion_sync.drafts_for(d.proposal, d.channel, draft=d).filter(status=Draft.DRAFT).update(status=Draft.SKIPPED)
             self._after_status(d.proposal)
             return '알겠어요'
         if action == 'sk':
@@ -474,21 +540,56 @@ class Marketing:
             return
         if not text or is_acknowledgement(text):  # 고맙다·좋다는 답뿐이면 고치지 않는다
             return
-        base, _ = self._current(draft.proposal, draft.channel)  # 옛 사본에 답장해도 최신 판(노션 포함)을 고친다
+        if draft.channel == Draft.EDITOR and (draft.extra or {}).get('form') == 'questions':
+            # 먼저 답장 대상 원본을 본다. 최신 판은 이미 글이 되어 있을 수 있다.
+            working = self.tg.send_message(chat_id, messages.WORKING, reply_to=msg['message_id'])
+            try:
+                new = editor.create_post(self.llm, draft, text, actor)
+            except (LLMError, ValueError) as e:
+                self.host.notify_admin(f'⚠️ 편집 일기 다듬기 실패: {type(e).__name__}: {e}')
+                self.tg.edit_text(chat_id, working['message_id'], messages.REWRITE_FAILED)
+                return
+            self._send_draft(new, chat_id, reply_to=msg['message_id'])
+            self.tg.edit_text(chat_id, working['message_id'], '답하신 내용으로 편집 일기 초안을 다듬었어요.')
+            client = self._notion()
+            if client is not None:
+                try:
+                    notion_sync.append_version(client, new, text)
+                except Exception:
+                    log.warning('editor notion append failed for draft %s', new.pk, exc_info=True)
+                    notion_sync.mark_dirty(new.proposal)
+            self._after_status(new.proposal)
+            return
+        if draft.channel == Draft.EDITOR and (draft.extra or {}).get('form') == 'post':
+            # 한 질문에 여러 편집자가 답할 수 있다. 그 작성자의 계보 안에서만 최신판을 고친다.
+            base, _ = self._current(draft.proposal, draft.channel, draft=draft)
+        else:
+            base, _ = self._current(draft.proposal, draft.channel)  # 옛 사본에 답장해도 최신 판(노션 포함)을 고친다
         CopyNote.objects.create(draft=base, text=text, by=actor[:100])
         working = self.tg.send_message(chat_id, messages.WORKING, reply_to=msg['message_id'])
         book = base.proposal.book
         source = (book.description or book.short_description or '') if book else ''
         try:
             out = complete_json(self.llm, REWRITE_SYSTEM, build_rewrite_user(base, text, source))
+            if base.channel == Draft.EDITOR and not editor.valid_facts(
+                    str(out.get('title') or '') + '\n' + str(out.get('body') or ''),
+                    base.title + '\n' + base.body + '\n' + text):
+                raise LLMError('답에 없는 숫자나 인용이 있어 저장하지 않았어요')
         except LLMError as e:
             self.host.notify_admin(f'⚠️ 마케팅 초안 고치기 실패: {type(e).__name__}: {e}')
             self.tg.edit_text(chat_id, working['message_id'], messages.REWRITE_FAILED)
             return
+        memorial = bool((base.proposal.extra or {}).get('memorial'))
+        if base.proposal.candidate_key.startswith('hook:'):
+            hook_id = base.proposal.candidate_key.split(':')[1]
+            if hook_id.isdigit():
+                memorial = memorial or HookDate.objects.filter(pk=hook_id, memorial=True).exists()
         new = Draft.objects.create(proposal=base.proposal, channel=base.channel,
                                    title=fix_title_marks(str(out.get('title') or '').strip())[:300],
                                    body=fix_title_marks(str(out.get('body') or '').strip()) or base.body,
-                                   version=base.version + 1, parent=base, origin=Draft.REWRITE, extra=base.extra)
+                                   version=self._newest(base.proposal_id, base.channel).version + 1,
+                                   parent=base, origin=Draft.REWRITE,
+                                   extra=rewrite_extra(base, out, note=text, source_text=source, memorial=memorial))
         # 새 글(본문만)을 먼저 보내고, '고치고 있어요'를 '고쳤어요: …'로 고쳐 써 방에 메시지가 하나만 늘게 한다
         self._send_draft(new, chat_id, reply_to=msg['message_id'])
         try:  # 고쳐 쓰기가 안 돼도(메시지가 지워짐 등) 새 글은 이미 갔다
@@ -513,6 +614,12 @@ class Marketing:
         self.tg.send_message(chat_id, handler(chat_id, (arg or '').strip(), now, kst_today(now)) or '완료')
 
     def _mk(self, chat_id, arg, now, today):
+        parts = arg.split()
+        if parts and parts[0] in ('peers', 'series'):
+            name = 'peer' if parts[0] == 'peers' else 'series'
+            if len(parts) == 2 and parts[1] in ('off', 'live'):
+                WorkerState.put(f'{name}_mode', parts[1])
+            return f"{name}_mode={WorkerState.get(name + '_mode', 'off')}"
         if arg.split()[:1] == ['notion']:
             return notion_sync.switch(arg[len('notion'):].strip())
         if arg.split()[:1] == ['social']:
@@ -530,6 +637,15 @@ class Marketing:
 
     def _moment(self, chat_id, arg, now, today):
         parts = arg.split()
+        if parts and parts[0] in ('editor', 'dated'):
+            feature = parts[0]
+            if len(parts) == 2 and parts[1] in ('off', 'live'):
+                WorkerState.put(f'{feature}_mode', parts[1])
+            mode = WorkerState.get(f'{feature}_mode', 'off')
+            if feature == 'dated':
+                return f'dated_mode={mode}\n' + dated.preview(today, now)
+            state = WorkerState.get('marketing_editor_state') or {}
+            return f'editor_mode={mode}\n' + str(state.get('reason') or '이번 구간은 아직 확인 전이에요.')
         if len(parts) == 2 and parts[0] == 'midweek' and parts[1] in MODES:
             WorkerState.put('midweek_mode', parts[1])
             return f'midweek_mode={parts[1]}'

@@ -8,12 +8,15 @@ from django.utils import timezone
 from intake.messages import CAPTION_LIMIT
 from intake.telegram_api import keyboard, plain_text
 from marketing.models import Draft
+from marketing.supplements import supplement_text
 from marketing.text import clip, tg_len
 from marketing.timeutil import kst_today
 
 TEXT_LIMIT = 4096
 KIT_BULLET = {Draft.BLOG: '네이버 블로그 글', Draft.INSTAGRAM: '인스타 글', Draft.LINKS: '서점 링크 공지',
-              Draft.SHORT: '짧은 소개 (한 줄 3가지, 200자)', Draft.LETTER: '알리면 좋을 곳과 보낼 글'}
+              Draft.SHORT: '짧은 소개 (한 줄 3가지, 200자)', Draft.LETTER: '알리면 좋을 곳과 보낼 글',
+              Draft.RECRUIT: '서평단 모집 글 (인원·마감은 [ ] 칸만 채우면 돼요)',
+              Draft.EDITOR: '편집 후기 질문 (답장하시면 네이버 블로그 글로 다듬어 드려요)'}
 
 
 def h(value):
@@ -88,6 +91,18 @@ def kit_buttons(proposal, drafts, states=None, notion_url=''):
     first = [(KIT_LABEL[states.get(c, OPEN)].format(KIT_SHORT[c]), cb('v', by[c].id))
              for c in (Draft.BLOG, Draft.INSTAGRAM) if c in by]
     rows = [first] if first else []
+    extra = []
+    if Draft.RECRUIT in by:
+        extra.append((KIT_LABEL[states.get(Draft.RECRUIT, OPEN)].format('서평단'), cb('v', by[Draft.RECRUIT].id)))
+    if Draft.EDITOR in by:
+        d = by[Draft.EDITOR]
+        question = (d.extra or {}).get('form') == 'questions'
+        label = '편집 후기 질문' if question else KIT_LABEL[states.get(Draft.EDITOR, OPEN)].format('편집 후기')
+        if question and states.get(Draft.EDITOR) == SKIPPED:
+            label += ' 넘김'
+        extra.append((label, cb('v', d.id)))
+    if extra:
+        rows.append(extra)
     rows.append([('나머지 보기', cb('m', proposal.id)), ('이번엔 넘기기', cb('sk', proposal.id))])
     return keyboard(_with_notion(rows, notion_url))
 
@@ -111,6 +126,8 @@ NO_POST_BUTTON = (Draft.LINKS, Draft.SHORT)  # [올렸어요]가 없는 글(서�
 
 
 def draft_buttons(draft):
+    if draft.channel == Draft.EDITOR and (draft.extra or {}).get('form') == 'questions':
+        return keyboard([[('다음에', cb('l', draft.id))]])
     if draft.channel in NO_POST_BUTTON:
         return keyboard([[('고치기', cb('e', draft.id)), ('다음에', cb('l', draft.id))]])
     return keyboard([[('올렸어요', cb('p', draft.id)), ('고치기', cb('e', draft.id)), ('다음에', cb('l', draft.id))]])
@@ -145,11 +162,18 @@ def briefing_buttons(briefing, proposals, states=None, notion_url=''):
     return keyboard(_with_notion(_pairs(btns), notion_url))
 
 
+def source_lines(proposal):
+    extra = getattr(proposal, 'extra', None) or {}
+    urls = list(dict.fromkeys(([extra['link']] if extra.get('link') else []) + extra.get('source_urls', [])))
+    return [f"{extra.get('link_label') or '원문'}: {url}" for url in urls]
+
+
 def midweek_text(proposals, guide=True):
     """HTML 서식, 안내는 끝에 한 번(briefing_text와 같게)."""
     lines = ['<b>이번 주에 앞둔 일이 있어 글을 준비해 뒀어요</b>']
     for i, p in enumerate(proposals, 1):
         lines += ['', f'<b>{i}. {h(p.headline)}</b>', h(p.reason)]
+        lines += [h(line) for line in source_lines(p)]
     return _html_guide('\n'.join(lines), guide)
 
 

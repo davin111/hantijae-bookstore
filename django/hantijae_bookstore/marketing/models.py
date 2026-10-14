@@ -53,8 +53,9 @@ class HookDate(BaseModel):
 
 class Signal(models.Model):
     NEWS, SELECTION, SOCIAL, MOMENT, REVIEW = 'news', 'selection', 'social', 'moment', 'review'
+    PEER = 'peer'
     kind = models.CharField(max_length=20, choices=((NEWS, '저자 소식'), (SELECTION, '공공 선정'), (SOCIAL, '운영진 SNS'),
-                                                    (MOMENT, '대화 속 계기'), (REVIEW, '독자 서평')))
+                                                    (MOMENT, '대화 속 계기'), (REVIEW, '독자 서평'), (PEER, '참고 출판사')))
     key = models.CharField(max_length=200, unique=True)
     book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL)
     title = models.CharField(max_length=500)
@@ -117,8 +118,9 @@ class Proposal(BaseModel):
 
 class Draft(BaseModel):
     BLOG, INSTAGRAM, LINKS, SHORT, LETTER = 'blog', 'instagram', 'links', 'short', 'letter'
+    RECRUIT, EDITOR = 'recruit', 'editor'
     CHANNEL_CHOICES = ((BLOG, '블로그 글'), (INSTAGRAM, '인스타 글'), (LINKS, '서점 링크 공지'),
-                       (SHORT, '짧은 소개'), (LETTER, '보낼 글'))
+                       (SHORT, '짧은 소개'), (LETTER, '보낼 글'), (RECRUIT, '서평단 모집 글'), (EDITOR, '편집 후기'))
     BOT, REWRITE, NOTION = 'bot', 'rewrite', 'notion'
     DRAFT, POSTED, SKIPPED = 'draft', 'posted', 'skipped'
     proposal = models.ForeignKey(Proposal, related_name='drafts', on_delete=models.CASCADE)
@@ -149,7 +151,7 @@ class Draft(BaseModel):
 
     @property
     def label(self):
-        return self.DISPLAY.get(self.channel) or dict(self.CHANNEL_CHOICES)[self.channel]
+        return self.DISPLAY.get(self.channel) or dict(self.CHANNEL_CHOICES).get(self.channel, '홍보 글')
 
 
 class DraftMessage(models.Model):

@@ -29,9 +29,9 @@ from marketing.text import clip, foreign_numbers, is_acknowledgement, title_key
 from marketing.timeutil import KST, kst_today, week_start
 
 log = logging.getLogger('intake')
-TYPES = ('author', 'event', 'group', 'selection', 'funding', 'media', 'issue', 'stock', 'upcoming')
+TYPES = ('author', 'event', 'group', 'selection', 'funding', 'media', 'issue', 'stock', 'reprint', 'upcoming')
 TYPE_LABEL = {'author': '저자 활동', 'event': '행사', 'group': '단체', 'selection': '선정·수상', 'funding': '펀딩',
-              'media': '매체 소개', 'issue': '시사', 'stock': '책 상태·수요', 'upcoming': '신간 예고'}
+              'media': '매체 소개', 'issue': '시사', 'stock': '책 상태·수요', 'reprint': '중쇄', 'upcoming': '신간 예고'}
 STATUSES = ('planned', 'confirmed', 'done', 'cancelled')
 CHUNK_CHARS, MAX_CHUNKS, CONTEXT_LINES, OPEN_LIMIT, PAST_DAYS, STALE_DAYS = 30000, 4, 30, 40, 7, 30
 STATUS_RANK = {'planned': 0, 'confirmed': 1, 'done': 2}
@@ -280,6 +280,16 @@ def _books(titles, index):
     return found[:3], hint
 
 
+def _printing(value, entries):
+    """쇄 표기는 짧은 문자열이고 근거에 그대로 있을 때만 보관한다. 잘라서 다른 표기로 만들지 않는다."""
+    if not isinstance(value, str) or not 0 < len(value.strip()) <= 20:
+        return ''
+    value = value.strip()
+    pattern = r'(?<!\d)' + re.escape(value) + r'(?!\d)'
+    return value if any(re.search(pattern, text or '') for e in entries
+                        for text in (e.text, e.media_text, e.link_text, e.heading)) else ''
+
+
 def _new(raw, by_id, index, today):
     """(fields, 근거 기록들, 버린 이유)."""
     kind, status = raw.get('type'), raw.get('status') or 'planned'
@@ -310,7 +320,9 @@ def _new(raw, by_id, index, today):
     return {'type': kind, 'status': status, 'status_given': bool(raw.get('status')), 'title': title,
             'summary': summary, 'place': place, 'happens_on': day, 'date_text': date_text,
             'date_unverified': unverified, 'books': books, 'book_hint': hint, 'seen_on': last,
-            'promoted': raw.get('promoted') is True, 'sensitive': raw.get('sensitive') is True}, ev, ''
+            'promoted': raw.get('promoted') is True, 'sensitive': raw.get('sensitive') is True,
+            'onsite_given': 'onsite' in raw, 'onsite': raw.get('onsite') is True,
+            'printing': _printing(raw.get('printing'), ev) if kind == 'reprint' else ''}, ev, ''
 
 
 def _same(opens, f):
@@ -348,6 +360,10 @@ def _merge_changes(s, f):
             changes[key] = f[key]
     if f['promoted'] and not s.detail.get('promoted'):
         changes['promoted'] = True
+    if f['onsite_given'] and f['onsite'] is not s.detail.get('onsite'):
+        changes['onsite'] = f['onsite']
+    if f['printing'] and f['printing'] != s.detail.get('printing'):
+        changes['printing'] = f['printing']
     return changes
 
 
@@ -374,6 +390,11 @@ def _update(raw, by_id, open_by_id, today):
             changes[key] = v
     if raw.get('promoted') is True and not s.detail.get('promoted'):
         changes['promoted'] = True
+    if isinstance(raw.get('onsite'), bool) and raw['onsite'] is not s.detail.get('onsite'):
+        changes['onsite'] = raw['onsite']
+    printing = _printing(raw.get('printing'), every) if s.detail.get('type') == 'reprint' else ''
+    if printing and printing != s.detail.get('printing'):
+        changes['printing'] = printing
     if raw.get('date'):
         day, text, unverified = _check_date(raw.get('date'), raw.get('date_text'), every)
         if day and day != s.happens_on:
@@ -429,6 +450,10 @@ def _create(f, entries):
               'date_text': f['date_text'], 'date_unverified': f['date_unverified'],
               'book_ids': [b.id for b in f['books']], 'book_hint': f['book_hint'], 'promoted': f['promoted'],
               'seen_on': f['seen_on'].isoformat(), 'sources': sorted({e.source for e in entries})}
+    if f['onsite_given']:
+        detail['onsite'] = f['onsite']
+    if f['type'] == 'reprint':
+        detail['printing'] = f['printing']
     s = Signal.objects.create(kind=Signal.MOMENT, key=f'moment:{uuid.uuid4().hex[:16]}',
                               book=f['books'][0] if f['books'] else None, title=f['title'], detail=detail,
                               happens_on=f['happens_on'], relevant=f['status'] != 'cancelled',
@@ -458,7 +483,7 @@ def _describe(s, changes, added):
 def _save_update(s, changes, entries):
     desc = _describe(s, changes, len(entries))
     detail = dict(s.detail)
-    for key in ('status', 'summary', 'place', 'date_text', 'date_unverified', 'promoted'):
+    for key in ('status', 'summary', 'place', 'date_text', 'date_unverified', 'promoted', 'onsite', 'printing'):
         if key in changes:
             detail[key] = changes[key]
     detail['sources'] = sorted(set(detail.get('sources', [])) | {e.source for e in entries})

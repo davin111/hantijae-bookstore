@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from intake.models import WorkerState
 from marketing import (ads, bnk, bnk_sales, briefing, funding, grants, instagram, kit, loans, mentions, midweek,
-                       moments, monthly, news, notion_sync, placements, reviews, sales, selections, social)
+                       moments, monthly, news, notion_sync, peers, placements, reviews, sales, selections, social)
 from marketing.messages import TEXT_LIMIT
 from marketing.models import Briefing
 from marketing.text import clip
@@ -18,6 +18,7 @@ log = logging.getLogger('intake')
 KIT_CHECK_SECONDS = 600
 SALES_AT, NEWS_AT, BRIEF_BUILD_AT, BRIEF_SEND_AT, BRIEF_GIVE_UP_AT = (6, 0), (6, 30), (7, 0), (9, 30), (21, 0)
 MOMENT_AT, MIDWEEK_BUILD_AT, MIDWEEK_SEND_AT = (5, 0), (5, 30), (9, 30)
+PEER_AT = (4, 55)
 ADMIN_QUEUE = 'moment_admin_queue'
 BNK_AT = (6, 20)   # 알라딘(06:00)·선정(06:10) 다음, 지원사업(06:40) 전
 BNK_MONTH_DAY, BNK_MONTH_AT = 3, (9, 30)   # 전산망이 약 2일 늦어서 1일이 아니라 3일
@@ -193,7 +194,8 @@ def _monthly(deps, today, now, started, month):
 
 
 def _build_midweek(deps, m, today, now, started):
-    made, dropped = midweek.build(deps.llm, today, now, m.mode())
+    kwargs = {'posts': m.blog_posts()} if WorkerState.get('editor_mode') == 'live' else {}
+    made, dropped = midweek.build(deps.llm, today, now, m.mode(), **kwargs)
     if dropped:
         _notify_awake(deps, _later(now, started), '⏭️ 주중 제안에서 버린 항목: ' + '; '.join(dropped))
     return made
@@ -203,13 +205,13 @@ def _midweek_blocks(deps, m, local, now, today, day, started):
     """화~토 05:30 만들기, 09:30~21:00 보내기. 워커가 늦게 켜져도 같은 바퀴에서 만들고 바로 보낸다.
     못 보낸 지난 주중 제안은 모드와 상관없이 풀어 준다(보내기를 꺼도 그 계기가 브리핑에서 빠지지 않게)."""
     _guard(deps, 'midweek', now, lambda: midweek.release_stale(today))
-    if local.weekday() not in midweek.BUILD_DAYS or WorkerState.get('midweek_mode', 'off') == 'off':
+    if not midweek.build_day(today) or WorkerState.get('midweek_mode', 'off') == 'off':
         return
     if _hm(local) >= MIDWEEK_BUILD_AT and WorkerState.get('midweek_last_build') != day:
         WorkerState.put('midweek_last_build', day)
         _guard(deps, 'midweek', now, lambda: _build_midweek(deps, m, today, now, started))
     send_now = _later(now, started)
-    if kst_now(send_now).date() == today and MIDWEEK_SEND_AT <= _hm(kst_now(send_now)) < BRIEF_GIVE_UP_AT:
+    if kst_now(send_now).date() == today and midweek.send_at(today) <= _hm(kst_now(send_now)) < BRIEF_GIVE_UP_AT:
         _guard(deps, 'midweek_send', send_now, lambda: m.send_midweek(send_now))
 
 
@@ -221,6 +223,11 @@ def _run_due(deps, now):
     local = kst_now(now)
     today, day, monday = local.date(), local.date().isoformat(), local.weekday() == 0
     _flush_admin_queue(deps, now)
+
+    if (_hm(local) >= PEER_AT and WorkerState.get('peer_mode') == 'live'
+            and WorkerState.get('peer_last_scan') != day):
+        WorkerState.put('peer_last_scan', day)
+        _guard(deps, 'peer', now, lambda: peers.run(deps.llm, today, now))
 
     # 계기 잡기는 LLM으로 몇 분 걸려 워커가 텔레그램을 못 본다 → 새벽에, 월요일 07:00 브리핑 만들기보다 먼저
     if (_hm(local) >= MOMENT_AT and WorkerState.get('moment_mode', 'off') != 'off'
