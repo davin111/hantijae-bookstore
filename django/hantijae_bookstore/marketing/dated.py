@@ -69,7 +69,7 @@ def _same(a, b):
                  or similarity(a.facts['name'], b.facts['name']) >= 0.5))
 
 
-def _items(today, now, reserved_ids=(), include_preview=True):
+def _items(today, now, reserved_ids=(), include_preview=True, check_sent=True):
     quiet = set(BookProfile.objects.filter(quiet_until__gte=today).values_list('book_id', flat=True))
     signals = list(Signal.objects.filter(Q(relevant=True) | Q(detail__status='cancelled'),
                                          kind__in=(Signal.MOMENT, Signal.SOCIAL))
@@ -116,7 +116,7 @@ def _items(today, now, reserved_ids=(), include_preview=True):
         if candidate.kind.startswith('onsite_'):
             stage = 'today' if candidate.kind == 'onsite_today' else 'after'
             keys += [f'onsite:{s.id}:{stage}' for s in candidate.more_signals]
-        if candidate.id not in blocked and not any(_sent(key, include_preview) for key in keys):
+        if candidate.id not in blocked and (not check_sent or not any(_sent(key, include_preview) for key in keys)):
             out.append(candidate)
     return sorted(out, key=lambda c: (-c.urgency, c.facts.get('date') or '', c.signal.id))
 

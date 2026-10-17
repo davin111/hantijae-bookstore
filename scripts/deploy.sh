@@ -18,6 +18,10 @@ git log --oneline -1
 echo ""
 echo "=== 2. Python deps (venv) ==="
 "$VENV/bin/pip" install -q -r django/requirements.txt
+# SVG 도형을 이미지로 변환하는 네이티브 라이브러리. 별도 이미지 API는 사용하지 않는다.
+if ! ldconfig -p | grep 'libcairo.so.2' >/dev/null; then
+  sudo dnf install -y cairo
+fi
 
 echo ""
 echo "=== 3. Django migrate + collectstatic ==="
@@ -42,6 +46,10 @@ if [ -f "$UNIT_DST" ]; then
   fi
   sudo systemctl restart hantijae-intake
   echo "(intake worker restarted)"
+  sudo cp "$REPO_DIR/scripts/hantijae-visuals.service" /etc/systemd/system/hantijae-visuals.service
+  sudo systemctl daemon-reload
+  sudo systemctl enable hantijae-visuals
+  sudo systemctl restart hantijae-visuals
 else
   echo "(intake worker not installed — skip)"
 fi

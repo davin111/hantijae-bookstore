@@ -1,0 +1,24 @@
+[Unit]
+Description=Hantijae promotional image worker
+After=network-online.target mysqld.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+Environment=MODE=prod
+Environment=HOME=/home/ec2-user
+Environment=PYTHONUNBUFFERED=1
+Environment=INTAKE_WORK_DIR=/home/ec2-user/hantijae-intake
+WorkingDirectory=/home/ec2-user/hantijae-bookstore/django/hantijae_bookstore
+ExecStart=/home/ec2-user/.pyenv/versions/hantijae-bookstore/bin/python manage.py visuals_worker
+Restart=always
+RestartSec=20
+MemoryMax=300M
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target

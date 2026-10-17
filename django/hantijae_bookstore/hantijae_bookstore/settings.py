@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'web.apps.WebConfig',
     'context.apps.ContextConfig',
     'marketing.apps.MarketingConfig',
+    'visuals.apps.VisualsConfig',
     'ops.apps.OpsConfig',
 ]
 
@@ -69,7 +70,7 @@ if ENV_MODE == 'test':
     if 'test' in sys.argv or 'testserver' in sys.argv:
         # accounts/0001이 0002에서야 생기는 커스텀 User를 참조해 빈 DB에선 마이그레이션이 깨진다(운영 DB는 이미 적용 완료).
         # 테스트 DB는 현재 모델로 바로 만든다. 모델↔마이그레이션 일치는 `makemigrations --check`로 따로 확인.
-        MIGRATION_MODULES = {app: None for app in ('accounts', 'books', 'core', 'intake', 'web', 'context', 'marketing')}
+        MIGRATION_MODULES = {app: None for app in ('accounts', 'books', 'core', 'intake', 'web', 'context', 'marketing', 'visuals')}
 elif ENV_MODE == 'prod':
     secrets_manager = boto3.client("secretsmanager", region_name="ap-northeast-2")
     credential = secrets_manager.get_secret_value(SecretId="prod/hantijae-bookstore")

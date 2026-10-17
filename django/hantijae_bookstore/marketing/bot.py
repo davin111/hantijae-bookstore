@@ -150,6 +150,8 @@ class Marketing:
         photo = cover_jpeg(proposal.book)
         sent = (self.tg.send_photo(chat, photo, caption, buttons=buttons) if photo
                 else self.tg.send_message(chat, caption, buttons=buttons))
+        from visuals.pipeline import safe_enqueue
+        safe_enqueue(proposal=proposal, chat_id=chat, reply_to=sent['message_id'])
         return sent['message_id']
 
     def _mark_sent(self, proposal, chat, message_id, now):
@@ -246,6 +248,9 @@ class Marketing:
             # 운영진이 이미 관리자 방 사본에서 누른 ACTED/SKIPPED 결정은 검수 방으로 넘길 때도 덮지 않는다
             Proposal.objects.filter(briefing=briefing, status__in=(Proposal.PROPOSED, Proposal.SHOWN)).update(status=Proposal.SHOWN)
             Proposal.objects.filter(briefing=briefing).update(chat_id=chat)
+            from visuals.pipeline import safe_enqueue
+            for proposal in shown:
+                safe_enqueue(proposal=proposal, chat_id=chat, reply_to=sent['message_id'])
         return True
 
     # ---- 지원사업 공고 ----
@@ -381,6 +386,9 @@ class Marketing:
                 state.update(status='sent' if room else 'preview', sent_at=now.isoformat(), room=room)
                 WorkerState.put('series_state', state)
         self._midweek_week_notice(now)
+        from visuals.pipeline import safe_enqueue
+        for proposal in items:
+            safe_enqueue(proposal=proposal, chat_id=chat, reply_to=sent['message_id'])
         return True
 
     def _midweek_week_notice(self, now):
@@ -404,6 +412,9 @@ class Marketing:
                                     quote_entities=quote_entities, buttons=messages.draft_buttons(draft))
         Draft.objects.filter(pk=draft.pk).update(chat_id=chat_id, message_id=sent['message_id'])  # 마지막 사본
         DraftMessage.objects.create(draft=draft, chat_id=chat_id, message_id=sent['message_id'])
+
+        from visuals.pipeline import safe_enqueue
+        safe_enqueue(draft=draft, chat_id=chat_id, reply_to=sent['message_id'])
 
     @staticmethod
     def _draft_for_message(chat_id, message_id):

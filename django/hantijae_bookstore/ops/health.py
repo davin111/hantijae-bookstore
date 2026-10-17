@@ -694,6 +694,31 @@ def _erp(c, row):
     _verdict(row, problems, bool(ready), f'보고 {ready}개월 · 나머지 파일 대기 {waiting}개월')
 
 
+def _visuals(c, row):
+    from visuals.models import CardJob
+    jobs = CardJob.objects.all()
+    sent = jobs.filter(state='sent')
+    pending = jobs.filter(state__in=('queued', 'building', 'ready', 'sending')).count()
+    problems = []
+    bad = jobs.filter(state__in=('failed', 'uncertain'), updated_at__gte=c.now - RECENT).count()
+    heartbeat = _parse(c.get('visuals_heartbeat'))
+    if not heartbeat or c.now - heartbeat > TICK_LIMIT:
+        problems.append('이미지 제작 워커 실행 확인 필요')
+    if bad:
+        problems.append(f'제작·전달 확인 {bad}건')
+    enqueue_error = _parse(c.get('visuals_enqueue_error'))
+    if enqueue_error and c.now - enqueue_error < RECENT:
+        problems.append('이미지 작업 등록 오류 확인 필요')
+    fallback = jobs.filter(state='sent', illustration_at__isnull=False, error__startswith='일러스트 제외:',
+                           updated_at__gte=c.now - RECENT).count()
+    if fallback:
+        problems.append(f'일러스트 생성 실패로 글 카드 사용 {fallback}건')
+    if jobs.filter(state='queued', created_at__lt=c.now - timedelta(hours=24)).exists():
+        problems.append('하루 넘게 대기 중인 이미지')
+    row.last = _when(sent.aggregate(at=Max('completed_at'))['at'])
+    _verdict(row, problems, sent.exists(), f'전달 {sent.count()}건 · 대기 {pending}건')
+
+
 def _always_rows(c):
     m_on = c.get('marketing_mode', 'off') != 'off'
     rows = []
@@ -703,6 +728,9 @@ def _always_rows(c):
         rows.append(_guarded(row, lambda: fn(c, row) or row) if on else _switch_off(row, why))
 
     add('worker', '워커', '약 1분마다', '텔레그램 수신과 모든 일정의 바탕', ('systemctl status hantijae-intake',), _worker)
+    add('visuals', '홍보 이미지', '글 제안 뒤', '원본 우선 · 필요할 때만 AI 일러스트 · 앨범과 원본 ZIP',
+        ('visuals_mode', 'visuals_heartbeat', 'systemctl status hantijae-visuals'), _visuals,
+        m_on and c.get('visuals_mode', 'off') != 'off', '홍보 이미지 또는 마케팅 꺼짐')
     add('telegram', '텔레그램 수신', '매 바퀴', f'연속 {TG_ALERT_AFTER}번 실패하면 관리자 방에 알림', (OUTAGE, LAST_OUTAGE),
         _telegram)
     add('context', '검수 방 대화 기록', '상시', '가린 글만, 90일', ('context_record', '/ctx'), _context,

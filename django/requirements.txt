@@ -7,6 +7,7 @@ google-auth==2.58.1
 Markdown==3.2.1
 mysqlclient==1.4.6
 Pillow==12.3.0
+CairoSVG==2.9.1
 pyhwp==0.1b15
 pypdf==6.19.0
 openpyxl==3.1.5
