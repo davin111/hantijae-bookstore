@@ -87,4 +87,6 @@ def forget(chat_id, message_id, sent_at=None):
     ids = list(rows.values_list('id', flat=True))
     if ids:
         ContextEntry.objects.filter(id__in=ids).update(**FORGET_FIELDS)
+        from marketing.erp import erase_unavailable
+        erase_unavailable()
     return ids

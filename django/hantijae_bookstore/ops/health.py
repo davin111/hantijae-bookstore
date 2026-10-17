@@ -673,6 +673,27 @@ def _daily_rows(c):
     return rows
 
 
+def _erp(c, row):
+    from marketing.models import ERPImport, ERPMonthlyReport
+    uncertain = ERPMonthlyReport.objects.filter(delivery_state='uncertain').count() + ERPImport.objects.filter(delivery_state='uncertain').count()
+    retry = ERPMonthlyReport.objects.filter(delivery_state='retry').count() + ERPImport.objects.filter(status='failed').count()
+    blocked = ERPMonthlyReport.objects.filter(state='blocked').count()
+    ready = ERPMonthlyReport.objects.filter(state='ready', delivery_state='sent').count()
+    waiting = ERPMonthlyReport.objects.filter(state='waiting').count()
+    problems = []
+    scanned = _parse(c.get('erp_last_scan'))
+    row.last = _when(scanned)
+    if scanned and (scanned.tzinfo is None or c.now - scanned > TICK_LIMIT):
+        problems.append('ERP 파일 확인이 30분 넘게 멈췄어요')
+    if uncertain:
+        problems.append(f'발송 결과 확인 필요 {uncertain}건(자동 재발송 멈춤)')
+    if retry:
+        problems.append(f'파일 수신·보고 수정 재확인 {retry}건')
+    if blocked:
+        problems.append(f'검산 보류 {blocked}개월')
+    _verdict(row, problems, bool(ready), f'보고 {ready}개월 · 나머지 파일 대기 {waiting}개월')
+
+
 def _always_rows(c):
     m_on = c.get('marketing_mode', 'off') != 'off'
     rows = []
@@ -686,6 +707,10 @@ def _always_rows(c):
         _telegram)
     add('context', '검수 방 대화 기록', '상시', '가린 글만, 90일', ('context_record', '/ctx'), _context,
         bool(c.get('context_record', False)), 'context_record 꺼짐')
+    add('erp', 'ERP 파일 분석', '파일 수신 뒤', '같은 달 XLSX 두 표 검산 · 수정은 기존 보고에 반영',
+        ('erp_mode', 'erp_start_at', 'erp_last_scan'), _erp,
+        c.get('marketing_mode') == 'live' and c.get('erp_mode') == 'live' and c.get('mode') == 'live' and bool(c.get('context_record')),
+        'ERP 분석·실운영·대화 기록 중 꺼진 설정이 있음', ('erp',))
     purge = Row('purge', '대화 기록 정리', '하루 한 번', '', '90일 넘은 기록 지우기', ('last_context_purge',), group='always')
     rows.append(_guarded(purge, lambda: _scheduled(c, purge, Daily((0, 0)), 'last_context_purge',
                                                    lambda _c, r, _since: _verdict(r, [], True, '오늘 돎'))))

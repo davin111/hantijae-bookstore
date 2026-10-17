@@ -9,6 +9,8 @@ mysqlclient==1.4.6
 Pillow==12.3.0
 pyhwp==0.1b15
 pypdf==6.19.0
+openpyxl==3.1.5
+defusedxml==0.7.1
 python-docx==1.2.0
 requests==2.34.2
 six==1.17.0

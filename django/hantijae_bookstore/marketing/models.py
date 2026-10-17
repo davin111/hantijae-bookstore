@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.db import models
+from django.utils import timezone
 
 from books.models import Book
 from core.models import BaseModel
@@ -14,6 +15,49 @@ class BookProfile(BaseModel):
 
     def is_quiet(self, today):
         return bool(self.quiet_until and self.quiet_until >= today)
+
+
+class ERPDelivery(BaseModel):
+    """먼저 발송 시도를 적는다. 결과 불명확한 새 메시지는 사람이 확인하기 전 재발송하지 않는다."""
+    chat_id = models.BigIntegerField()
+    message_id = models.BigIntegerField(null=True, blank=True)
+    text = models.TextField(blank=True)
+    delivered_hash = models.CharField(max_length=64, blank=True)
+    delivery_state = models.CharField(max_length=20, default='pending')
+    delivery_try_at = models.DateTimeField(null=True, blank=True)
+    delivery_error = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        abstract = True
+
+
+class ERPImport(ERPDelivery):
+    entry = models.ForeignKey('context.ContextEntry', related_name='erp_imports', on_delete=models.CASCADE)
+    signature = models.CharField(max_length=64, unique=True)
+    received_at = models.DateTimeField(default=timezone.now)
+    digest = models.CharField(max_length=64, blank=True)
+    kind = models.CharField(max_length=20)
+    month = models.CharField(max_length=7, blank=True, db_index=True)
+    status = models.CharField(max_length=20, default='pending')
+    payload = models.JSONField(default=dict, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    tried_at = models.DateTimeField(null=True, blank=True)
+    error = models.CharField(max_length=300, blank=True)
+
+
+class ERPMonthlyReport(ERPDelivery):
+    month = models.CharField(max_length=7)
+    state = models.CharField(max_length=20, default='waiting')
+    customer = models.ForeignKey(ERPImport, null=True, blank=True, related_name='+', on_delete=models.SET_NULL)
+    product = models.ForeignKey(ERPImport, null=True, blank=True, related_name='+', on_delete=models.SET_NULL)
+    accepted_after = models.PositiveIntegerField(default=0)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    pair_hash = models.CharField(max_length=64, blank=True)
+    revision = models.PositiveIntegerField(default=0)
+    result = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        unique_together = ('chat_id', 'month')
 
 
 class SalesSnapshot(models.Model):

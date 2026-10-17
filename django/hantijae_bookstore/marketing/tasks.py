@@ -223,6 +223,9 @@ def _run_due(deps, now):
     local = kst_now(now)
     today, day, monday = local.date(), local.date().isoformat(), local.weekday() == 0
     _flush_admin_queue(deps, now)
+    if WorkerState.get('erp_mode', 'off') == 'live':
+        from marketing.erp import run as run_erp
+        _guard(deps, 'erp', now, lambda: run_erp(deps.bot, now))
 
     if (_hm(local) >= PEER_AT and WorkerState.get('peer_mode') == 'live'
             and WorkerState.get('peer_last_scan') != day):
