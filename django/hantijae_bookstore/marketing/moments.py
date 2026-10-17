@@ -18,6 +18,7 @@ from django.db.models import Count, Q
 from books.models import Book
 from context import links as context_links, notion as context_notion, photos as context_photos
 from context.models import ContextEntry
+from context import notion_work
 from context.redact import redact
 from intake.llm import Attachment, complete_json
 from intake.models import WorkerState
@@ -60,12 +61,14 @@ class Report:
 def pending_entries():
     """아직 추출에 넣지 않았거나, 넣은 뒤 바뀐(수정·사진 읽음) 기록. at 순서."""
     seen = dict(MomentScan.objects.values_list('entry_id', 'changed_at'))
-    return [e for e in ContextEntry.objects.filter(forgotten=False).order_by('at', 'id')
+    return [e for e in ContextEntry.objects.filter(forgotten=False).exclude(key__startswith=notion_work.PREFIX).order_by('at', 'id')
             if e.id not in seen or e.changed_at > seen[e.id]]
 
 
 def _meaningful(e):
     """LLM에 보낼 만한 기록인가. 빈 글·스티커·'넵'·'감사합니다' 같은 맞장구만 있으면 아니다."""
+    if notion_work.internal(e):
+        return False
     if e.media_text.strip() or e.source == ContextEntry.NOTION:
         return bool(e.media_text.strip() or e.text.strip())
     text = e.text.strip()
@@ -102,6 +105,8 @@ def line(e, reply_ids=None):
     """기록 한 줄. #번호는 ContextEntry 번호(= LLM이 근거로 적을 번호)."""
     if e.source == ContextEntry.NOTION:
         t = e.at.astimezone(KST)
+        if notion_work.internal(e):
+            return f'[#{e.id} 내부 업무 참고 · 홍보 근거로 사용하지 않음]\n{e.text}'
         return f'[#{e.id} 노션 · {e.heading} · {t.month}/{t.day} 수정]\n{e.text}'
     body = ' '.join(p for p in (_media_part(e), e.text.strip(), _link_part(e)) if p)
     tail = ''
@@ -129,15 +134,16 @@ def chunks(entries, limit=None):
     return out
 
 
-def context_before(chunk):
+def context_before(chunk, now=None):
     """조각의 첫 텔레그램 기록 앞 30줄(같은 방). 답장과 흐름을 이해하게 하는 참고용."""
     first = next((e for e in chunk if e.source == ContextEntry.TELEGRAM), None)
+    work = notion_work.context_for(chunk, now or datetime.now(KST))
     if first is None:
-        return []
+        return work
     qs = (ContextEntry.objects.filter(source=ContextEntry.TELEGRAM, chat_id=first.chat_id, forgotten=False,
                                       at__lte=first.at)
           .exclude(id__in=[e.id for e in chunk]).order_by('-at', '-id')[:CONTEXT_LINES])
-    return list(reversed(qs))
+    return list(reversed(qs)) + work
 
 
 def books_block():
@@ -233,6 +239,8 @@ def _pick(values, by_id):
     out = []
     for i in _ids(values):
         e = by_id.get(i)
+        if e is not None and notion_work.internal(e):
+            return []  # 혼합 근거에서도 내부 내용만 남겨 잘못 인용하는 것을 막는다.
         if e is not None and e not in out:
             out.append(e)
     return out
@@ -267,6 +275,16 @@ def _check_date(value, date_text, entries):
     if date_supported(day, _date_evidence(entries)):
         return day, text, False
     return None, text or day.isoformat(), True
+
+
+def _unsupported_work_date(by_id, value, text, entries, today):
+    """업무 참고가 있는 추출에서는 확인 안 된 내부 날짜를 설명 칸에도 남기지 않는다."""
+    if not any(notion_work.internal(e) for e in by_id.values()):
+        return False
+    day = _parse_date(value)
+    return bool((day and not date_supported(day, _date_evidence(entries)))
+                or unsupported_mentions(text, _date_evidence(entries), relative=True)
+                or foreign_numbers(text, _allowed(entries, today, day)))
 
 
 def _books(titles, index):
@@ -306,6 +324,8 @@ def _new(raw, by_id, index, today):
     if raw_day and raw_day < today - timedelta(days=PAST_DAYS):  # 확인 여부와 상관없이 지난 일은 버린다
         return None, [], f'{title}: 지난 일({raw_day.isoformat()})'
     day, date_text, unverified = _check_date(raw.get('date'), raw.get('date_text'), ev)
+    if _unsupported_work_date(by_id, raw.get('date'), date_text, ev, today):
+        return None, [], f'{title}: 업무 참고 외의 날짜 근거 없음'
     last = max(_local_day(e) for e in ev)
     if not day and last < today - timedelta(days=STALE_DAYS):
         return None, [], f'{title}: 오래된 이야기({last.isoformat()})'
@@ -381,6 +401,8 @@ def _update(raw, by_id, open_by_id, today):
     if not added:  # 취소·날짜 변경·이미 올림은 이번 입력의 새 근거가 있어야 받는다
         return None, f'#{s.id}: 새 근거 없는 갱신'
     every = old + added
+    if _unsupported_work_date(by_id, raw.get('date'), _clean(raw.get('date_text'), 50), every, today):
+        return None, f'#{s.id}: 업무 참고 외의 날짜 근거 없음'
     changes = {}
     if status and status != s.detail.get('status'):
         changes['status'] = status
@@ -548,7 +570,7 @@ def run(llm, now, report=None, entries=None, max_chunks=MAX_CHUNKS, dry_run=Fals
     report.left = sum(len(c) for c in parts[max_chunks:])
     index, books_text = book_index(), books_block()
     for chunk in parts[:max_chunks]:
-        context = context_before(chunk)
+        context = context_before(chunk, now)
         opens = open_moments(today, now)
         shown = context + chunk
         reply_ids = {(e.chat_id, e.origin, e.message_id): e.id for e in shown if e.message_id is not None}
@@ -656,7 +678,7 @@ def daily(deps, now, since=None, until=None, notion=True, photos=True, max_chunk
     data_source = settings.INTAKE.get('NOTION_DATA_SOURCE_ID')
     if notion and getattr(deps, 'notion', None) and data_source:
         try:
-            report.notion = context_notion.sync(deps.notion, data_source, now)
+            report.notion = context_notion.sync(deps.notion, data_source, now, related=True)
         except Exception as e:
             log.exception('moment notion sync failed')
             report.errors.append(f'노션 읽기 실패: {type(e).__name__}: {e}')

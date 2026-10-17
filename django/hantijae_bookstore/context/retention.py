@@ -8,5 +8,8 @@ from context.models import ContextEntry
 
 def purge(now, days=None):
     days = days or settings.CONTEXT['RETENTION_DAYS']
-    deleted, _ = ContextEntry.objects.filter(at__lt=now - timedelta(days=days)).delete()
+    from context.notion_work import PREFIX
+    # 업무는 완료·재개될 수 있다. 내용 없는 '잊기' 표식은 보존해 재수집을 막는다.
+    deleted, _ = (ContextEntry.objects.filter(at__lt=now - timedelta(days=days))
+                  .exclude(source=ContextEntry.NOTION, key__startswith=PREFIX, forgotten=True).delete())
     return deleted

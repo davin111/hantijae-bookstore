@@ -165,7 +165,7 @@ def _upsert(sec, title, now):
     return 1
 
 
-def sync(client, data_source_id, now, sleep=time.sleep):
+def sync(client, data_source_id, now, sleep=time.sleep, related=False):
     """대상 책 페이지(발행일 1년 안 또는 비어 있음)를 훑어 새로 넣거나 바뀐 구역 수를 돌려준다.
     보관 일수(90일)보다 오래 안 고친 구역은 넣지 않는다 — 정리했다가 다시 넣는 반복을 막는다."""
     cutoff = now - timedelta(days=settings.CONTEXT['RETENTION_DAYS'])
@@ -177,6 +177,12 @@ def sync(client, data_source_id, now, sleep=time.sleep):
             changed += _sync_page(client, page, cutoff, now, sleep)
         except Exception as e:
             failed.append(f'{page_title(page) or page.get("id")}: {type(e).__name__}: {e}')
+    if related:
+        from context.notion_work import sync_work
+        try:
+            changed += sync_work(client, data_source_id, now, sleep)
+        except Exception as e:
+            failed.append(f'업무 기록·할 일: {type(e).__name__}: {e}')
     if failed:
         raise RuntimeError(f'노션 페이지 {len(failed)}개 읽기 실패(나머지 {changed}구역은 반영) — {failed[0]}')
     return changed

@@ -147,6 +147,41 @@ class FillNotionTest(TestCase):
                 self.assertTrue(all(call.args[0] == 'POST' for call in session.request.call_args_list))
 
 
+class ISBNContractTest(TestCase):
+    setUp = FillNotionTest.setUp
+
+    def test_separates_legacy_combined_isbn_and_preserves_zero(self):
+        self.book.isbn = '979-11-92455-59-4 04300'
+        fake = FakeNotion([page('target', self.book.title)])
+        notion.fill_notion_row(fake, 'ds', self.book, '', 'https://x')
+        props = fake.updates[0][1]
+        self.assertEqual(props['ISBN']['rich_text'][0]['text']['content'], '979-11-92455-59-4')
+        self.assertEqual(props['부가기호']['rich_text'][0]['text']['content'], '04300')
+
+    def test_rejects_bad_checksum_extra_digits_and_ambiguous_addon(self):
+        for isbn, addon in [('979-11-92455-59-0', '4300'), ('97911924555940430099', ''),
+                            ('979-11-92455-59-4 04300', '03300')]:
+            with self.subTest(isbn=isbn):
+                self.book.isbn = isbn
+                fake = FakeNotion([page('target', self.book.title)])
+                result = notion.fill_notion_row(fake, 'ds', self.book, addon, 'https://x')
+                props = fake.updates[0][1]
+                if isbn != '979-11-92455-59-4 04300':
+                    self.assertNotIn('ISBN', props)
+                self.assertNotIn('부가기호', props)
+                self.assertTrue(result['note'])
+
+    def test_client_relation_property_paginates_more_than_25_links(self):
+        s = FakeSession([{'results': [{'relation': {'id': str(i)}} for i in range(25)],
+                          'has_more': True, 'next_cursor': 'next'},
+                         {'results': [{'relation': {'id': 'last'}}], 'has_more': False}])
+        c = notion.NotionClient('t', session=s)
+        ids = c.relation_ids('page', {'id': 'a%3Ab', 'has_more': True})
+        self.assertEqual(len(ids), 26)
+        self.assertEqual(ids[-1], 'last')
+        self.assertEqual(s.calls[1][2]['params']['start_cursor'], 'next')
+
+
 class FakeSession:
     def __init__(self, pages):
         self.pages, self.calls = list(pages), []

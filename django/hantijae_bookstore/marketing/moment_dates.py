@@ -73,7 +73,7 @@ def date_supported(day, evidence):
     return any(day in candidate_dates(text, sent) for text, sent in evidence)
 
 
-def explicit_mentions(text, ref):
+def explicit_mentions(text, ref, relative=False):
     """결과 글(제목·요약)에 적힌 날짜 표현마다 그 표현이 뜻할 수 있는 날짜 집합. ref: 기준 날(근거 가운데 가장 늦은 날).
     '저녁 7시'·'80주년'처럼 날짜가 아닌 숫자는 잡지 않는다."""
     text = text or ''
@@ -94,10 +94,15 @@ def explicit_mentions(text, ref):
         for base in (first, following):
             _add(found, base.year, base.month, int(d))
         out.append(found)
+    if relative:
+        phrases = [word for word in _RELATIVE if word in text]
+        phrases += [m.group() for m in _WEEKDAY.finditer(text)]
+        phrases += re.findall(r'(?:다음\s*)?주말', text)
+        out += [candidate_dates(phrase, ref) for phrase in phrases]
     return [f for f in out if f]
 
 
-def unsupported_mentions(text, evidence):
+def unsupported_mentions(text, evidence, relative=False):
     """결과 글의 날짜 표현 가운데 근거로 설명되지 않는 것들(표현마다 가능한 날짜 집합)."""
     if not evidence:
         return []
@@ -105,4 +110,4 @@ def unsupported_mentions(text, evidence):
     pool = set()
     for body, sent in evidence:  # 근거를 보낸 날 자체도 허용한다("9/28 방에 알렸다")
         pool |= candidate_dates(body, sent) | {sent}
-    return [found for found in explicit_mentions(text, ref) if not found & pool]
+    return [found for found in explicit_mentions(text, ref, relative=relative) if not found & pool]

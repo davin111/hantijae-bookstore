@@ -1,9 +1,10 @@
 """노션 '전체 도서 데이터베이스'의 빈 칸만 채운다. 값이 있는 칸은 절대 덮어쓰지 않는다."""
+import re
 import time
 
 import requests
 
-from intake.mapping import normalize_key
+from intake.mapping import isbn13_valid, normalize_key
 
 NOTION_VERSION = '2026-03-11'
 API = 'https://api.notion.com/v1'
@@ -47,6 +48,23 @@ class NotionClient:
 
     def get_page(self, page_id):
         return self._call('GET', f'/pages/{page_id}')
+
+    def data_source(self, data_source_id):
+        return self._call('GET', f'/data_sources/{data_source_id}')
+
+    def relation_ids(self, page_id, prop):
+        """행의 relation은 25개까지만 올 수 있으므로 필요한 경우 속성 API를 끝까지 읽는다."""
+        if not prop.get('has_more'):
+            return [r['id'] for r in prop.get('relation', [])]
+        out, cursor = [], None
+        while True:
+            params = {'page_size': 100, **({'start_cursor': cursor} if cursor else {})}
+            res = self._call('GET', f'/pages/{page_id}/properties/{prop["id"]}', params=params)
+            out += [r['relation']['id'] for r in res['results']]
+            if not res.get('has_more'):
+                return out
+            cursor = res['next_cursor']
+            time.sleep(0.35)
 
     def update_page(self, page_id, properties, timeout=30):
         self._call('PATCH', f'/pages/{page_id}', timeout=timeout, json={'properties': properties})
@@ -106,6 +124,20 @@ def _text(v):
     return {'rich_text': [{'type': 'text', 'text': {'content': v}}]}
 
 
+def _bibliography(isbn, addon):
+    """빈 칸을 채우기 전 형식을 검사한다. 임의 절단·앞자리 0 추측은 하지 않는다."""
+    raw, supplied = str(isbn or '').strip(), str(addon or '').strip()
+    match = re.fullmatch(r'(97[89](?:-?[0-9]){10})(?:\s+([0-9]{5}))?', raw)
+    valid = match and isbn13_valid(match[1].replace('-', ''))
+    isbn_value, embedded = (match[1], match[2] or '') if valid else ('', '')
+    notes = ['ISBN 형식을 확인해 주세요'] if raw and not valid else []
+    addon_value = supplied or embedded
+    if supplied and (not re.fullmatch(r'[0-9]{5}', supplied) or (embedded and embedded != supplied)):
+        addon_value = ''
+        notes.append('부가기호 형식 또는 값이 달라 확인이 필요해요')
+    return isbn_value, addon_value, notes
+
+
 def _match_row(rows, book_title, exact_only=False):
     """(행, 'exact'|'prefix') 또는 (None, None). 노션엔 작업 제목(앞부분)만 적힌 행이 많아 유일한 접두 일치도 허용한다."""
     key = normalize_key(book_title)
@@ -130,10 +162,11 @@ def fill_notion_row(client, data_source_id, book, isbn_addon, site_url):
         row, how = _match_row(rows, book.title, exact_only=True)
     if row is None:
         return {'page_id': None, 'filled': [], 'note': f"노션에서 '{book.title}' 행을 하나로 특정하지 못했어요 ({len(rows)}개 후보)"}
+    isbn, addon, notes = _bibliography(book.isbn, isbn_addon)
     candidates = {
         '발행일': {'date': {'start': book.published_date.isoformat()}} if book.published_date else None,
-        'ISBN': _text(book.isbn) if book.isbn else None,
-        '부가기호': _text(isbn_addon) if isbn_addon else None,
+        'ISBN': _text(isbn) if isbn else None,
+        '부가기호': _text(addon) if addon else None,
         '가격': {'number': book.full_price} if book.full_price else None,
         '쪽수': {'number': book.page_count} if book.page_count else None,
         '부제': _text(book.subtitle) if book.subtitle else None,
@@ -145,8 +178,7 @@ def fill_notion_row(client, data_source_id, book, isbn_addon, site_url):
              if v is not None and k in row['properties'] and _is_empty(row['properties'][k])}
     if props:
         client.update_page(row['id'], props)
-    note = ''
     if how == 'prefix':
-        note = (f"노션 '{_title(row)}' 행과 접두 일치로 매칭해 빈 칸({', '.join(sorted(props)) or '없음'})을 채웠어요 "
-                f"— 다른 책이면 노션에서 되돌려 주세요")
-    return {'page_id': row['id'], 'filled': sorted(props), 'note': note}
+        notes.append(f"노션 '{_title(row)}' 행과 접두 일치로 매칭해 빈 칸({', '.join(sorted(props)) or '없음'})을 채웠어요 "
+                     f"— 다른 책이면 노션에서 되돌려 주세요")
+    return {'page_id': row['id'], 'filled': sorted(props), 'note': '\n'.join(notes)}
