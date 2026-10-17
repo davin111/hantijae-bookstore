@@ -56,3 +56,15 @@ class IntegrationTest(TestCase):
             with self.assertLogs('intake', level='ERROR'):
                 Marketing(tg, FakeLLM({}), FakeHost())._send_draft(self.draft, -200)
         self.assertTrue(tg.calls[-1]['buttons'])
+
+    def test_ops_surfaces_failed_illustration_decision_even_without_art_reservation(self):
+        from visuals.pipeline import enqueue
+        now = timezone.now()
+        WorkerState.put('visuals_heartbeat', now.isoformat())
+        job = enqueue(self.draft, -200, 20)
+        job.state = 'sent'
+        job.error = '일러스트 제외: LLMTransientError'
+        job.save()
+        row = Row('visuals', '홍보 이미지', '')
+        _visuals(_Ctx(now), row)
+        self.assertEqual(row.state, 'warn')

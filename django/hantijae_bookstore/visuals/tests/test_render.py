@@ -88,3 +88,11 @@ class KindTest(SimpleTestCase):
     def test_title_text_card_with_screenshot_prohibition_is_still_text(self):
         from visuals.policy import card_kind
         self.assertEqual(card_kind('기사 제목을 글자로만 적은 카드(기사 화면 갈무리는 쓰지 않음)'), 'text')
+
+    def test_korean_words_are_not_split_when_the_next_word_can_start_a_new_line(self):
+        from visuals.render import lines_for, font
+        text = '가을 문학 행사를 다룬 지역 기사에 이 시집이 나왔습니다'
+        lines = lines_for(text, font(86, True), 928)
+        self.assertEqual(' '.join(lines), text)
+        self.assertTrue(any('지역' in line for line in lines))
+        self.assertTrue(all(font(86, True).getlength(line) <= 928 for line in lines))

@@ -1,4 +1,5 @@
 """검증된 글은 글꼴로, 표지/목차는 원본으로 배치한다. 모델이 문구를 다시 그리지 않는다."""
+import re
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -18,13 +19,21 @@ def lines_for(text, face, width):
     lines = []
     for paragraph in text.split('\n'):
         current = ''
-        for char in paragraph:
-            if face.getlength(current + char) > width:
-                lines.append(current.rstrip())
-                current = char.lstrip()
+        for word in paragraph.split():
+            candidate = current + ' ' + word if current else word
+            if face.getlength(candidate) <= width:
+                current = candidate
             else:
-                current += char
-        lines.append(current.rstrip())
+                if current:
+                    lines.append(current)
+                current = ''
+                # 공백 없는 긴 낱말만 글자 단위로 나눈다. 일반 단어는 다음 줄에 온전히 놓는다.
+                for char in word:
+                    if current and face.getlength(current + char) > width:
+                        lines.append(current)
+                        current = ''
+                    current += char
+        lines.append(current)
     return lines
 
 
@@ -67,7 +76,8 @@ def render_packet(cards, assets, svg, output_dir, title='한티재의 책'):
             fitted = ImageOps.contain(image, (830, 855), Image.Resampling.LANCZOS)
             x, y = (WIDTH - fitted.width) // 2, 162 + (855 - fitted.height) // 2
             canvas.paste(fitted, (x, y))
-            text_block(draw, text, (76, 1053, 928, 190), max_size=51, min_size=34)
+            caption = re.sub(r'(』)\s+', r'\1\n', text, count=1) if kind == 'cover' else text
+            text_block(draw, caption, (76, 1053, 928, 190), max_size=51, min_size=34)
         elif kind == 'illustration':
             text_block(draw, text, (76, 172, 928, 275), max_size=68, min_size=40)
         elif kind == 'text':

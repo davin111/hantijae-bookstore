@@ -709,7 +709,7 @@ def _visuals(c, row):
     enqueue_error = _parse(c.get('visuals_enqueue_error'))
     if enqueue_error and c.now - enqueue_error < RECENT:
         problems.append('이미지 작업 등록 오류 확인 필요')
-    fallback = jobs.filter(state='sent', illustration_at__isnull=False, error__startswith='일러스트 제외:',
+    fallback = jobs.filter(state='sent', error__startswith='일러스트 제외:',
                            updated_at__gte=c.now - RECENT).count()
     if fallback:
         problems.append(f'일러스트 생성 실패로 글 카드 사용 {fallback}건')
