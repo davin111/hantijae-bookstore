@@ -287,7 +287,18 @@ def _grant_lines(call):
     if v.get('prep'):
         lines.append(f'준비: {h(v["prep"])}')
     lines.append(f'공고: {h(call.url)}')
-    if call.state in DECISION and call.decided_by:
+    if call.state == 'submitted':
+        done = '✅ 신청 완료'
+        if call.submitted_on:
+            done += f' — {call.submitted_on.month}월 {call.submitted_on.day}일 신청'
+        try:
+            reported = date.fromisoformat((call.submission_source or {}).get('reported_on', ''))
+        except (TypeError, ValueError):
+            reported = None
+        if reported:
+            done += f' (운영진의 {reported.month}월 {reported.day}일 보고 기준)'
+        lines.append(done)
+    elif call.state in DECISION and call.decided_by:
         lines.append(DECISION[call.state].format(who=h(call.decided_by)))
     return lines
 
@@ -303,10 +314,15 @@ def grant_card_text(calls):
 
 
 def grant_buttons(calls):
-    if len(calls) == 1:
-        return keyboard([[('신청할게요', cb('ga', calls[0].id)), ('이번엔 넘기기', cb('gp', calls[0].id))]])
-    return keyboard([[(f'{i}번 신청할게요', cb('ga', c.id)), (f'{i}번 넘기기', cb('gp', c.id))]
-                     for i, c in enumerate(calls, 1)])
+    rows = []
+    for i, c in enumerate(calls, 1):
+        if c.state == 'submitted':
+            continue
+        prefix = f'{i}번 ' if len(calls) > 1 else ''
+        label, action = ('신청 완료', 'gs') if c.state == 'applying' else ('신청할게요', 'ga')
+        skip = f'{i}번 넘기기' if len(calls) > 1 else '이번엔 넘기기'
+        rows.append([(prefix + label, cb(action, c.id)), (skip, cb('gp', c.id))])
+    return keyboard(rows)
 
 
 def grant_preview_text(calls):
@@ -326,6 +342,8 @@ def grant_reminder_text(call):
 def grant_briefing_lines(calls):
     out = []
     for c in calls:
+        if c.state == 'submitted':
+            continue
         until = grant_deadline(c)
         out.append(f'· {c.title} — ' + (f'{until} 마감' if until else '마감은 공고에서 확인')
                    + (' (신청하기로 함)' if c.state == 'applying' else ''))

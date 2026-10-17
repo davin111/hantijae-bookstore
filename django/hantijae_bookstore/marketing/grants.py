@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import List
 
+from django.db import transaction
 from django.db.models import F, Q
 
 from intake.llm import complete_json
@@ -140,7 +141,7 @@ REMIND_DAYS = 2
 CARD_ORDER = (F('apply_until').asc(nulls_last=True), 'posted_on', 'id')
 STATE_LABEL = {GrantCall.IGNORED: '제목 제외', GrantCall.OLD: '지난 글', GrantCall.PENDING: '판단 전',
                GrantCall.SKIPPED_LLM: '해당 없음', GrantCall.READY: '보낼 차례', GrantCall.ANNOUNCED: '알림',
-               GrantCall.APPLYING: '신청', GrantCall.PASSED: '넘김'}
+               GrantCall.APPLYING: '신청', GrantCall.PASSED: '넘김', GrantCall.SUBMITTED: '신청 완료'}
 USAGE = '사용법: /grant off|admin_only|live · /grant now (지금 한 번 읽기, 몇 분)'
 
 
@@ -166,9 +167,12 @@ def due_reminders(today):
                                          reminded_at__isnull=True, message_id__isnull=False))
 
 
+@transaction.atomic
 def decide(call_id, applying, actor, now):
     """카드 버튼. (바뀐 공고 또는 None, 누른 사람에게 보일 짧은 답)."""
-    call = GrantCall.objects.filter(pk=call_id, state__in=GrantCall.OPEN + (GrantCall.PASSED,)).first()
+    call = GrantCall.objects.select_for_update().filter(pk=call_id).first()
+    if call is not None and call.state not in GrantCall.OPEN + (GrantCall.PASSED,):
+        call = None
     if call is None:
         return None, '이미 정리된 공고예요'
     today = kst_today(now)
@@ -182,6 +186,23 @@ def decide(call_id, applying, actor, now):
     if call.apply_until and (call.apply_until - today).days > REMIND_DAYS:
         return call, '마감 이틀 전에 한 번 더 알려 드릴게요'
     return call, '신청하기로 적어 뒀어요'
+
+
+@transaction.atomic
+def submit(call_id, actor, now, submitted_on=None, source=None):
+    """신청 완료 사실 기록. 마감 후 보고도 허용하며 기록 시각으로 실제 신청일을 추정하지 않는다."""
+    call = GrantCall.objects.select_for_update().filter(pk=call_id).first()
+    if call is None or call.state not in (GrantCall.APPLYING, GrantCall.SUBMITTED):
+        return None, '신청하기로 한 공고에서 완료를 표시해 주세요'
+    if call.state == GrantCall.SUBMITTED:
+        return call, '이미 신청 완료로 적혀 있어요'  # 카드 편집 실패 뒤 다시 누르면 같은 카드만 다시 그린다
+    if submitted_on and submitted_on > kst_today(now):
+        raise ValueError('실제 신청일은 미래일 수 없어요')
+    call.state = GrantCall.SUBMITTED
+    call.submitted_on, call.submitted_at, call.submitted_by = submitted_on, now, actor[:100]
+    call.submission_source = dict(source or {})
+    call.save(update_fields=['state', 'submitted_on', 'submitted_at', 'submitted_by', 'submission_source'])
+    return call, '신청 완료로 적어 뒀어요'
 
 
 def status_text(today):

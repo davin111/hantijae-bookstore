@@ -263,6 +263,7 @@ class GrantCall(models.Model):
     """진흥원 지원사업 공고 한 건(게시글). 한 번 본 글은 다시 판단하지 않으려고 모두 적는다(grants.py)."""
     IGNORED, OLD, PENDING, SKIPPED_LLM = 'ignored', 'old', 'pending', 'skipped_llm'
     READY, ANNOUNCED, APPLYING, PASSED = 'ready', 'announced', 'applying', 'passed'
+    SUBMITTED = 'submitted'
     OPEN = (ANNOUNCED, APPLYING)
     key = models.CharField(max_length=200, unique=True)
     title = models.CharField(max_length=300)
@@ -278,6 +279,10 @@ class GrantCall(models.Model):
     sent_at = models.DateTimeField(null=True, blank=True, help_text='검수 방에 카드를 보낸 시각')
     decided_by = models.CharField(max_length=100, blank=True)
     decided_at = models.DateTimeField(null=True, blank=True)
+    submitted_on = models.DateField(null=True, blank=True, help_text='명시적으로 확인한 실제 신청일(모르면 비움)')
+    submitted_at = models.DateTimeField(null=True, blank=True, help_text='신청 완료를 기록한 시각(실제 신청일과 별개)')
+    submitted_by = models.CharField(max_length=100, blank=True)
+    submission_source = models.JSONField(default=dict, blank=True, help_text='완료 버튼 또는 운영진 보고의 근거')
     reminded_at = models.DateTimeField(null=True, blank=True, help_text='마감 이틀 전 알림을 보낸 시각')
     reminder_message_id = models.BigIntegerField(null=True, blank=True, help_text='그 알림 메시지(답장을 받으려고)')
     created_at = models.DateTimeField(auto_now_add=True)

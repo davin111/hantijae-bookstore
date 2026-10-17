@@ -516,8 +516,14 @@ class Marketing:
             if first:
                 self._after_status(first)
             return '이번 주는 넘길게요'
-        if action in ('ga', 'gp'):
-            call, answer = grants.decide(pk, action == 'ga', actor, timezone.now())
+        if action in ('ga', 'gp', 'gs'):
+            if not GrantCall.objects.filter(pk=pk, chat_id=chat_id, message_id=here).exists():
+                return '이 카드에 있는 공고에서 선택해 주세요'
+            if action == 'gs':
+                call, answer = grants.submit(pk, actor, timezone.now(),
+                                             source={'chat_id': chat_id, 'message_id': here})
+            else:
+                call, answer = grants.decide(pk, action == 'ga', actor, timezone.now())
             if call and call.message_id:
                 calls = grants.card_calls(call.chat_id, call.message_id)
                 self.tg.edit_text(call.chat_id, call.message_id, messages.grant_card_text(calls),
