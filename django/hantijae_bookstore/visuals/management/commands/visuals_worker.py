@@ -28,7 +28,7 @@ class Command(BaseCommand):
             except BlockingIOError as exc:
                 raise CommandError('이미지 워커가 이미 실행 중입니다') from exc
             c = settings.INTAKE
-            llm = VisualClient(c['SIDECAR_URL'], c['SIDECAR_TOKEN'], c['SIDECAR_MODEL'], timeout=300)
+            llm = VisualClient(c['SIDECAR_URL'], c['SIDECAR_TOKEN'], c['SIDECAR_MODEL'], timeout=150)
             tg = TelegramAPI(c['TELEGRAM_BOT_TOKEN'])
             while True:
                 close_old_connections()

@@ -698,9 +698,9 @@ def _visuals(c, row):
     from visuals.models import CardJob
     jobs = CardJob.objects.all()
     sent = jobs.filter(state='sent')
-    pending = jobs.filter(state__in=('queued', 'building', 'ready', 'sending')).count()
+    pending = jobs.filter(state__in=('queued', 'building', 'ready', 'sending', 'handoff', 'handoff_sending')).count()
     problems = []
-    bad = jobs.filter(state__in=('failed', 'uncertain'), updated_at__gte=c.now - RECENT).count()
+    bad = jobs.filter(state__in=('failed', 'uncertain', 'handoff_uncertain', 'handoff_waiting'), updated_at__gte=c.now - RECENT).count()
     heartbeat = _parse(c.get('visuals_heartbeat'))
     if not heartbeat or c.now - heartbeat > TICK_LIMIT:
         problems.append('이미지 제작 워커 실행 확인 필요')
@@ -716,7 +716,8 @@ def _visuals(c, row):
     if jobs.filter(state='queued', created_at__lt=c.now - timedelta(hours=24)).exists():
         problems.append('하루 넘게 대기 중인 이미지')
     row.last = _when(sent.aggregate(at=Max('completed_at'))['at'])
-    _verdict(row, problems, sent.exists(), f'전달 {sent.count()}건 · 대기 {pending}건')
+    requests = jobs.filter(state='handed_off').count()
+    _verdict(row, problems, sent.exists(), f'전달 {sent.count()}건 · 대기 {pending}건 · 개인 제작 요청 {requests}건')
 
 
 def _always_rows(c):
@@ -728,7 +729,7 @@ def _always_rows(c):
         rows.append(_guarded(row, lambda: fn(c, row) or row) if on else _switch_off(row, why))
 
     add('worker', '워커', '약 1분마다', '텔레그램 수신과 모든 일정의 바탕', ('systemctl status hantijae-intake',), _worker)
-    add('visuals', '홍보 이미지', '글 제안 뒤', '원본 우선 · 필요할 때만 AI 일러스트 · 앨범과 원본 ZIP',
+    add('visuals', '홍보 이미지', '글 제안 뒤', '원문·내용·이미지 검토 후 전달 · 미통과는 개인 제작 요청',
         ('visuals_mode', 'visuals_heartbeat', 'systemctl status hantijae-visuals'), _visuals,
         m_on and c.get('visuals_mode', 'off') != 'off', '홍보 이미지 또는 마케팅 꺼짐')
     add('telegram', '텔레그램 수신', '매 바퀴', f'연속 {TG_ALERT_AFTER}번 실패하면 관리자 방에 알림', (OUTAGE, LAST_OUTAGE),

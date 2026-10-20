@@ -18,6 +18,8 @@ from visuals.policy import card_kind, illustration_decision
 from visuals.prompts import ART, DECISION
 from visuals.render import render_packet
 from visuals.svg import validate_svg
+from visuals.quality import assess, current_sources, files_approved, hold
+from visuals.handoff import deliver_handoff
 
 log = logging.getLogger('intake')
 
@@ -87,7 +89,7 @@ def _allowed(draft, chat_id, now):
 def eligible(job, now):
     draft = Draft.objects.select_related('proposal__book').get(pk=job.draft_id)
     return (_allowed(draft, job.chat_id, now) and fingerprint(draft) == job.fingerprint
-            and sources_current(job.plan))
+            and sources_current(job.plan) and current_sources(job, draft))
 
 
 def enqueue(draft, chat_id, reply_to):
@@ -97,6 +99,11 @@ def enqueue(draft, chat_id, reply_to):
         return None
     job, _ = CardJob.objects.get_or_create(draft=draft, chat_id=chat_id, fingerprint=fingerprint(draft),
                                           defaults={'reply_to': reply_to})
+    # 과거 발송의 키는 유지하고 아직 보내지 않은 원문 변경만 재검토한다.
+    if (job.state in ('cancelled', 'queued', 'ready', 'handoff') and not job.receipt
+            and not current_sources(job, draft)):
+        job.state, job.plan, job.files, job.attempts = 'queued', {}, [], 0
+        job.save(update_fields=['state', 'plan', 'files', 'attempts', 'updated_at'])
     return job
 
 
@@ -208,8 +215,8 @@ def build(job, llm, now):
 def recover(now):
     stale = CardJob.objects.filter(started_at__lt=now - timedelta(minutes=15))
     stale.filter(state='sending').update(state='uncertain', error='전송 중 중단됨. 중복 방지를 위해 자동 재전송하지 않음')
-    stale.filter(state='building', attempts__lt=2).update(state='queued')
-    stale.filter(state='building', attempts__gte=2).update(state='failed', error='이미지 제작이 두 번 중단됨')
+    stale.filter(state='handoff_sending').update(state='handoff_uncertain', error='개인 제작 요청 전송 중 중단됨. 자동 재전송하지 않음')
+    stale.filter(state='building').update(state='handoff', error='카드 제작·검토가 중단되어 사람의 확인이 필요합니다')
 
 
 def run_once(llm, tg, now=None):
@@ -218,12 +225,24 @@ def run_once(llm, tg, now=None):
     recover(now)
     if WorkerState.get('visuals_mode', 'off') == 'off' or in_quiet_hours(now):
         return None
-    job = CardJob.objects.filter(state__in=('queued', 'ready')).select_related('draft__proposal__book').first()
+    if TelegramChat.objects.filter(kind=TelegramChat.ADMIN, chat_id__gt=0).count() == 1:
+        CardJob.objects.filter(state='handoff_waiting').update(state='handoff')
+    job = CardJob.objects.filter(state__in=('queued', 'ready', 'handoff')).select_related('draft__proposal__book').first()
     if not job:
         return None
     if not eligible(job, now):
+        if (not job.receipt and not current_sources(job) and _allowed(job.draft, job.chat_id, now)
+                and fingerprint(job.draft) == job.fingerprint):
+            CardJob.objects.filter(pk=job.pk).update(state='queued', plan={}, files=[])
+            return job
         CardJob.objects.filter(pk=job.pk).update(state='cancelled')
         return job
+    if job.state == 'ready' and not files_approved(job):
+        if job.receipt.get('images'):
+            CardJob.objects.filter(pk=job.pk).update(state='uncertain', error='이미 일부 전송된 시안의 검토 기록 확인 필요')
+            return job
+        job.state = 'queued'
+        job.save(update_fields=['state', 'updated_at'])
     if job.state == 'queued':
         claimed = CardJob.objects.filter(pk=job.pk, state='queued').update(state='building', started_at=now,
                                                                          attempts=job.attempts + 1)
@@ -231,10 +250,15 @@ def run_once(llm, tg, now=None):
             return None
         job.state, job.attempts = 'building', job.attempts + 1
         try:
-            build(job, llm, now)
+            assess(job, llm)
         except Exception as exc:
-            CardJob.objects.filter(pk=job.pk).update(state='failed', error='이미지 제작 실패: ' + type(exc).__name__)
-            return job
+            log.warning('visuals quality needs help job=%s type=%s', job.pk, type(exc).__name__)
+            job.plan.setdefault('quality', {}).setdefault('attempts', []).append({
+                'stage': 'automation', 'failure_type': type(exc).__name__})
+            hold(job, '자동 제작·이미지 검토를 완료하지 못했습니다. 원문과 시안을 보고 마무리가 필요합니다.')
+    if job.state == 'handoff':
+        deliver_handoff(job, tg, lambda: eligible(job, timezone.now()))
+        return job
     try:
         deliver(job, tg, lambda: eligible(job, timezone.now()))
     except Exception as exc:

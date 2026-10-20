@@ -29,6 +29,17 @@ class JobsTest(TestCase):
         WorkerState.put('marketing_mode', 'live')
         TelegramChat.objects.create(kind='reviewers', chat_id=-200)
         TelegramChat.objects.create(kind='admin', chat_id=100)
+        # 전달 경계 테스트의 검토 fixture. 실제 품질 경로는 test_quality에서 검증한다.
+        def reviewed(job, llm):
+            from visuals.pipeline import build
+            import hashlib
+            build(job, llm, timezone.now())
+            job.plan['quality'] = {'version': 1, 'status': 'passed', 'file_sha256': {
+                n: hashlib.sha256((Path(self.tmp.name)/str(job.pk)/n).read_bytes()).hexdigest() for n in job.files}}
+            job.save(update_fields=['plan'])
+        self.assess = mock.patch('visuals.pipeline.assess', side_effect=reviewed)
+        self.assess.start()
+        self.addCleanup(self.assess.stop)
         self.book = make_book()
         self.proposal = Proposal.objects.create(book=self.book, kind='kit', headline='책 소식')
         self.draft = Draft.objects.create(proposal=self.proposal, channel='instagram', title='책 소식', body='책 소개',
@@ -131,7 +142,7 @@ class JobsTest(TestCase):
         CardJob.objects.filter(pk=job.pk).update(state='building', attempts=1, started_at=ago)
         recover(timezone.now())
         job.refresh_from_db()
-        self.assertEqual(job.state, 'queued')
+        self.assertEqual(job.state, 'handoff')
 
     def test_cancellation_during_build_prevents_any_telegram_send(self):
         job = enqueue(self.draft, -200, 50)
@@ -206,6 +217,9 @@ class JobsTest(TestCase):
         from marketing.timeutil import KST
         job = enqueue(self.draft, -200, 50)
         build(job, FakeLLM({}), timezone.now())
+        import hashlib
+        job.plan['quality'] = {'version': 1, 'status': 'passed', 'file_sha256': {n: hashlib.sha256((Path(self.tmp.name)/str(job.pk)/n).read_bytes()).hexdigest() for n in job.files}}
+        job.save(update_fields=['plan'])
         quiet = timezone.now().astimezone(KST).replace(hour=21)
         daylight = quiet.replace(hour=10)
         tg = mock.Mock()

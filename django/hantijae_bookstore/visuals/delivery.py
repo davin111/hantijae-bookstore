@@ -15,6 +15,13 @@ def deliver(job, tg, can_send):
     job.refresh_from_db()
     if job.state != 'ready':
         return
+    from visuals.quality import files_approved, hold
+    if not files_approved(job):
+        if job.receipt.get('images'):
+            CardJob.objects.filter(pk=job.pk).update(state='uncertain', error='전송된 카드의 검토 기록 확인 필요')
+        else:
+            hold(job, '실제로 검토한 이미지 파일과 일치하지 않아 확인이 필요합니다')
+        return
     if in_quiet_hours(timezone.now()):
         return
     folder = root() / str(job.pk)
@@ -31,7 +38,7 @@ def deliver(job, tg, can_send):
             z.write(path, path.name)
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     caption = f'『{job.draft.proposal.book.title}』 게시물 이미지 시안' if job.draft.proposal.book else '게시물 이미지 시안'
-    caption += f'\n{len(paths)}장 · 1080×1350\n문구와 자료를 확인한 뒤 사용해 주세요. 게시용 원본은 ZIP으로 함께 드립니다.'
+    caption += f'\n{len(paths)}장 · 1080×1350\n원문 대조와 별도 AI 내용·이미지 검토를 거친 시안입니다. 최종 확인 후 사용해 주세요. 게시용 원본은 ZIP으로 함께 드립니다.'
     if job.plan.get('illustration'):
         caption += '\nAI가 만든 도형 일러스트가 포함되어 있습니다.'
     missing = job.plan.get('missing', [])

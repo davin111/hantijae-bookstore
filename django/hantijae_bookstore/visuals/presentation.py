@@ -9,6 +9,7 @@ from intake.models import WorkerState
 from visuals.assets import sources_current
 from visuals.models import CardJob
 from visuals.pipeline import _allowed, fingerprint
+from visuals.quality import current_sources
 
 log = logging.getLogger('intake')
 
@@ -19,7 +20,7 @@ def draft_status(draft, chat_id):
         return '', None
     try:
         job = CardJob.objects.filter(draft=draft, chat_id=chat_id, fingerprint=fingerprint(draft)).first()
-        if job and not sources_current(job.plan):
+        if job and (not sources_current(job.plan) or not current_sources(job, draft)):
             return '원본 자료가 달라져 이전 이미지를 다시 확인해야 해요.', None
         if not job:
             if _allowed(draft, chat_id, timezone.now()):
@@ -43,6 +44,12 @@ def draft_status(draft, chat_id):
                 text = '이미지 시안을 준비하고 있어요. 밤에는 다음 날 오전에 이어서 전달합니다.'
         elif job.state in ('sending', 'uncertain'):
             text, target = '이미지 전달 결과를 확인하고 있어요. 중복으로 보내지 않을게요.', None
+        elif job.state == 'handed_off':
+            text, target = '자동 검토를 마치지 못해 개발자에게 자료와 제작 요청을 전달했어요. 아직 완성 시안은 아닙니다.', None
+        elif job.state in ('handoff', 'handoff_waiting'):
+            text, target = '내용·이미지 검토를 마치지 못해 개발자에게 보낼 제작 자료를 준비하고 있어요.', None
+        elif job.state in ('handoff_sending', 'handoff_uncertain'):
+            text, target = '개발자에게 제작 자료를 전달한 결과를 확인하고 있어요. 중복 요청하지 않을게요.', None
         elif job.state == 'cancelled':
             text, target = '원고나 자료 상태가 바뀌어 이미지 제작·전달을 중단했어요.', None
         else:

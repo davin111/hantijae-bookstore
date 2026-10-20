@@ -35,3 +35,16 @@ class ClientTest(SimpleTestCase):
         client, _ = self.make_client([], status=401)
         with self.assertRaises(LLMAuthError):
             client.complete('system', 'user')
+
+    def test_pixel_review_uses_attachment_api_without_interview_history(self):
+        from intake.llm import Attachment
+        session = mock.Mock()
+        session.post.return_value = mock.Mock(status_code=200)
+        session.post.return_value.json.return_value = {'text': 'review result'}
+        client = VisualClient('https://sidecar.test', 'token', 'claude-test', timeout=150, session=session)
+        self.assertEqual(client.review('reviewer', 'sources', [Attachment('image','image/png',b'pixels','01.png')]), 'review result')
+        request = session.post.call_args
+        self.assertTrue(request.args[0].endswith('/complete'))
+        self.assertNotIn('history', request.kwargs['json'])
+        self.assertEqual(request.kwargs['json']['attachments'][0]['data'], 'cGl4ZWxz')
+        self.assertEqual(request.kwargs['timeout'], 150)

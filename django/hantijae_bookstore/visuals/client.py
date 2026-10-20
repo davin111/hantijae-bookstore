@@ -8,6 +8,10 @@ from intake.llm import LLMAuthError, LLMError, LLMTransientError, SidecarClient
 
 
 class VisualClient(SidecarClient):
+    def review(self, system, user, attachments):
+        """완성된 픽셀 검토는 도구 없는 첨부 API로 별도 요청한다."""
+        return SidecarClient.complete(self, system, user, attachments)
+
     def complete(self, system, user, attachments=()):
         if attachments:
             raise ValueError('그림 코드는 파일 첨부 없이 요청합니다')
