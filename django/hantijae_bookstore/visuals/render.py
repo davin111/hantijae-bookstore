@@ -89,7 +89,6 @@ def render_packet(cards, assets, svg, output_dir, title='한티재의 책'):
         draw.rectangle((0, 1260, WIDTH, HEIGHT), fill=PAPER)
         draw.text((76, 1292), 'AI 도형 일러스트' if kind == 'illustration' else '도서출판 한티재',
                   font=font(23), fill=ACCENT)
-        draw.text((1004, 1292), f'{index:02} / {len(cards):02}', font=font(23), fill=ACCENT, anchor='rt')
         path = output_dir / f'{index:02}.png'
         canvas.save(path, 'PNG')
         paths.append(path)
