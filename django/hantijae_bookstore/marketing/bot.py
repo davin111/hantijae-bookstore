@@ -16,7 +16,7 @@ from marketing import board
 from marketing import briefing as briefing_mod
 from marketing import kit as kit_mod
 from marketing import ads, bnk, bnk_sales, dated, editor, grants, messages, meta, midweek, moments, monthly, notion_sync, peers, series, social
-from marketing.supplements import rewrite_extra
+from marketing.supplements import factual, has_operational_metrics, rewrite_extra
 from marketing.hooks import add_hook, upcoming
 from marketing.models import BookProfile, Briefing, CopyNote, Draft, DraftMessage, GrantCall, HookDate, Proposal, Signal, WatchQuery
 from marketing.prompts import REWRITE_SYSTEM, build_rewrite_user
@@ -400,9 +400,13 @@ class Marketing:
             self.host.notify_admin('ℹ️ 이번 주 주중 제안이 두 번째예요. 너무 잦으면 /moment midweek 로 조정하세요')
 
     def _send_draft(self, draft, chat_id, reply_to=None, quote=None, quote_entities=None):
-        supplement = messages.supplement_text(draft)
+        from visuals.presentation import draft_status
+        visual_status, image_reply = draft_status(draft, chat_id)
+        supplement = messages.supplement_text(draft, visual_status=visual_status)
         if supplement:
-            sent = self.tg.send_message(chat_id, supplement, reply_to=reply_to, quote=quote, quote_entities=quote_entities)
+            sent = self.tg.send_message(chat_id, supplement, reply_to=image_reply or reply_to,
+                                       quote=None if image_reply else quote,
+                                       quote_entities=None if image_reply else quote_entities)
             DraftMessage.objects.create(draft=draft, chat_id=chat_id, message_id=sent['message_id'])
         places = messages.places_text(draft)
         if places:  # 편지: 보낼 곳을 먼저 짧게(올릴 글이 아니라 본문에서 뺐다). 여기에 단 답장도 편지 고치기로 간다
@@ -588,6 +592,14 @@ class Marketing:
         source = (book.description or book.short_description or '') if book else ''
         try:
             out = complete_json(self.llm, REWRITE_SYSTEM, build_rewrite_user(base, text, source))
+            new_title = fix_title_marks(str(out.get('title') or '').strip())[:300]
+            new_body = fix_title_marks(str(out.get('body') or '').strip()) or base.body
+            if has_operational_metrics(new_title + '\n' + new_body):
+                raise LLMError('대출·판매 지수는 운영진용 참고 자료라 공개 원고에 넣지 않았어요')
+            if (base.proposal.candidate_key.startswith(('loan:', 'surge:'))
+                    and not factual(new_title + '\n' + new_body,
+                                    [source, book.title, book.subtitle, book.short_description] if book else [source])):
+                raise LLMError('책 자료에 없는 숫자나 인용이 있어 저장하지 않았어요')
             if base.channel == Draft.EDITOR and not editor.valid_facts(
                     str(out.get('title') or '') + '\n' + str(out.get('body') or ''),
                     base.title + '\n' + base.body + '\n' + text):
@@ -602,8 +614,7 @@ class Marketing:
             if hook_id.isdigit():
                 memorial = memorial or HookDate.objects.filter(pk=hook_id, memorial=True).exists()
         new = Draft.objects.create(proposal=base.proposal, channel=base.channel,
-                                   title=fix_title_marks(str(out.get('title') or '').strip())[:300],
-                                   body=fix_title_marks(str(out.get('body') or '').strip()) or base.body,
+                                   title=new_title, body=new_body,
                                    version=self._newest(base.proposal_id, base.channel).version + 1,
                                    parent=base, origin=Draft.REWRITE,
                                    extra=rewrite_extra(base, out, note=text, source_text=source, memorial=memorial))

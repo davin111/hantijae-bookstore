@@ -140,7 +140,7 @@ def build(job, llm, now):
     folder.mkdir(parents=True, exist_ok=True)
     assets, labels, sources = load_assets(book)
     raw = (draft.extra or {}).get('cards', [])[:6]
-    candidates, missing = [], []
+    candidates, missing, fallbacks = [], [], []
     for item in raw:
         if not isinstance(item, dict):
             continue
@@ -149,8 +149,13 @@ def build(job, llm, now):
             continue
         kind = card_kind(show)
         if kind in ('cover', 'toc', 'inside', 'photo') and kind not in assets:
-            missing.append({'toc': '목차', 'inside': '본문', 'photo': '사진', 'cover': '표지'}[kind])
-            continue
+            label = {'toc': '목차', 'inside': '본문', 'photo': '사진', 'cover': '표지'}[kind]
+            if kind in ('photo', 'cover') and text.strip() and '[' not in text and ']' not in text:
+                fallbacks.append(label)
+                kind = 'text'  # 확인된 문구만 유지한다. 없는 사진/목차를 만들어내지 않는다.
+            else:
+                missing.append(label)
+                continue
         if kind in ('toc', 'inside'):
             text = labels[kind]
         if '[' in text or ']' in text or not text.strip():
@@ -190,9 +195,10 @@ def build(job, llm, now):
     cards = cards[:4]
     if not cards:
         raise ValueError('만들 수 있는 카드가 없습니다')
-    paths = render_packet(cards, assets, art, folder, title=draft.title)
+    paths = render_packet(cards, assets, art, folder, title=book.title if book else draft.title)
     job.plan = {'cards': cards, 'illustration': decision if used else None,
-                'missing': list(dict.fromkeys(missing)), 'originals': labels, 'sources': sources}
+                'missing': list(dict.fromkeys(missing)), 'text_fallbacks': list(dict.fromkeys(fallbacks)),
+                'originals': labels, 'sources': sources}
     job.files = [p.name for p in paths]
     job.state = 'ready'
     job.save(update_fields=['plan', 'files', 'state', 'error', 'updated_at'])

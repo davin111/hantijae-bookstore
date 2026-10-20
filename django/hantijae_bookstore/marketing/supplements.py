@@ -11,6 +11,10 @@ SALES_WORDS = ('구매', '주문', '할인', '서점에서', '링크', 'http', '
 _NUMBER = re.compile(r'\d+(?:,\d{3})*(?:\.\d+)?')
 _QUOTE = re.compile(r'[“"]([^”"\n]+)[”"]')
 _HASHTAG = re.compile(r'#[\w가-힣]+')
+_OPERATIONAL_METRIC = re.compile(
+    r'대출\s*(?:횟수|건수|량|순위)|대출[^\n.!?]{0,30}\d|\d[^\n.!?]{0,30}대출'
+    r'|(?:앞선|이전|지난)\s*\d+\s*(?:달|개월)\s*평균|(?:월\s*)?평균\s*\d+[\d,.]*\s*(?:회|건|번)'
+    r'|\d+[\d,.]*\s*(?:번|회)\s*빌려|판매\s*지수|세일즈포인트')
 _RECRUIT_CONDITION = re.compile(r'모집|신청|마감|발표|서평\s*(?:기간|올릴)|인원|선착순|증정|추첨|당첨|제공|선물|선정')
 _RECRUIT_CARDS = [
     {'show': '책 표지와 제목·지은이 준비', 'text': '서평단을 모십니다'},
@@ -24,11 +28,17 @@ def clean(value):
     return fix_title_marks(value.strip()) if isinstance(value, str) else ''
 
 
+def has_operational_metrics(text):
+    """운영진용 수집 지표를 공개 원고로 옮기지 않는다. 행사·펀딩 숫자는 별개다."""
+    return bool(_OPERATIONAL_METRIC.search(text or ''))
+
+
 def factual(text, allowed_texts=(), memorial=False):
     """자료의 숫자 표기와 직접 인용을 확인한다. 짧은 숫자도 모집 인원·날짜가 될 수 있다."""
     source = '\n'.join(str(t or '') for t in allowed_texts)
     numbers = {x.replace(',', '') for x in _NUMBER.findall(source)}
     return (not ({x.replace(',', '') for x in _NUMBER.findall(text)} - numbers)
+            and not has_operational_metrics(text)
             and all(is_verbatim(q, source) for q in _QUOTE.findall(text))
             and not (memorial and any(w in text for w in SALES_WORDS))
             # 프로필의 실제 목적지를 이 생성기는 확인하지 않는다. 공개 문구에는 넣지 않는다.
@@ -89,8 +99,20 @@ def rewrite_extra(draft, out, note='', source_text='', memorial=False):
     channel = getattr(draft, 'channel', None)
     if channel not in ('blog', 'instagram', 'recruit'):
         return extra
+    proposal = getattr(draft, 'proposal', None)
+    book_only = bool(proposal and proposal.candidate_key.startswith(('loan:', 'surge:')))
+    book = proposal.book if book_only else None
+    sources = ([source_text, book.title, book.subtitle, book.short_description] if book else [source_text]) if book_only else [source_text, note]
+    # 예전 원고의 통계 카드는 새 원고에서 정상 보조물의 대체값으로 되살리지 않는다.
+    if any(has_operational_metrics(str(c.get('show', '')) + '\n' + str(c.get('text', '')))
+           or (book_only and not factual(str(c.get('show', '')) + '\n' + str(c.get('text', '')), sources))
+           for c in extra.get('cards', []) if isinstance(c, dict)):
+        extra.pop('cards', None)
+    if isinstance(extra.get('cross'), dict) and (has_operational_metrics(extra['cross'].get('lead', ''))
+            or (book_only and not factual(extra['cross'].get('lead', ''), sources))):
+        extra['cross']['lead'] = ''
     raw = out if isinstance(out, dict) else {}
-    valid = normalize_extra(raw, [source_text, note], memorial=memorial)
+    valid = normalize_extra(raw, sources, memorial=memorial)
     if channel == 'recruit' and 'cards' in raw:
         valid['cards'] = recruit_cards(raw['cards'], [source_text, note])
     if 'cards' in valid:
@@ -111,7 +133,7 @@ def cross_copy_text(title, body, hashtags):
     return '\n\n'.join(p for p in (title, body, ' '.join(tags)) if p)
 
 
-def supplement_text(draft):
+def supplement_text(draft, visual_status=''):
     """텔레그램과 노션의 같은 메모. 길이 초과 원고를 자동 절단하지 않는다."""
     extra = getattr(draft, 'extra', None) or {}
     cross, cards = extra.get('cross') or {}, extra.get('cards') or []
@@ -135,5 +157,5 @@ def supplement_text(draft):
         lines.append(f'카드 구성안 ({len(cards)}장)')
         for i, card in enumerate(cards, 1):
             lines.append(f'{i}장 · {card["show"]}' + (f' — {card["text"]}' if card.get('text') else ''))
-        lines.append('자료 준비와 사진 사용 허락을 확인한 뒤 만들어 주세요.')
+        lines.append(visual_status or '구성안입니다. 실제 제작 결과는 확보된 원본 자료에 따라 달라질 수 있어요.')
     return '\n'.join(lines)

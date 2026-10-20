@@ -37,6 +37,8 @@ def deliver(job, tg, can_send):
     missing = job.plan.get('missing', [])
     if missing:
         caption += '\n원본 자료가 없어 제외: ' + ', '.join(missing)
+    if job.plan.get('text_fallbacks'):
+        caption += '\n원본 자료가 없어 글 카드로 구성: ' + ', '.join(job.plan['text_fallbacks'])
     caption = caption[:950]
     reply = {'message_id': job.reply_to, 'allow_sending_without_reply': True}
     if not can_send():

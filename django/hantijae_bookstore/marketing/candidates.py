@@ -1,12 +1,15 @@
 """주간 브리핑 후보. 규칙만으로 만들고(LLM 없음), 고르기는 briefing.py가 LLM에 맡긴다."""
 import json
 import logging
+import re
+from html import unescape
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
 from django.db.models import Max, Q
+from django.utils.html import strip_tags
 
 from books.models import Book
 from intake.models import WorkerState
@@ -58,6 +61,9 @@ class Candidate:
     def as_prompt(self):
         return {'id': self.id, 'kind': KIND_LABEL[self.kind], 'memorial': self.memorial,
                 'books': [f'『{b.title}』 {b.subtitle}'.strip() for b in self.books],
+                'book_content': [{'title': b.title, 'description': re.sub(
+                    r'https?://\S+', '', unescape(strip_tags(b.description or b.short_description or '')))[:3000]}
+                    for b in self.books],
                 'summary': self.summary, 'facts': self.facts}
 
     def allowed_texts(self):
@@ -65,6 +71,12 @@ class Candidate:
         for b in self.books:
             texts += [b.title, b.subtitle or '', b.description or '', b.short_description or '']
         return texts
+
+    def public_texts(self):
+        if self.kind not in ('loan', 'surge'):
+            return self.allowed_texts()
+        return [text for b in self.books for text in
+                (b.title, b.subtitle or '', b.description or '', b.short_description or '')]
 
 
 def _live(books):

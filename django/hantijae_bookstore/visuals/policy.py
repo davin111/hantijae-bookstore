@@ -22,6 +22,8 @@ def illustration_decision(value, *, sensitive, requested):
 
 
 def card_kind(show):
+    if re.search(r'글\s*카드|텍스트(?:\s*카드|로만)|글자(?:\s*카드|로만|만\s*적은)', show):
+        return 'text'
     if re.search(r'목차|차례', show):
         return 'toc'
     if re.search(r'본문|책\s*속|시\s*전문', show):

@@ -43,6 +43,33 @@ class JobsTest(TestCase):
         self.assertNotEqual(first.pk, second.pk)
         self.assertFalse(eligible(first, timezone.now()))
 
+    def test_missing_photo_keeps_verified_opening_as_text_without_inventing_toc(self):
+        from visuals.pipeline import build
+        self.draft.extra = {'cards': [
+            {'show': '책을 서가에 꽂아 찍은 사진 준비', 'text': '밥을 짓는 사람들의 노동'},
+            {'show': '차례 페이지 사진 준비', 'text': ''},
+            {'show': '글 카드', 'text': '밥과 노동에 관한 에세이'}]}
+        self.draft.save()
+        job = enqueue(self.draft, -200, 50)
+        build(job, FakeLLM({}), timezone.now())
+        self.assertEqual([c['text'] for c in job.plan['cards']], ['밥을 짓는 사람들의 노동', '밥과 노동에 관한 에세이'])
+        self.assertEqual(job.plan['cards'][0]['kind'], 'text')
+        self.assertIn('목차', job.plan['missing'])
+        self.assertIn('사진', job.plan['text_fallbacks'])
+
+    def test_explicit_text_card_does_not_require_cover_or_inside_image(self):
+        from visuals.pipeline import build
+        self.draft.extra = {'cards': [
+            {'show': '일시와 장소만 적은 글 카드(표지 색 배경)', 'text': '책방에서 만나요'},
+            {'show': '책 속 문장을 적은 글 카드', 'text': '확인한 문장'},
+            {'show': '글자만 적은 카드(표지 색 배경)', 'text': '책의 이야기'},
+            {'show': '텍스트로만 구성(표지 색 배경)', 'text': '책 소개'}]}
+        self.draft.save()
+        job = enqueue(self.draft, -200, 50)
+        build(job, FakeLLM({}), timezone.now())
+        self.assertEqual([c['kind'] for c in job.plan['cards']], ['text'] * 4)
+        self.assertFalse(job.plan['missing'])
+
     def test_off_unauthorized_chat_and_posted_draft_do_not_queue(self):
         self.assertIsNone(enqueue(self.draft, 999, 50))
         WorkerState.put('visuals_mode', 'off')

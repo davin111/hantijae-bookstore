@@ -66,7 +66,8 @@ def render_packet(cards, assets, svg, output_dir, title='한티재의 책'):
             # 상단 문구는 충분한 단색 여백에 합성한다. 그림은 하단에 보존한다.
             ImageDraw.Draw(canvas).rectangle((0, 0, WIDTH, 470), fill=PAPER)
         draw = ImageDraw.Draw(canvas)
-        draw.text((76, 66), '한티재의 책', font=font(27), fill=ACCENT)
+        header = title.strip() if title and len(title.strip()) <= 60 else '한티재의 책'
+        text_block(draw, header, (76, 52, 928, 64), max_size=27, min_size=19, serif=False, color=ACCENT)
         draw.line((76, 122, 1004, 122), fill='#D7CDBB', width=2)
         if kind in ('cover', 'toc', 'inside', 'photo'):
             original = assets.get(kind)

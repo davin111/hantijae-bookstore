@@ -11,7 +11,7 @@ from intake.llm import complete_json
 from marketing import ads, bnk_sales, candidates, channels, gnews, meta, search
 from marketing.models import Briefing, Draft, Proposal, SalesSnapshot, Signal
 from marketing.prompts import BRIEFING_SYSTEM, build_briefing_user
-from marketing.supplements import normalize_extra
+from marketing.supplements import factual, has_operational_metrics, normalize_extra
 from marketing.sales import latest
 from marketing.text import fix_title_marks, foreign_numbers
 from marketing.timeutil import KST, week_start
@@ -54,6 +54,13 @@ def compose(llm, cands, today, context=(), midweek=False):
         if not headline or not body:
             dropped.append(f'{cand.id}: 빈 항목')
             continue
+        if has_operational_metrics(str(d.get('title') or '') + '\n' + body):
+            dropped.append(f'{cand.id}: 공개 원고에 운영 통계 포함')
+            continue
+        public_sources = cand.public_texts() + [today.isoformat()]
+        if cand.kind in ('loan', 'surge') and not factual(str(d.get('title') or '') + '\n' + body, public_sources):
+            dropped.append(f'{cand.id}: 책 자료에 없는 공개 원고 숫자·인용')
+            continue
         places = _places(d) if d.get('channel') == Draft.LETTER else []
         bad = foreign_numbers(' '.join([headline, reason, body, *places]), cand.allowed_texts() + [today.isoformat()])
         if bad:
@@ -75,7 +82,7 @@ def compose(llm, cands, today, context=(), midweek=False):
                    d.get('channel') if d.get('channel') in CHANNELS else Draft.INSTAGRAM)
         if channel != Draft.LETTER:
             places = []
-        supplements = normalize_extra(d, cand.allowed_texts() + [today.isoformat()], cand.memorial) if channel != Draft.LETTER else {}
+        supplements = normalize_extra(d, public_sources, cand.memorial) if channel != Draft.LETTER else {}
         items.append((cand, headline, reason,
                       {'channel': channel, 'title': fix_title_marks(str(d.get('title', '')).strip()), 'body': body,
                        'places': places, 'extra': supplements}))  # 보조물은 올릴 글에 섞지 않는다
