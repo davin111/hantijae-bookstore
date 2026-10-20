@@ -227,3 +227,22 @@ class QualityTest(TestCase):
         data['observations'][0]['visible_text'] += ' / 이미지에 없는 새 문장'
         with self.assertRaises(ValueError):
             quality.checked_review(data, CARDS)
+
+    def test_failed_revision_keeps_complete_preview_and_matching_copy(self):
+        from visuals.editorial import render_editorial
+        self.llm.review.return_value = json.dumps(review(False), ensure_ascii=False)
+        count = 0
+        def fail_second(cards, assets, folder, title):
+            nonlocal count
+            count += 1
+            if count == 2:
+                Path(folder).mkdir(parents=True, exist_ok=True)
+                (Path(folder)/'01.png').write_bytes(b'incomplete replacement')
+                raise ValueError('다시 편집 필요')
+            return render_editorial(cards, assets, folder, title)
+        with mock.patch('visuals.quality.render_editorial', side_effect=fail_second):
+            quality.assess(self.job, self.llm)
+        self.assertEqual(self.job.state, 'handoff')
+        for name in self.job.files:
+            with Image.open(Path(self.tmp.name)/str(self.job.pk)/name) as im:
+                self.assertEqual(im.size, (1080,1350))
