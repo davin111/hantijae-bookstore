@@ -35,6 +35,16 @@ def export(kind='customer', month='2026-09', delta=0, change=None):
     return out.getvalue()
 
 
+def split_product_prices(ws):
+    """Same product at two list prices, including a return in the later-price row."""
+    ws['D8'], ws['E8'], ws['H8'], ws['I8'], ws['J8'] = 1, 1000, 1, 1000, 1
+    ws.insert_rows(9)
+    for col, value in enumerate(['00000001', '가상 책', '3,000', 3, 3000, 1, 1000, 2, 2000, 1], 1):
+        ws.cell(9, col, value)
+    # Two price rows plus the other product's return: 4 out, 2 returned, 2 net.
+    ws['F11'], ws['G11'], ws['H11'], ws['I11'] = '2', '2,000', '2', '2,000'
+
+
 class ERPParserTest(TestCase):
     def read(self, kind='customer', **kwargs):
         return parse_export(export(kind, **kwargs), today=date(2026, 10, 17))
@@ -52,6 +62,42 @@ class ERPParserTest(TestCase):
     def test_changed_column_is_rejected(self):
         with self.assertRaisesRegex(InvalidERP, '열'):
             self.read(change=lambda ws: setattr(ws['E7'], 'value', '건수'))
+
+    def test_same_product_at_distinct_prices_is_aggregated_once(self):
+        try:
+            product = self.read('product', change=split_product_prices)
+        except InvalidERP as error:
+            self.fail(f'정가가 다른 정상 제품 행을 거절함: {error}')
+        self.assertEqual(product['count'], 2)
+        self.assertEqual(product['source_count'], 3)
+        self.assertEqual(product['rows'][0], dict(code='00000001', label='가상 책',
+                         out_qty=4, out_amount=4000, return_qty=1, return_amount=1000,
+                         net_qty=3, net_amount=3000, gift_qty=2))
+        self.assertEqual(product['totals'], dict(out_qty=4, out_amount=4000, return_qty=2,
+                         return_amount=2000, net_qty=2, net_amount=2000, gift_qty=2))
+
+    def test_repeated_product_requires_same_name_and_distinct_known_prices(self):
+        for cell, value in [('C9', '2000'), ('B9', '다른 책'), ('C9', None), ('C8', 0)]:
+            def change(ws):
+                split_product_prices(ws)
+                ws[cell] = value
+            with self.subTest(cell=cell, value=value), self.assertRaises(InvalidERP):
+                self.read('product', change=change)
+
+    def test_price_split_still_checks_each_row_and_grand_total(self):
+        for cell, value in [('H9', 3), ('I11', '3,000')]:
+            def change(ws):
+                split_product_prices(ws)
+                ws[cell] = value
+            with self.subTest(cell=cell), self.assertRaises(InvalidERP):
+                self.read('product', change=change)
+
+    def test_price_split_rejects_consistent_footer_that_disagrees_with_details(self):
+        def change(ws):
+            split_product_prices(ws)
+            ws['D11'], ws['H11'] = 5, 3  # 5 - 2 = 3, but details total 4 - 2 = 2.
+        with self.assertRaisesRegex(InvalidERP, '상세 행'):
+            self.read('product', change=change)
 
     def test_row_and_footer_must_both_reconcile(self):
         for cell, value in [('J8', 5), ('K9', '4,000'), ('F8', 9)]:

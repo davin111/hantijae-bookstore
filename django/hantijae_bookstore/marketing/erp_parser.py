@@ -107,6 +107,7 @@ def parse_export(data, today):
         if [norm(x) for x in rows[5]] != top + [''] * (13 - len(top)) or [norm(x) for x in rows[6]] != sub + [''] * (13 - len(sub)):
             raise InvalidERP('집계표의 열 형식이 달라요. 두 줄 제목을 유지한 원본으로 보내 주세요.')
         details, footer, codes, counts = [], None, set(), [0, 0, 0]
+        products, prices, source_count = {}, {}, 0
         for row in rows[7:]:
             if not any(v is not None and v != '' for v in row):
                 continue
@@ -118,20 +119,40 @@ def parse_export(data, today):
                     raise InvalidERP('거래처별 건수와 합계 행이 달라요.')
                 continue
             code, label = norm(row[0]), norm(row[2] if kind == 'customer' else row[1])
-            if not re.fullmatch(r'\d{6}' if kind == 'customer' else r'\d{8}', code) or not label or code in codes:
+            if (not re.fullmatch(r'\d{6}' if kind == 'customer' else r'\d{8}', code) or not label
+                    or (kind == 'customer' and code in codes)):
                 raise InvalidERP('코드·이름이 비었거나 같은 코드가 중복돼 있어요.')
             codes.add(code)
             if kind == 'product':
-                if _number(row[2]) < 0:
+                price = _number(row[2])
+                if price < 0:
                     raise InvalidERP('제품의 정가가 음수예요.')
             else:
                 counts = [a + _number(row[i]) for a, i in zip(counts, (5, 8, 11))]
-            details.append(dict(code=code, label=label, **_values(row, kind)))
+            values = _values(row, kind)  # 합산 전에 각 가격 행의 차감도 검산한다.
+            source_count += 1
+            if kind == 'product' and code in products:
+                # SA408은 정가 변경 전후를 별도 행으로 출력한다. 이름이 같고
+                # 정가가 명확히 다를 때만 합친다. 같은 가격의 중복은 계속 거절한다.
+                if (products[code]['label'] != label or price <= 0 or 0 in prices[code]
+                        or price in prices[code]):
+                    raise InvalidERP('같은 제품코드의 이름이 다르거나 정가가 없거나 중복돼 있어요.')
+                prices[code].add(price)
+                for metric in METRICS:
+                    products[code][metric] += values[metric]
+            else:
+                detail = dict(code=code, label=label, **values)
+                details.append(detail)
+                if kind == 'product':
+                    products[code], prices[code] = detail, {price}
         totals = {k: sum(row[k] for row in details) for k in METRICS}
         if footer is None or footer != totals:
             raise InvalidERP('상세 행을 더한 값과 파일의 합계가 달라요.')
-        return dict(kind=kind, month=start.strftime('%Y-%m'), totals=totals, rows=details,
-                    count=len(details), vat='별도', scope='조회 조건 미확인')
+        result = dict(kind=kind, month=start.strftime('%Y-%m'), totals=totals, rows=details,
+                      count=len(details), vat='별도', scope='조회 조건 미확인')
+        if source_count != len(details):
+            result['source_count'] = source_count
+        return result
     except InvalidERP:
         raise
     except Exception:

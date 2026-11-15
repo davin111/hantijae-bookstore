@@ -148,18 +148,24 @@ def _result(customer, product):
     bnk = None
     if month_ready(start):
         bnk = BnkSale.objects.filter(day__range=(start, end)).aggregate(n=Sum('total'))['n'] or 0
-    return dict(totals=c['totals'], customer_count=c['count'], product_count=p['count'], bnk=bnk,
-                top=sorted(p['rows'], key=lambda r: (-r['net_qty'], r['code']))[:5])
+    result = dict(totals=c['totals'], customer_count=c['count'], product_count=p['count'], bnk=bnk,
+                  top=sorted(p['rows'], key=lambda r: (-r['net_qty'], r['code']))[:5])
+    if 'source_count' in p:
+        result['product_source_count'] = p['source_count']
+    return result
 
 
 def _report_text(report):
     r, t = report.result, report.result['totals']
+    products = f'제품 {r["product_count"]:,}개 행'
+    if 'product_source_count' in r:
+        products = f'제품 {r["product_count"]:,}종(원본 {r["product_source_count"]:,}행)'
     lines = [f'📚 {report.month} ERP 출고 보고' + (' (수정)' if report.revision > 1 else ''), '',
              f'출고 {t["out_qty"]:,}권 · {t["out_amount"]:,}원',
              f'반품 {t["return_qty"]:,}권 · {t["return_amount"]:,}원',
              f'순출고 {t["net_qty"]:,}권 · {t["net_amount"]:,}원',
              f'기증 {t["gift_qty"]:,}권은 별도예요.', '',
-             f'거래처 {r["customer_count"]:,}곳·제품 {r["product_count"]:,}개 행의 계산과 두 파일의 합계를 확인했어요.',
+             f'거래처 {r["customer_count"]:,}곳·{products}의 계산과 두 파일의 합계를 확인했어요.',
              '제공된 조회 범위의 출판사 출고액(부가세 별도)이며, 입금액·이익은 아니에요.',
              '조회 조건: 제품성격·제품상태 필터는 엑셀에 없어 확인하지 못했어요. 같은 조건으로 내보내 주세요.']
     if r['top']:

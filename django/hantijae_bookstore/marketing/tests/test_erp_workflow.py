@@ -9,7 +9,7 @@ from context.record import forget
 from intake.models import TelegramChat, WorkerState
 from marketing.erp import _deliver, run
 from marketing.models import ERPImport, ERPMonthlyReport
-from marketing.tests.test_erp import export
+from marketing.tests.test_erp import export, split_product_prices
 
 NOW = datetime(2026, 10, 17, 3, tzinfo=timezone.utc)
 
@@ -84,6 +84,24 @@ class ERPWorkflowTest(TestCase):
         self.assertEqual(len(self.tg.sent), 1)
         self.assertEqual(self.tg.edited[-1][1], 101)
         self.assertIn('순출고', self.tg.edited[-1][2])
+
+    def test_price_split_report_combines_book_ranking_and_keeps_source_row_count(self):
+        def second_return(ws):
+            for row in (8, 9):
+                ws.cell(row, 7, 2)
+                ws.cell(row, 8, 2000)
+                ws.cell(row, 10, 2)
+                ws.cell(row, 11, 2000)
+        self.entry(data=export(change=second_return))
+        self.entry('product', data=export('product', change=split_product_prices))
+        self.tick()
+        report = ERPMonthlyReport.objects.get()
+        self.assertEqual(report.state, 'ready')
+        self.assertEqual(report.result['product_count'], 2)
+        self.assertEqual(report.result['product_source_count'], 3)
+        self.assertEqual([(r['label'], r['net_qty']) for r in report.result['top']],
+                         [('가상 책', 3), ('반품 책', -1)])
+        self.assertIn('제품 2종(원본 3행)', report.text)
 
     def test_revision_requires_both_new_inputs_and_does_not_add(self):
         self.pair()
