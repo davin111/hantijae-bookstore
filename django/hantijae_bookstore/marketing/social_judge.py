@@ -73,6 +73,32 @@ def match_title(key, keys):
     return max(near, key=lambda x: x[0])[1] if near else None
 
 
+def ground_identity(text, book_ids, titles, summary, keys):
+    """책 제목 해시태그와 실제 차례로 소제목 오인을 정정한다. 원문 신호는 변경하지 않는다."""
+    ids = list(book_ids)
+    tags = {loose_key(t) for t in re.findall(r'#([^\s#]+)', text)}
+    named = {loose_key(t) for t in re.findall(r'『([^』]+)』', text)}
+    resolved = [b for k, b in keys if b.pk in ids or k in tags or k in named]
+    for b in resolved:
+        if b.pk not in ids:
+            ids.append(b.pk)
+    remaining = []
+    for title in titles:
+        key = loose_key(title)
+        exact = next((b for k, b in keys if key == k), None)
+        chapters = [b for b in resolved if key and key in {
+            loose_key(part) for line in (b.description or '').splitlines()
+            for part in line.split('/') if part.strip()}]
+        if exact:
+            if exact.pk not in ids:
+                ids.append(exact.pk)
+        elif len(chapters) == 1:
+            summary = summary.replace('『' + title + '』', '『' + chapters[0].title + '』')
+        else:
+            remaining.append(title)
+    return ids, remaining, summary
+
+
 # ---- LLM 판정 확인 ----
 
 def mentions_day(text, day):
@@ -119,11 +145,12 @@ def clean_verdict(raw, post, keys):
         bid = int(m.group(1))
         if bid not in books and Book.objects.filter(pk=bid, is_published=True).exists():
             books.append(bid)
+    books, titles, summary = ground_identity(text, books, titles, str(raw.get('summary') or '').strip()[:300], keys)
     return {'relevant': bool(raw.get('relevant')), 'private': bool(raw.get('private')),
             'sensitive': bool(raw.get('sensitive')),
             'category': raw.get('category') if raw.get('category') in CATEGORIES else 'other',
             'books': books, 'titles': titles, 'event': check_event(raw.get('event'), post),
-            'summary': str(raw.get('summary') or '').strip()[:300]}
+            'summary': summary}
 
 
 # ---- 신호 ----

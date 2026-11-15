@@ -53,13 +53,21 @@ def _hwp_text(path):
     return '\n'.join(l for l in lines if l.strip() and l.strip() not in HWP_PLACEHOLDERS)
 
 
+def _docx_blocks(element, parent):
+    for child in element.iterchildren():
+        if child.tag == docx.oxml.ns.qn('w:p'):
+            text = docx.text.paragraph.Paragraph(child, parent).text
+            if text.strip():
+                yield text
+        elif child.tag == docx.oxml.ns.qn('w:tbl'):
+            table = docx.table.Table(child, parent)
+            for row in table.rows:
+                yield ' | '.join('\n'.join(_docx_blocks(cell._tc, cell)).strip() for cell in row.cells)
+
+
 def _docx_text(path):
     d = docx.Document(path)
-    lines = [p.text for p in d.paragraphs if p.text.strip()]
-    for table in d.tables:
-        for row in table.rows:
-            lines.append(' | '.join(cell.text.strip() for cell in row.cells))
-    return '\n'.join(lines)
+    return '\n'.join(_docx_blocks(d.element.body, d))
 
 
 EXTRACTORS = {'.pdf': _pdf_text, '.hwpx': _hwpx_text, '.hwp': _hwp_text, '.docx': _docx_text}

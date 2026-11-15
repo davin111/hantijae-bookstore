@@ -54,6 +54,27 @@ class SocialCandidateTest(TestCase):
         self.assertEqual(c.facts['official'], {'네이버 블로그': '없음', '인스타': '모름', '페이스북 페이지': '없음'})
         self.assertEqual(C.KIND_LABEL['sns_event'], '다가오는 행사')
 
+    def test_ended_campaign_is_not_recommended_from_recently_found_old_post(self):
+        FundingCampaign.objects.create(platform='aladin', external_id='3013',
+            url='https://www.aladin.co.kr/bookfund/view.aspx?pid=3013', title=self.farmer.title,
+            ends_at=NOW - timedelta(days=1), is_ours=True)
+        signal = sns('ended', category='funding', titles=['잘생긴 감자만 살아남는다'], summary='북펀드 참여 부탁')
+        signal.detail['link'] = {'url': 'https://www.aladin.co.kr/m/bookfund/view.aspx?pid=3013'}
+        signal.save()
+        self.assertEqual(C.social_candidates(TODAY, NOW, [], fetch=boom), [])
+
+    def test_existing_signal_is_grounded_against_source_hashtag(self):
+        from marketing.tests.fakes import make_post
+        self.farmer.description = '■ 차례\n잘생긴 감자만 살아남는다'
+        self.farmer.save()
+        signal = sns('chapter', category='new_book', titles=['잘생긴 감자만 살아남는다'],
+                     summary='『잘생긴 감자만 살아남는다』 출간')
+        make_post('chapter', text='잘생긴 감자만 살아남는다\n#농부짠한형', signal=signal)
+        [candidate] = C.social_candidates(TODAY, NOW, [], fetch=unknown)
+        self.assertEqual(candidate.books, [self.farmer])
+        self.assertNotIn('not_on_site', candidate.facts)
+        self.assertIn('『농부, 짠한 형』', candidate.summary)
+
     def test_unknown_official_channel_is_not_called_missing(self):
         sns('n1', category='new_book', books=[self.farmer], summary='『농부, 짠한 형』 출간')
         [c] = C.social_candidates(TODAY, NOW, None, fetch=unknown)

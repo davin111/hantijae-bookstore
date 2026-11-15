@@ -67,6 +67,16 @@ class JudgeTest(TestCase):
         kw.setdefault('posted_at', datetime(2026, 9, 29, 11, 0, tzinfo=KST))
         return make_post(pid, **kw)
 
+    def test_catalog_hashtag_overrides_chapter_mistaken_for_book(self):
+        self.farmer.description = '■ 차례\n구구절절 귀농 / 잘생긴 감자만 살아남는다 / 로터리를 치면서\n농부의 하루'
+        self.farmer.save()
+        post = self.post('chapter', text='잘생긴 감자만 살아남는다\n책에서 한 대목을 옮깁니다. #농부짠한형 #한티재')
+        v = J.clean_verdict(verdict(category='new_book', books=['잘생긴 감자만 살아남는다'],
+                                    summary='『잘생긴 감자만 살아남는다』 출간'), post, J.catalog_keys())
+        self.assertEqual(v['books'], [self.farmer.id])
+        self.assertEqual(v['titles'], [])
+        self.assertNotIn('『잘생긴 감자만 살아남는다』', v['summary'])
+
     def test_share_without_own_words_is_judged_from_original(self):
         p = self.post('1', shared={'url': 'https://www.facebook.com/a/posts/X', 'author': '원작성자',
                                    'posted_at': '2026-09-28T00:40:16+00:00',

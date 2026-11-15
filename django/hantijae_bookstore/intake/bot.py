@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import unicodedata
+import uuid
 from datetime import datetime, timezone as dt_timezone
 from typing import Protocol
 
@@ -11,11 +12,13 @@ from django.utils import timezone
 
 from books.preview import preview_url
 from context import record as context_record, stats as context_stats
-from intake import drafts, funding, messages, notices, review
+from intake import drafts, funding, messages, notices, review, source_updates
 from intake.llm import LLMError
-from intake.models import BookDraft, FundingCampaign, IntakeSource, PendingPatch, ReviewItem, TelegramChat, WorkerState
+from intake.models import BookDraft, DraftMessage, FundingCampaign, IntakeSource, PendingPatch, ReviewItem, TelegramChat, WorkerState
 from intake.notion import fill_notion_row
 from intake.publish import PublishBlocked, publish
+from intake.source_queue import SourceQueueError, retry_source
+from intake.telegram_api import TelegramError
 from marketing import moments
 from marketing.bot import COMMANDS as MARKETING_COMMANDS, Marketing
 from ops import health
@@ -28,6 +31,10 @@ DONE_WORDS = ('완료', '끝', '다 보냈어요', '다보냈어요')
 MAX_TG_FILE = 20 * 1024 * 1024
 REPLY_GUIDE = '이 메시지에는 답장으로 고칠 수 있는 게 없어요. 책 초안(📕), 알림 띠, 홍보 초안 메시지에 답장해 주세요.'
 FORGET_COMMANDS = ('/잊어', '/forget')
+APPLY_REQUEST = re.compile(
+    r'^(?:(?:앞선|이전|위|방금|이)\s*(?:수정안|제안)(?:을)?\s*)?'
+    r'(?:먼저\s*)?반영\s*(?:해\s*(?:줘|주세요|주세요요)|부탁(?:해요|드립니다))'
+    r'[.!。]*(?:\s*그러면\s*추가\s*제안할게[요]?[.!。]*)?$')
 UNRECORDED_COMMANDS = FORGET_COMMANDS + ('/register', '/start')   # /register 에는 초대 코드가 붙는다
 CONTEXT_ANNOUNCE = ('이제부터 이 방 대화를 봇이 기록해요. 전화번호·계좌·비밀번호·주소는 가린 채 저장하고, 90일이 지나면 지워요. '
                     '새 소식이나 행사를 놓치지 않고 홍보 초안에 반영하는 데만 써요. 기록에서 빼고 싶은 메시지가 있으면 '
@@ -192,12 +199,23 @@ class Bot:
             if self.marketing.owns_message(chat_id, reply['message_id']):
                 return self.marketing.handle_reply(chat_id, reply['message_id'], msg, text, actor)
             draft = BookDraft.objects.filter(chat_id=chat_id, message_id=reply['message_id']).select_related('book').first()
+            patch = None
             if draft is None:
                 patch = PendingPatch.objects.filter(message_id=reply['message_id'], draft__chat_id=chat_id) \
                     .select_related('draft__book').first()
                 draft = patch.draft if patch else None      # "이렇게 바꿀게요"에 단 답장도 같은 초안의 수정 요청
+            if draft is None:
+                link = DraftMessage.objects.filter(chat_id=chat_id, message_id=reply['message_id']) \
+                    .select_related('draft__book', 'patch').first()
+                if link:
+                    draft, patch = link.draft, link.patch
+                    # 낡은 수정안의 거절 안내를 다시 "반영"해도 대상은 그 안이다.
+                    # 새 수정 요청은 같은 책의 현재 대화로 이어 갈 수 있다.
+                    if patch and (patch.status != PendingPatch.PROPOSED or patch.base_version != draft.version) \
+                            and not APPLY_REQUEST.fullmatch(text.strip()):
+                        patch = None
             if draft and draft.book and draft.state in (BookDraft.REVIEW, BookDraft.PUBLISHED):
-                return self.on_draft_reply(draft, msg, text, actor)
+                return self.on_draft_reply(draft, msg, text, actor, parent_patch=patch)
         if kind == TelegramChat.ADMIN and parse_folder_id(text):
             return self.ingest_folder(chat_id, parse_folder_id(text))
         if reply and kind == TelegramChat.REVIEWERS and reply.get('from', {}).get('is_bot'):
@@ -260,8 +278,11 @@ class Bot:
         elif cmd == '/ingest' and parse_folder_id(arg) or (cmd == '/ingest' and re.fullmatch(r'[\w-]{10,}', arg)):
             return self.ingest_folder(chat_id, parse_folder_id(arg) or arg)
         elif cmd == '/retry' and arg.isdigit():
-            n = IntakeSource.objects.filter(pk=int(arg)).update(status=IntakeSource.QUEUED, error='', attempts=0)
-            text = '다시 대기열에 넣었어요' if n else '그런 자료가 없어요'
+            try:
+                retry_source(int(arg))
+                text = '실패한 자료를 다시 대기열에 넣었어요. 초안이 준비되면 알려 드릴게요.'
+            except SourceQueueError as e:
+                text = str(e)
         elif cmd == '/fund':
             if arg in ('on', 'off'):
                 WorkerState.put('fund_autoscan', arg == 'on')
@@ -298,7 +319,10 @@ class Bot:
     def ingest_folder(self, chat_id, folder_id):
         if not self.drive_ops:
             return self.tg.send_message(chat_id, '드라이브 연결이 설정되지 않았어요')
-        src = self.drive_ops.ingest(folder_id)
+        try:
+            src = self.drive_ops.ingest(folder_id)
+        except SourceQueueError as e:
+            return self.tg.send_message(chat_id, str(e))
         self.tg.send_message(chat_id, f"'{src.title}' 폴더를 처리 대기열에 넣었어요. 초안이 준비되면 알려 드릴게요.")
 
     def start_newbook(self, chat_id, message_id, actor):
@@ -340,33 +364,68 @@ class Bot:
             src.save(update_fields=['status', 'updated_at'])
             self.tg.send_message(chat_id, '초안을 만들고 있어요. 1~2분 정도 걸려요.', reply_to=msg['message_id'])
 
-    def on_draft_reply(self, draft, msg, text, actor):
+    def _draft_reply(self, draft, msg, text, buttons=None, patch=None):
+        sent = self.tg.send_message(msg['chat']['id'], text, reply_to=msg['message_id'], buttons=buttons)
+        DraftMessage.objects.update_or_create(chat_id=msg['chat']['id'], message_id=sent['message_id'],
+                                             defaults={'draft': draft, 'patch': patch})
+        return sent
+
+    def _apply_draft_patch(self, patch, actor, msg):
+        draft, rev = drafts.apply_patch(patch.id, actor)
+        self.refresh_draft_message(draft)
+        state = '공개된 책에 저장했어요.' if draft.book.is_published else '아직 공개 전이에요.'
+        self._draft_reply(draft, msg, '✅ 수정안을 반영했어요. ' + state, buttons=messages.undo_buttons(rev.id))
+
+    def on_draft_reply(self, draft, msg, text, actor, parent_patch=None):
         chat_id = msg['chat']['id']
+        if APPLY_REQUEST.fullmatch(text.strip()) and not msg.get('document') and not msg.get('photo'):
+            try:
+                candidates = [p for p in drafts.open_patches(draft) if p.changes or p.questions]
+                target = parent_patch or (candidates[0] if len(candidates) == 1 else None)
+                if not target:
+                    raise drafts.PatchError('반영할 수정안을 하나로 정할 수 없어요. 반영할 수정안 메시지에 답장해 주세요')
+                return self._apply_draft_patch(target, actor, msg)
+            except (drafts.PatchError, drafts.StaleError) as e:
+                return self._draft_reply(draft, msg, str(e), patch=target)
         if msg.get('photo') or (msg.get('document') or {}).get('mime_type', '').startswith('image/'):
             path = self._download(msg, drafts._draft_dir(draft))
             draft = drafts.replace_front_cover(draft.id, path, actor)
             self.refresh_draft_message(draft)
-            return self.tg.send_message(chat_id, '앞표지를 이 사진으로 바꿨어요', reply_to=msg['message_id'])
+            return self._draft_reply(draft, msg, '앞표지를 이 사진으로 바꿨어요')
+        if msg.get('document'):
+            try:
+                dest = os.path.join(drafts._draft_dir(draft), 'source-updates', uuid.uuid4().hex)
+                os.makedirs(dest, exist_ok=True)
+                path = self._download(msg, dest)
+                draft, changed = source_updates.replace_source(draft, path, actor, request=text)
+            except (drafts.PatchError, drafts.StaleError, ValueError) as e:
+                return self._draft_reply(draft, msg, str(e))
+            except (TelegramError, OSError):
+                log.exception('draft source download failed: draft=%s', draft.pk)
+                return self._draft_reply(draft, msg, '첨부 자료를 받지 못했어요. 기존 자료는 그대로예요. 이 메시지에 파일을 다시 보내 주세요.')
+            self._draft_reply(draft, msg, f'📎 {os.path.basename(path)} 원문을 읽었어요. '
+                              + ('새 자료를 기준으로 수정안을 준비해요. 이전 대기안은 닫았어요. ' if changed else '앞서 받은 자료와 같아요. ')
+                              + '책 내용은 아직 바뀌지 않았어요.')
+            parent_patch = None
+            text = text or source_updates.DEFAULT_REQUEST
         if not text:
             return
         self.tg.send_typing(chat_id)
-        self.tg.send_message(chat_id, '✍️ 수정 중이에요…', reply_to=msg['message_id'])
+        self._draft_reply(draft, msg, '✍️ 수정안을 준비하고 있어요. 아직 저장 전이에요.')
         try:
-            patch = drafts.propose_patch(draft, text, actor, self.llm)
+            patch = drafts.propose_patch(draft, text, actor, self.llm, parent_patch=parent_patch)
         except LLMError as e:
             self.notify_admin(f'⚠️ 수정 요청 처리 실패 (초안 #{draft.id}): {e}')
-            return self.tg.send_message(chat_id, '지금은 수정 요청을 처리하지 못했어요. 잠시 후 다시 답장해 주세요.',
-                                        reply_to=msg['message_id'])
+            return self._draft_reply(draft, msg, '수정안을 준비하지 못했어요. 책 내용은 바뀌지 않았어요. 이 메시지에 다시 답장해 주세요.')
+        except (drafts.PatchError, drafts.StaleError) as e:
+            return self._draft_reply(draft, msg, str(e), patch=parent_patch)
         if patch.cancelled_previous:
-            return self.tg.send_message(chat_id, patch.reply_message or '알겠어요. 진행 중이던 수정 요청을 취소했어요.',
-                                        reply_to=msg['message_id'])
+            return self._draft_reply(draft, msg, '진행 중이던 수정 요청을 취소했어요. 책 내용은 바뀌지 않았어요.')
         if not patch.changes and not patch.questions:
-            return self.tg.send_message(chat_id, patch.reply_message or '바꿀 내용을 찾지 못했어요. 조금 더 구체적으로 적어 주세요.',
-                                        reply_to=msg['message_id'])
-        sent = self.tg.send_message(chat_id, messages.patch_text(drafts.book_snapshot(draft.book), patch.changes,
-                                                                 patch.questions),
-                                    reply_to=msg['message_id'],
-                                    buttons=messages.patch_buttons(patch.id) if patch.changes else None)
+            return self._draft_reply(draft, msg, '새로 바꿀 내용을 찾지 못했어요. 대기 중인 수정안과 책 내용은 그대로예요. 바꿀 내용을 적어 주세요.')
+        sent = self._draft_reply(draft, msg, messages.patch_text(drafts.book_snapshot(draft.book), patch.changes,
+                                                                 patch.questions), patch=patch,
+                                    buttons=messages.patch_buttons(patch.id) if patch.changes and not patch.questions else None)
         patch.message_id = sent['message_id']
         patch.save(update_fields=['message_id', 'updated_at'])
 
@@ -415,10 +474,10 @@ class Bot:
             self.refresh_draft_message(draft)
             return '바꿨어요'
         if action == 'apply':
-            draft, rev = drafts.apply_patch(args[0], actor)
-            self.refresh_draft_message(draft)
-            self.tg.send_message(chat_id, '반영했어요', reply_to=cq['message']['message_id'],
-                                 buttons=messages.undo_buttons(rev.id))
+            patch = PendingPatch.objects.select_related('draft').get(pk=args[0])
+            if patch.draft.chat_id != chat_id:
+                raise drafts.PatchError('이 방의 수정안이 아니에요')
+            self._apply_draft_patch(patch, actor, cq['message'])
             return '반영했어요'
         if action == 'cancel':
             PendingPatch.objects.filter(pk=args[0], status=PendingPatch.PROPOSED).update(status=PendingPatch.CANCELLED)

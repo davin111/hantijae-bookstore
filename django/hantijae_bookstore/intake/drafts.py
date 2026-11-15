@@ -5,11 +5,13 @@ import os
 from django.conf import settings
 from django.core.cache import cache
 from django.core.files.base import ContentFile
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
 from books.models import Author, Book, BookAuthor, BookSeries, Category, Series
 from intake.images import to_jpeg
+from intake.extract import is_verbatim
 from intake.llm import complete_json
 from intake.mapping import (MAX_PRICE, ROLE_TO_TYPE, TYPE_TO_ROLE, aladin_search_url, book_label, check_book,
                             find_isbn_duplicate, format_isbn, match_name, normalize_extraction, normalize_size,
@@ -124,6 +126,7 @@ def create_draft(source, result):
 
 
 def _set_field(book, field, value):
+    validate_change(book, field, value)
     if field in ('title', 'subtitle', 'short_description', 'description'):
         v = str(value or '').strip()
         if field == 'title' and not v:
@@ -232,24 +235,107 @@ def cancel_open_patches(draft):
     return PendingPatch.objects.filter(draft=draft, status=PendingPatch.PROPOSED).update(status=PendingPatch.CANCELLED)
 
 
-def propose_patch(draft, request_text, actor, client):
+def validate_change(book, field, value):
+    """제안과 실행에서 같은 입력을 검증한다. 관계 모델이나 공개 내용은 변경하지 않는다."""
+    if field in ('title', 'subtitle', 'short_description', 'description'):
+        if not isinstance(value, str) or (field == 'title' and not value.strip()):
+            raise PatchError('제목과 소개에는 글을 입력해 주세요')
+        try:
+            book._meta.get_field(field).run_validators(value)
+        except ValidationError:
+            raise PatchError('입력한 글이 해당 항목에 저장할 수 있는 길이를 넘었어요')
+    elif field in ('full_price', 'page_count'):
+        v = to_int(value)
+        if not v or v < 0 or v > (MAX_PRICE if field == 'full_price' else 2147483647):
+            raise PatchError('가격과 쪽수는 올바른 양수로 입력해 주세요')
+    elif field == 'size' and not normalize_size(value):
+        raise PatchError('판형을 이해하지 못했어요 (예: 130*200)')
+    elif field == 'isbn':
+        isbn = format_isbn(value)
+        if not isbn:
+            raise PatchError('ISBN이 올바르지 않아요')
+        if Book.objects.filter(isbn=isbn).exclude(pk=book.pk).exists():
+            raise PatchError('같은 ISBN의 책이 이미 있어요')
+    elif field == 'published_date' and not parse_date(value):
+        raise PatchError('발행일을 이해하지 못했어요')
+    elif field in ('category', 'series'):
+        model = Category if field == 'category' else Series
+        if not match_name(value, {x.name: x.id for x in model.objects.all()}):
+            label = '분류' if field == 'category' else '시리즈'
+            raise PatchError(f"'{value}' {label}는 아직 등록되지 않았어요. 기존 목록을 확인하거나 관리자에게 새 항목 등록을 요청해 주세요. 수정안은 저장하지 않았어요.")
+    elif field == 'authors':
+        if not isinstance(value, list) or not value or any(
+                not isinstance(a, dict) or not isinstance(a.get('name'), str) or not a['name'].strip()
+                or len(a['name']) > Author._meta.get_field('name').max_length
+                or a.get('role') not in ROLE_TO_TYPE for a in value):
+            raise PatchError('저자 이름과 역할을 확인해 주세요. 그림 등 지원하지 않는 역할은 지은이로 바꾸지 않아요.')
+    elif field == 'series_number':
+        length = BookSeries._meta.get_field('index').max_length
+        if value is not None and (not isinstance(value, (str, int)) or len(str(value)) > length):
+            raise PatchError('시리즈 번호가 너무 길거나 올바르지 않아요')
+
+
+def open_patches(draft):
+    return list(PendingPatch.objects.filter(draft=draft, status=PendingPatch.PROPOSED,
+                                           base_version=draft.version).order_by('id'))
+
+
+def propose_patch(draft, request_text, actor, client, parent_patch=None):
     """반환하는 PendingPatch 에는 저장되지 않는 속성 reply_message·cancelled_previous 가 붙는다(봇 응답용)."""
     snap = book_snapshot(draft.book)
     history = conversation_history(draft)
-    reply = complete_json(client, PATCH_SYSTEM, build_patch_user(snap, draft.source_text, request_text, history))
+    opened = [p for p in open_patches(draft) if p.changes or p.questions]
+    if parent_patch and (parent_patch.status != PendingPatch.PROPOSED
+                         or parent_patch.draft_id != draft.pk or parent_patch.base_version != draft.version
+                         or parent_patch.pk not in [p.pk for p in opened]):
+        raise StaleError('이미 처리됐거나 이전 버전의 수정안이에요. 최신 책 카드에 답장해 주세요')
+    if len(opened) > 1:
+        if not parent_patch or parent_patch.pk not in [p.pk for p in opened]:
+            raise PatchError('대기 수정안이 여러 개예요. 이어서 고칠 수정안에 답장해 주세요')
+        previous = parent_patch
+    else:
+        previous = opened[0] if opened else None
+    pending = {'changes': previous.changes, 'questions': previous.questions} if previous else None
+    try:
+        prompt = build_patch_user(snap, draft.source_text, request_text, history, pending=pending,
+                                  require_full_source=bool(draft.files.get('source_revision')))
+    except ValueError as e:
+        raise PatchError(str(e)) from e
+    reply = complete_json(client, PATCH_SYSTEM, prompt)
     cancel = bool(reply.get('cancel_previous'))
-    changes = [] if cancel else [
+    incoming = [] if cancel else [
         c for c in reply.get('changes') or []
-        if isinstance(c, dict) and c.get('field') in PATCHABLE and c.get('new_value') != snap.get(c.get('field'))]
+        if isinstance(c, dict) and c.get('field') in PATCHABLE]
+    addition = reply.get('append_description') if not cancel else None
+    if addition:
+        if not isinstance(addition, str) or not (is_verbatim(addition, request_text) or is_verbatim(addition, draft.source_text)):
+            raise PatchError('추가할 문장이 원자료와 일치하지 않아 수정안을 저장하지 않았어요. 원문을 다시 확인해 주세요')
+        if any(c['field'] == 'description' for c in incoming):
+            raise PatchError('본문 교체와 추가 요청이 겹쳐 수정안을 저장하지 않았어요. 추가할 부분을 다시 알려 주세요')
+        base = next((c['new_value'] for c in previous.changes if c['field'] == 'description'), snap['description']) if previous else snap['description']
+        incoming.append({'field': 'description', 'new_value': (base.rstrip() + '\n\n' + addition.strip()).strip()})
     questions = [] if cancel else [str(q) for q in reply.get('questions') or []][:3]
-    if cancel:   # 대기 중인 제안을 닫아야 예전 [반영] 버튼이 뒤늦게 적용되지 않는다
-        cancel_open_patches(draft)
-    else:        # 봇이 되물었던 질문은 이번 메시지로 답을 받았으니 닫는다
-        answered = [p.pk for p in PendingPatch.objects.filter(draft=draft, status=PendingPatch.PROPOSED) if p.questions]
-        PendingPatch.objects.filter(pk__in=answered).update(status=PendingPatch.CANCELLED)
-    patch = PendingPatch.objects.create(
-        draft=draft, base_version=draft.version, changes=changes, questions=questions, request_text=request_text,
-        requested_by=actor, status=PendingPatch.CANCELLED if cancel else PendingPatch.PROPOSED)
+    replace = bool(incoming or questions)
+    merged = {c['field']: c for c in previous.changes} if previous and replace else {}
+    for c in incoming:
+        validate_change(draft.book, c['field'], c.get('new_value'))
+        merged[c['field']] = c
+    changes = [c for c in merged.values() if c.get('new_value') != snap.get(c['field'])]
+    for c in changes:
+        validate_change(draft.book, c['field'], c.get('new_value'))
+    with transaction.atomic():
+        current = lock_current(draft.pk, draft.version)
+        current_ids = [p.pk for p in open_patches(current) if p.changes or p.questions]
+        if current_ids != [p.pk for p in opened] or current.source_text != draft.source_text:
+            raise StaleError('그사이 다른 수정이 있었어요. 최신 카드에서 다시 요청해 주세요')
+        if cancel:
+            if previous:
+                PendingPatch.objects.filter(pk=previous.pk).update(status=PendingPatch.CANCELLED)
+        elif previous and replace:
+            PendingPatch.objects.filter(pk=previous.pk).update(status=PendingPatch.CANCELLED)
+        patch = PendingPatch.objects.create(
+            draft=draft, base_version=draft.version, changes=changes, questions=questions, request_text=request_text,
+            requested_by=actor, status=PendingPatch.CANCELLED if cancel else PendingPatch.PROPOSED)
     patch.reply_message = str(reply.get('message') or '').strip()[:500]
     patch.cancelled_previous = cancel
     return patch
@@ -273,14 +359,14 @@ def apply_patch(patch_id, actor):
             patch.status = PendingPatch.STALE
             patch.save()
             stale = '그사이 다른 수정이 있었어요. 다시 요청해 주세요'
+        elif patch.questions or not patch.changes:
+            raise PatchError('아직 확인할 내용이 있거나 반영할 변경이 없어요. 수정안에 답장해 주세요')
+        else:
+            rev = _apply_changes(draft, patch.changes, patch.request_text, actor)
+            patch.status = PendingPatch.APPLIED
+            patch.save()
     if stale:
         raise StaleError(stale)
-    with transaction.atomic():
-        patch = PendingPatch.objects.select_for_update().get(pk=patch_id)
-        draft = lock_current(patch.draft_id, patch.base_version)
-        rev = _apply_changes(draft, patch.changes, patch.request_text, actor)
-        patch.status = PendingPatch.APPLIED
-        patch.save()
     return draft, rev
 
 

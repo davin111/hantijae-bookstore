@@ -73,7 +73,7 @@ def confirm_buttons(action, draft_id, version):
 def patch_text(snap, changes, questions):
     if questions and not changes:
         return '\n'.join(f'❓ {q}' for q in questions)
-    lines = ['이렇게 바꿀게요'] + [
+    lines = ['수정안을 준비했어요. 아직 저장 전이에요.'] + [
         f"• {FIELD_LABELS.get(c['field'], c['field'])}: {_short(snap.get(c['field']))} → {_short(c.get('new_value'))}"
         for c in changes]
     lines += [f'❓ {q}' for q in questions]

@@ -73,6 +73,17 @@ class PendingPatch(BaseModel):
     message_id = models.BigIntegerField(null=True, blank=True)
 
 
+class DraftMessage(BaseModel):
+    """오류·진행·완료 안내에 답해도 같은 책의 대화를 이어 간다."""
+    draft = models.ForeignKey(BookDraft, related_name='messages', on_delete=models.CASCADE)
+    patch = models.ForeignKey(PendingPatch, null=True, blank=True, on_delete=models.SET_NULL)
+    chat_id = models.BigIntegerField()
+    message_id = models.BigIntegerField()
+
+    class Meta:
+        unique_together = (('chat_id', 'message_id'),)
+
+
 class ReviewItem(BaseModel):
     """검수 방의 '확인 부탁' 한 건. 노션·사이트 값이 다를 때 어느 값으로 맞출지 검수자가 버튼으로 고른다."""
     PENDING, APPLIED, KEPT, STALE = 'pending', 'applied', 'kept', 'stale'

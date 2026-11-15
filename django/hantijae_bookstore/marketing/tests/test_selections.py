@@ -9,9 +9,10 @@ from django.test import TestCase
 
 from intake.models import WorkerState
 from marketing.models import BookProfile, SelectionAnnouncement, Signal
-from marketing.selection_sources import Announcement
+from marketing.selection_sources import Announcement, KPIPA_VIEW, scan_kpipa
 from marketing.selections import Found, announce, collect, notice_message, run_scan, _track_failures
-from marketing.tests.fakes import FakeTG, make_book
+from marketing.tests.fakes import FakeTG, make_book, tiny_pdf
+from marketing.tests.test_selection_sources import FILES, LIST_FILE, PAGES, KPIPA_VIEW_HTML
 from marketing.timeutil import KST
 from web.models import Notice
 
@@ -65,6 +66,39 @@ class CollectTest(TestCase):
         found, _ = self.run_with(('kpipa', 'x', lambda *a: [ann(withdrawal=True)]))
         self.assertFalse(found[0].signal.relevant)
         self.assertTrue(SelectionAnnouncement.objects.get().withdrawal)
+
+    def assert_kpipa_failure_retries(self, broken_page, get_bytes):
+        pages = {**PAGES, KPIPA_VIEW.format(no='2145'): broken_page}
+        scanners = [('kpipa', '출판진흥원 결과공고', scan_kpipa), ('nl', '국립중앙도서관', lambda *a: [])]
+        with mock.patch('marketing.selections.SCANNERS', scanners):
+            found, failed = collect(TODAY, get_text=pages.__getitem__, get_bytes=get_bytes, sleep=lambda _: None)
+            self.assertEqual((found, failed), ([], ['kpipa']))
+            self.assertFalse(SelectionAnnouncement.objects.exists())
+            self.assertFalse(Signal.objects.exists())
+            pages[KPIPA_VIEW.format(no='2145')] = KPIPA_VIEW_HTML
+            found, failed = collect(TODAY, get_text=pages.__getitem__, get_bytes=FILES.__getitem__, sleep=lambda _: None)
+        self.assertEqual(failed, [])
+        self.assertEqual([(f.how, f.signal.book) for f in found], [('isbn', self.book)])
+        self.assertEqual(set(SelectionAnnouncement.objects.values_list('key', flat=True)),
+                         {'kpipa:2145', 'kpipa:2133'})
+
+    def test_blocked_detail_is_not_remembered_as_no_match_and_retries(self):
+        self.assert_kpipa_failure_retries('<html>접속을 확인해 주세요</html>', FILES.__getitem__)
+
+    def test_unrecognized_attachment_is_not_remembered_as_no_match_and_retries(self):
+        page = '<a href="/files/changed.pdf" class="new-download">선정도서 목록.pdf</a>'
+        self.assert_kpipa_failure_retries(page, FILES.__getitem__)
+
+    def test_empty_attachment_text_is_not_remembered_as_no_match_and_retries(self):
+        files = {**FILES, LIST_FILE: tiny_pdf('   ')}
+        self.assert_kpipa_failure_retries(KPIPA_VIEW_HTML, files.__getitem__)
+
+    def test_attachment_download_failure_is_reported_and_retries(self):
+        def unavailable(url):
+            if url == LIST_FILE:
+                raise ValueError('download unavailable')
+            return FILES[url]
+        self.assert_kpipa_failure_retries(KPIPA_VIEW_HTML, unavailable)
 
     def test_one_failing_source_is_reported_others_continue(self):
         found, failed = self.run_with(('tkpf', '청소년 교양도서', boom), ('kpipa', 'x', lambda *a: [ann()]))

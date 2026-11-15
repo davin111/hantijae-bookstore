@@ -137,6 +137,17 @@ class ListTest(SimpleTestCase):
         page = row('2170', '2026년 제4차 전자책 제작 지원 사업 공고', '14:32') + row('2167', '제3차 공고', '26.07.29.')
         self.assertEqual([(p.no, p.posted_on) for p in grant_posts(page)], [('2167', date(2026, 7, 29))])
 
+    def test_relative_notice_links_keep_titles_dates_and_absolute_view_urls(self):
+        # 2026-11-16 원문: 사이트 개편 뒤 목록 링크가 /p/g1_2/... 상대경로로 바뀜.
+        page = """<li class=""><div class="fz-subject">
+<a href='/p/g1_2/2198?sca=%EC%82%AC%EC%97%85%EA%B3%B5%EA%B3%A0' class='list-subject'><span class="bo-cate-link">[사업공고]</span>2026년 권역별 선도서점 육성 사업 멘토링 프로그램 참여서점 모집 공고</a></div>
+<div class="fz-writer sv-empty-writer"><span class="sv_member">서점책방상생팀</span></div>
+<div class="fz-date">26.11.13.</div></li>"""
+        posts = grant_posts(page)
+        self.assertEqual([(p.key, p.posted_on, p.url) for p in posts],
+                         [('kpipa:2198', date(2026, 11, 13), 'https://www.kpipa.or.kr/p/g1_2/2198')])
+        self.assertEqual(posts[0].title, '2026년 권역별 선도서점 육성 사업 멘토링 프로그램 참여서점 모집 공고')
+
     def test_exclusion_rules_keep_publisher_programs(self):
         self.assertEqual([t for t in RECENT_TITLES if not is_excluded(t)], KEPT)
 

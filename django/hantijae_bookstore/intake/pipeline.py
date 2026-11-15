@@ -6,6 +6,7 @@ from datetime import datetime
 
 from django.conf import settings
 from django.db import close_old_connections
+from django.db.models import F
 from django.utils import timezone
 
 from books.models import Category, Series
@@ -35,9 +36,21 @@ def _fail(source, deps, message, notify_reviewers=False):
 MAX_ATTEMPTS = 3
 
 
+def _preserve_committed_draft(source):
+    # 초안 저장 직후 워커가 죽었을 수 있다. 이미 만든 초안이나 전송 여부가
+    # 불명확한 카드를 다시 만들거나 보내지 않고 기존 검수 상태를 보존한다.
+    if source.drafts.exists():
+        source.status = IntakeSource.PROCESSED
+        source.save(update_fields=['status', 'updated_at'])
+        return True
+    return False
+
+
 def recover_interrupted(deps, max_attempts=MAX_ATTEMPTS):
     """처리 도중 워커가 죽은(OOM 등) 자료: 재시도하되 max_attempts 넘으면 실패 처리해 무한 재시작을 끊는다."""
     for src in IntakeSource.objects.filter(status=IntakeSource.PROCESSING):
+        if _preserve_committed_draft(src):
+            continue
         if src.attempts >= max_attempts:
             src.status = IntakeSource.FAILED
             src.error = f'처리 중 {src.attempts}번 중단됐어요(메모리 부족 등). 자료 크기를 확인해 주세요.'
@@ -49,9 +62,15 @@ def recover_interrupted(deps, max_attempts=MAX_ATTEMPTS):
 
 
 def process_source(source, deps):
-    source.status = IntakeSource.PROCESSING
-    source.attempts += 1
-    source.save(update_fields=['status', 'attempts', 'updated_at'])
+    # 읽어 둔 대기 목록은 오래됐을 수 있다. 한 SQL에서 상태를 확인하고 선점해야
+    # 반복 명령이나 겹친 worker가 같은 자료를 두 번 추출하지 않는다.
+    claimed = IntakeSource.objects.filter(pk=source.pk, status=IntakeSource.QUEUED).update(
+        status=IntakeSource.PROCESSING, attempts=F('attempts') + 1, updated_at=timezone.now())
+    if not claimed:
+        return None
+    source.refresh_from_db()
+    if _preserve_committed_draft(source):
+        return None
     is_drive = source.kind == IntakeSource.DRIVE
     work = os.path.join(settings.INTAKE['WORK_DIR'], 'sources', str(source.id)) if is_drive else source.local_dir
     try:

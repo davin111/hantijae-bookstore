@@ -294,7 +294,7 @@ class CancelFlowTest(TestCase):
         reply = {'changes': [], 'questions': [], 'cancel_previous': True, 'message': '알겠어요, 부제 변경은 취소할게요.'}
         Bot(self.tg, FakeLLM(reply), config=CONFIG).handle_update(msg(GROUP, '취소', reply_to=777))
         self.assertEqual(set(PendingPatch.objects.values_list('status', flat=True)), {PendingPatch.CANCELLED})
-        self.assertEqual(self.tg.texts()[-1], '알겠어요, 부제 변경은 취소할게요.')
+        self.assertIn('취소했어요', self.tg.texts()[-1])
 
 
 DATE = 1790000000

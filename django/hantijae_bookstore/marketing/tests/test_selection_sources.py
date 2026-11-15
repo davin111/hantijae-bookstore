@@ -31,9 +31,11 @@ KPIPA_VIEW_HTML = """<h2>첨부파일</h2>
   <strong>2026년 세종도서 지원 사업 교양부문 심사 총평.pdf</strong>   (149.5K)</a>"""
 
 LIST_FILE = 'https://www.kpipa.or.kr/p/download/g1_2/2145/1/'
+WITHDRAW_FILE = 'https://www.kpipa.or.kr/p/download/g1_2/2133/0/'
 PAGES = {KPIPA_LIST: KPIPA_LIST_HTML, KPIPA_VIEW.format(no='2145'): KPIPA_VIEW_HTML,
-         KPIPA_VIEW.format(no='2133'): '<h2>첨부파일</h2>'}
-FILES = {LIST_FILE: tiny_pdf('1 9791192455808')}
+         KPIPA_VIEW.format(no='2133'): '<h2>첨부파일</h2>'
+         f'<a href="{WITHDRAW_FILE}" class="view_file_download"><strong>선정 철회 목록.pdf</strong></a>'}
+FILES = {LIST_FILE: tiny_pdf('1 9791192455808'), WITHDRAW_FILE: tiny_pdf('1 9790000000000')}
 
 
 def no_sleep(_):
@@ -45,6 +47,23 @@ class KpipaParseTest(SimpleTestCase):
         posts = kpipa_posts(KPIPA_LIST_HTML)
         self.assertEqual(posts[0], ('2145', '2026년 세종도서 교양부문 선정 결과 공고', date(2026, 8, 25)))
         self.assertEqual([p[0] for p in posts], ['2145', '2133', '2166'])
+
+    def test_relative_list_links_keep_each_posts_own_date(self):
+        # 오늘 글의 시각을 다음 글의 날짜와 합치면 선정 시점을 잘못 알리게 된다.
+        page = """<li><a href='/p/g1_2/2200?sca=result' class='list-subject'>세종도서 선정 결과</a>
+<div class="fz-date">09:30</div></li>
+<li><a href='/p/g1_2/2197?sca=result' class='list-subject'><span class="bo-cate-link">[결과공고]</span>2026년 권역별 선도서점 심화 컨설팅 선정 서점 철회 공고</a>
+<div class="fz-date">26.11.13.</div></li>"""
+        self.assertEqual(kpipa_posts(page),
+                         [('2197', '2026년 권역별 선도서점 심화 컨설팅 선정 서점 철회 공고', date(2026, 11, 13))])
+
+    def test_relative_attachment_links_are_resolved_only_on_official_host(self):
+        page = """<a href="/p/download/g1_2/2145/1/" class="view_file_download">
+<strong>2026년 세종도서 지원 사업 교양부문 선정도서 목록429종.pdf</strong></a>
+<a href="https://other.example/p/download/g1_2/2145/2/" class="view_file_download"><strong>외부.pdf</strong></a>"""
+        self.assertEqual(kpipa_files(page),
+                         [('https://www.kpipa.or.kr/p/download/g1_2/2145/1/',
+                           '2026년 세종도서 지원 사업 교양부문 선정도서 목록429종.pdf')])
 
     def test_selection_titles_only(self):
         self.assertEqual([is_selection_title(t) for _, t, _ in kpipa_posts(KPIPA_LIST_HTML)], [True, True, False])
@@ -67,7 +86,7 @@ class KpipaScanTest(SimpleTestCase):
         fetched = []
         anns = scan_kpipa(date(2026, 9, 30), set(), PAGES.__getitem__, lambda u: fetched.append(u) or FILES[u], no_sleep)
         self.assertEqual([a.key for a in anns], ['kpipa:2145', 'kpipa:2133'])
-        self.assertEqual(fetched, [LIST_FILE])
+        self.assertEqual(fetched, [LIST_FILE, WITHDRAW_FILE])
         a = anns[0]
         self.assertEqual((a.source, a.label, a.url, a.posted_on, a.fresh, a.withdrawal),
                          ('kpipa', '2026년 세종도서 교양부문', KPIPA_VIEW.format(no='2145'), date(2026, 8, 25), True, False))
@@ -86,15 +105,14 @@ class KpipaScanTest(SimpleTestCase):
         with self.assertRaises(RuntimeError):
             scan_kpipa(date(2026, 9, 30), set(), lambda _: '<html>바뀐 형식</html>', FILES.__getitem__, no_sleep)
 
-    def test_broken_post_is_skipped_and_the_rest_still_read(self):
+    def test_broken_post_reports_source_failure_for_retry(self):
         def raising_get_bytes(u):
             if u == LIST_FILE:
                 raise ValueError('boom')
             return FILES[u]
 
-        with self.assertLogs('intake', level='WARNING'):
-            anns = scan_kpipa(date(2026, 9, 30), set(), PAGES.__getitem__, raising_get_bytes, no_sleep)
-        self.assertEqual([a.key for a in anns], ['kpipa:2133'])
+        with self.assertLogs('intake', level='WARNING'), self.assertRaises(ValueError):
+            scan_kpipa(date(2026, 9, 30), set(), PAGES.__getitem__, raising_get_bytes, no_sleep)
 
 
 TKPF_LIST_HTML = """<a href="/contents/readCountN.php?no=143&cp=1&searchSelect=&searchText=">2026년 하반기 올해의 청소년 교양도서 선정ㆍ보급사업 신청 안내</a>

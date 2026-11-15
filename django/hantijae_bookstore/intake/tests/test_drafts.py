@@ -85,7 +85,9 @@ class DraftsTest(TestCase):
         draft = drafts.create_draft(self.source, self.result())
         reply = {'changes': [{'field': 'subtitle', 'new_value': '가'}], 'questions': []}
         p1 = drafts.propose_patch(draft, 'a', '검수자A', FakeLLM(reply))
-        p2 = drafts.propose_patch(draft, 'b', '검수자B', FakeLLM(dict(reply, changes=[{'field': 'subtitle', 'new_value': '나'}])))
+        # 배포 전 생성된 복수 대기안도 버전 충돌을 막는다.
+        p2 = PendingPatch.objects.create(draft=draft, base_version=draft.version,
+                                        changes=[{'field': 'subtitle', 'new_value': '나'}])
         drafts.apply_patch(p1.id, '검수자A')
         with self.assertRaises(drafts.StaleError):
             drafts.apply_patch(p2.id, '검수자B')
@@ -106,8 +108,11 @@ class DraftsTest(TestCase):
 
     def test_invalid_patch_value_raises_and_rolls_back(self):
         draft = drafts.create_draft(self.source, self.result())
-        p = drafts.propose_patch(draft, 'x', '검수자A', FakeLLM({'changes': [
-            {'field': 'subtitle', 'new_value': '새 부제'}, {'field': 'isbn', 'new_value': '123'}], 'questions': []}))
+        changes = [{'field': 'subtitle', 'new_value': '새 부제'}, {'field': 'isbn', 'new_value': '123'}]
+        with self.assertRaises(drafts.PatchError):
+            drafts.propose_patch(draft, 'x', '검수자A', FakeLLM({'changes': changes, 'questions': []}))
+        # 이전 코드가 만든 잘못된 대기안도 반영 단계에서 다시 검증한다.
+        p = PendingPatch.objects.create(draft=draft, base_version=draft.version, changes=changes)
         with self.assertRaises(drafts.PatchError):
             drafts.apply_patch(p.id, '검수자A')
         self.assertEqual(Book.objects.get(pk=draft.book_id).subtitle, DATA['subtitle'])

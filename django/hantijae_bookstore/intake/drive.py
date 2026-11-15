@@ -9,6 +9,7 @@ from books.models import Book
 from intake.classify import FileEntry, classify, nfc
 from intake.mapping import normalize_key
 from intake.models import IntakeSource, WorkerState
+from intake.source_queue import ingest_source
 
 API = 'https://www.googleapis.com/drive/v3'
 FOLDER = 'application/vnd.google-apps.folder'
@@ -139,11 +140,7 @@ def baseline(drive, root_id, now=None):
 
 def ingest(drive, folder_id):
     meta = drive.get(folder_id)
-    src, _ = IntakeSource.objects.get_or_create(
-        drive_folder_id=folder_id, defaults={'kind': IntakeSource.DRIVE, 'title': nfc(meta['name'])})
-    src.status, src.error = IntakeSource.QUEUED, ''
-    src.save(update_fields=['status', 'error', 'updated_at'])
-    return src
+    return ingest_source(folder_id, nfc(meta['name']))
 
 
 def download_folder(drive, folder_id, dest):

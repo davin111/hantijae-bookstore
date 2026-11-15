@@ -47,9 +47,10 @@ KPIPA_LIST = 'https://www.kpipa.or.kr/p/g1_2?sca=%EA%B2%B0%EA%B3%BC%EA%B3%B5%EA%
 KPIPA_VIEW = 'https://www.kpipa.or.kr/p/g1_2/{no}'
 KPIPA_PROGRAMS = ('세종도서', '문학나눔')
 NOT_SELECTION = ('수혜기관', '심사위원', '이의신청')   # 선정 결과가 아닌 결과공고(수혜 기관 명단·심사위원 위촉·이의신청 처리 등)
-_KPIPA_ROW = re.compile(r"href='https://www\.kpipa\.or\.kr/p/g1_2/(\d+)[^']*' class='list-subject'>(.*?)</a>"
-                        r".*?<div class=\"fz-date\">(\d{2})\.(\d{2})\.(\d{2})\.</div>", re.S)
-_KPIPA_FILE = re.compile(r'<a href="(https://www\.kpipa\.or\.kr/p/download/g1_2/\d+/\d+/)" class="view_file_download">'
+# 2026-11 사이트 개편 뒤 상대경로도 내려온다. 외부 호스트는 받지 않는다.
+_KPIPA_ROW = re.compile(r"href='(?:https://www\.kpipa\.or\.kr)?/p/g1_2/(\d+)[^']*' class='list-subject'>((?:(?!</a>).)*)</a>"
+                        r"(?:(?!class='list-subject').)*?<div class=\"fz-date\">(\d{2})\.(\d{2})\.(\d{2})\.</div>", re.S)
+_KPIPA_FILE = re.compile(r'<a href="((?:https://www\.kpipa\.or\.kr)?/p/download/g1_2/\d+/\d+/)" class="view_file_download">'
                          r'\s*<strong>(.*?)</strong>', re.S)
 
 
@@ -59,7 +60,7 @@ def kpipa_posts(html):
 
 
 def kpipa_files(html):
-    return [(url, clean(name)) for url, name in _KPIPA_FILE.findall(html)]
+    return [(urllib.parse.urljoin(KPIPA_LIST, url), clean(name)) for url, name in _KPIPA_FILE.findall(html)]
 
 
 def is_withdrawal(title):
@@ -78,6 +79,7 @@ def kpipa_label(title):
 
 
 def scan_kpipa(today, seen, get_text, get_bytes, sleep):
+    """새 발표의 첨부를 모두 읽어야 반환한다. 부분 실패를 '일치 없음'으로 확정하지 않는다."""
     out = []
     posts = kpipa_posts(get_text(KPIPA_LIST))
     if not posts:
@@ -91,12 +93,16 @@ def scan_kpipa(today, seen, get_text, get_bytes, sleep):
             sleep(SPACING)
             files = [f for f in kpipa_files(get_text(view)) if f[1].lower().endswith(('.pdf', '.xlsx'))]
             lists = [f for f in files if '목록' in f[1]] or files   # 공고문·총평은 한글 글꼴이 깨져 대조에 쓸모없다
+            if not lists:
+                raise RuntimeError('출판진흥원 선정 발표의 첨부 목록을 찾지 못했어요')
+            texts = _download_texts(lists, get_bytes, sleep)
+            if any(not text.strip() for text in texts):
+                raise RuntimeError('출판진흥원 선정 발표 첨부에서 글자를 읽지 못했어요')
             out.append(Announcement('kpipa', key, kpipa_label(title), view, posted,
-                                    posted >= today - timedelta(days=FRESH_DAYS),
-                                    _download_texts(lists, get_bytes, sleep), is_withdrawal(title)))
+                                    posted >= today - timedelta(days=FRESH_DAYS), texts, is_withdrawal(title)))
         except Exception:
             log.warning('selection post failed: %s', view, exc_info=True)
-            continue
+            raise  # collect가 출처 실패로 표시하고 이번 출처는 seen에 저장하지 않아 다음 주기에 재시도한다
     return out
 
 

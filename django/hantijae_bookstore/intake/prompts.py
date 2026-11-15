@@ -45,6 +45,8 @@ PATCH_SYSTEM = REVIEWER_AUDIENCE + """당신은 출판사 사이트의 도서 �
 - 웹 도구를 사용하지 마세요.
 - 요청에 명시된 부분만 바꾸고, 언급되지 않은 필드는 절대 넣지 마세요.
 - 소개글을 고칠 때는 요청된 부분 외의 문장을 그대로 유지하세요.
+- '대기 수정안'이 있으면 아직 저장 전인 전체 내용입니다. 후속 요청은 그 값을 기준으로 수정하세요. 언급하지 않은 대기 필드는 프로그램이 보존합니다. 본문 일부를 추가할 때는 기존 본문을 빠짐없이 유지하세요. 대기 질문이 해결되지 않았으면 questions에 그대로 남기세요.
+- 본문 맨 뒤에 원문 구획을 추가하는 요청은 기존 본문을 다시 쓰지 말고 append_description에 추가 부분의 원문만 넣으세요. 이때 changes에 description을 넣지 마세요. 프로그램이 대기 본문 뒤에 그대로 붙입니다. 추가 부분은 요청이나 원자료에 실제로 있는 문장만 가능합니다.
 - '책 소개'·'소개글'은 description(상세 소개), '요약'·'짧은 소개'는 short_description 입니다.
 - 요청에 인용된 문장이나 '첫 행' 같은 위치 표현이 있으면 현재 도서 정보에서 그 필드와 위치를 스스로 찾으세요. 찾을 수 있으면 필드를 되묻지 마세요.
 - 사이트 표시 규칙: 소개글의 줄바꿈(\\n)은 그대로 줄바꿈으로, 빈 줄(\\n\\n)은 문단 간격으로 보입니다. `**문장**`으로 감싼 부분은 굵게 보입니다. 그 밖의 서식(기울임·밑줄·색·글자 크기·링크)은 지원하지 않으니, 요청되면 changes 없이 questions에 지원하지 않는다고 짧게 알리고 대안을 제안하세요.
@@ -53,21 +55,30 @@ PATCH_SYSTEM = REVIEWER_AUDIENCE + """당신은 출판사 사이트의 도서 �
 - 요청이 모호하거나 어떤 값으로 바꿔야 할지 확실하지 않으면 changes를 비우고 questions에 짧은 한국어 질문을 넣으세요.
 - 허용 필드: title, subtitle, authors, series, series_number, category, size, page_count, full_price, isbn, published_date, short_description, description
 - authors 값은 [{"name": "...", "role": "지은이|옮긴이|엮은이|기획"}] 전체 목록입니다.
-- JSON 객체 하나만 출력: {"changes": [{"field": "...", "new_value": ...}], "questions": ["..."], "cancel_previous": false, "message": ""}
+- JSON 객체 하나만 출력: {"changes": [{"field": "...", "new_value": ...}], "append_description": "", "questions": ["..."], "cancel_previous": false, "message": ""}
 - message: 바꿀 것도 되물을 것도 없을 때(예: 취소 확인) 사용자에게 보낼 짧은 한국어 답. 그 밖에는 빈 문자열."""
 
 
 MAX_USER_CHARS = 48000   # 사이드카 /complete userMessage 한도 50,000자에 여유를 둔다
 
 
-def build_patch_user(current, source_text, request, history=()):
+def build_patch_user(current, source_text, request, history=(), pending=None, require_full_source=False):
     head = '현재 도서 정보:\n' + json.dumps(current, ensure_ascii=False, indent=1)
+    if pending:
+        head += '\n\n대기 수정안(아직 저장 전, 전체 값):\n' + json.dumps(pending, ensure_ascii=False)
     talk = ('이 초안의 지난 대화(오래된 순):\n' + '\n'.join(f'- {h}' for h in history)) if history else ''
     tail = '수정 요청:\n' + request
+    # 수정 중인 원문을 잘라서 LLM에 보내면 조용한 유실이 생긴다. 과거 요약부터 줄인다.
+    source_length = len(source_text or '') if require_full_source else 0
+    if len(head) + len(tail) + source_length + 200 > MAX_USER_CHARS:
+        raise ValueError('본문이 길어 한 번에 수정안을 준비할 수 없어요. 대기 수정안은 보존했어요. 먼저 반영하거나 수정 범위를 나눠 주세요.')
+    talk_budget = max(0, MAX_USER_CHARS - len(head) - len(tail) - source_length - 200)
+    talk = talk[-talk_budget:] if talk_budget else ''
     # 대화 맥락과 현재 정보는 온전히 두고, 참고용 원문이 남는 분량만 쓴다
     budget = MAX_USER_CHARS - len(head) - len(talk) - len(tail) - 100
-    source = (source_text or '')[:max(0, min(30000, budget))]
-    parts = [head, '보도자료 원문(참고용):\n<document>\n' + source + '\n</document>'] + ([talk] if talk else []) + [tail]
+    source = (source_text or '') if require_full_source else (source_text or '')[:max(0, min(30000, budget))]
+    label = '보도자료 원문(전체)' if require_full_source else '보도자료 원문(참고용, 길면 일부만 포함)'
+    parts = [head, label + ':\n<document>\n' + source + '\n</document>'] + ([talk] if talk else []) + [tail]
     return '\n\n'.join(parts)
 
 

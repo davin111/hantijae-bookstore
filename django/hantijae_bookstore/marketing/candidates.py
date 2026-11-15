@@ -7,12 +7,13 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
+from urllib.parse import parse_qs, urlparse
 
 from django.db.models import Max, Q
 from django.utils.html import strip_tags
 
 from books.models import Book
-from intake.models import WorkerState
+from intake.models import FundingCampaign, WorkerState
 from marketing import bnk_sales, meta
 from marketing.funding import ends_on, is_stalled, live_campaigns
 from marketing.hooks import upcoming
@@ -21,7 +22,7 @@ from marketing.models import BookProfile, LoanSnapshot, Proposal, SalesSnapshot,
 from marketing.moments import TYPE_LABEL, find_book, seen_on
 from marketing.review_search import SOURCE_LABEL
 from marketing.sales import latest
-from marketing.social_judge import mentions_day
+from marketing.social_judge import catalog_keys, ground_identity, mentions_day
 from marketing.social_parse import share_key
 from marketing.text import loose_key, similarity, title_key, won_display
 from marketing.timeutil import kst_today, week_start
@@ -472,6 +473,31 @@ def _official_note(status):
     return ', '.join(parts)
 
 
+def _campaign_url_key(url):
+    parsed = urlparse(url or '')
+    host = (parsed.hostname or '').lower()
+    if host == 'aladin.co.kr' or host.endswith('.aladin.co.kr'):
+        pid = parse_qs(parsed.query).get('pid', [''])[0]
+        if pid:
+            return ('aladin', pid)
+    return ('url', share_key(url)) if url else None
+
+
+def _ended_social_fund(signal, books, now):
+    if signal.detail.get('category') != 'funding':
+        return False
+    urls = [signal.url, (signal.detail.get('link') or {}).get('url', '')]
+    urls += signal.detail.get('shared_urls') or []
+    keys = {_campaign_url_key(u) for u in urls if u}
+    titles = {loose_key(b.title) for b in books}
+    titles.update(loose_key(t) for t in signal.detail.get('titles') or [])
+    campaigns = list(FundingCampaign.objects.filter(is_ours=True))
+    linked = [c for c in campaigns if _campaign_url_key(c.url) in keys]
+    matched = linked or [c for c in campaigns if loose_key(c.title) in titles]
+    # 같은 책의 새 펀딩이 있을 수 있다. URL이 특정되지 않으면 모두 종료된 경우만 제외한다.
+    return bool(matched) and all(c.ends_at and c.ends_at <= now for c in matched)
+
+
 def social_candidates(today, now, posts, fetch=None):
     """운영진 개인 SNS 신호 → 다가오는 행사·행사 후기·공식 채널로 옮겨 싣기·서평·기사 모음.
     공식 채널(Meta)은 신호가 있을 때만 읽는다. posts는 블로그 글(못 읽었으면 None)."""
@@ -480,9 +506,17 @@ def social_candidates(today, now, posts, fetch=None):
         return []
     meta_posts = None
     out, press = [], []
+    book_keys = catalog_keys()
     for s in signals:
-        d = s.detail
+        d = dict(s.detail)
+        source = '\n'.join(p.full_text() for p in s.social_posts.all())
+        ids, titles, summary = ground_identity(source, d.get('books') or [], d.get('titles') or [],
+                                               d.get('summary', ''), book_keys)
+        d.update(books=ids, titles=titles, summary=summary)
+        s.detail = d  # 이번 후보에서만 사용. 이미 전송한 카드와 운영 기록은 덮어쓰지 않는다.
         books = _live(Book.objects.filter(pk__in=d.get('books') or []))
+        if _ended_social_fund(s, books, now):
+            continue
         facts = {'who': sns_where(s), 'url': s.url, 'posted': d.get('posted_on', '')}
         if d.get('titles'):
             facts['not_on_site'] = d['titles']
